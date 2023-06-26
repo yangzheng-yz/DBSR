@@ -1,0 +1,5 @@
+# Ignore all .pth files
+pretrained_networks/*.pth
+
+# Ignore all files in the results directory
+downloaded_datasets/
