@@ -3,7 +3,7 @@
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode
+#      https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode
 #
 # The code is released for academic research use only. For commercial use, please contact Huawei Technologies Co., Ltd.
 # Unless required by applicable law or agreed to in writing, software
