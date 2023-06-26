@@ -149,7 +149,9 @@ def mosaic(image, mode='rggb'):
         green_red = image[:, 1, 0::2, 1::2]
         green_blue = image[:, 1, 1::2, 0::2]
         blue = image[:, 2, 1::2, 1::2]
+        # print("!!!!!!!!!!!mosaic: ", image.shape)
         image = torch.stack((red, green_red, green_blue, blue), dim=1)
+        
     elif mode == 'grbg':
         green_red = image[:, 1, 0::2, 0::2]
         red = image[:, 0, 0::2, 1::2]
