@@ -16,10 +16,12 @@ backwarp_tenPartial = {}
 
 def backwarp(tenInput, tenFlow):
     device = tenInput.device
+    print("!!!!!!!!!!!!!!!!pwcnet's device: ", device)
     key = str(tenFlow.shape) + str(device)
     if key not in backwarp_tenGrid:
         tenHor = torch.linspace(-1.0 + (1.0 / tenFlow.shape[3]), 1.0 - (1.0 / tenFlow.shape[3]), tenFlow.shape[3]).view(1, 1, 1, -1).expand(-1, -1, tenFlow.shape[2], -1)
         tenVer = torch.linspace(-1.0 + (1.0 / tenFlow.shape[2]), 1.0 - (1.0 / tenFlow.shape[2]), tenFlow.shape[2]).view(1, 1, -1, 1).expand(-1, -1, -1, tenFlow.shape[3])
+        
 
         backwarp_tenGrid[key] = torch.cat([tenHor, tenVer], 1).to(device)
 
@@ -245,6 +247,7 @@ class PWCNet(torch.nn.Module):
                 weights_dict = torch.load(weights_path)
                 self.net.load_state_dict({strKey.replace('module', 'net'): tenWeight for strKey, tenWeight
                                           in weights_dict.items()})
+        
 
     def forward(self, source_img, target_img):
         assert (source_img.shape[-1] == target_img.shape[-1])
@@ -270,6 +273,9 @@ class PWCNet(torch.nn.Module):
         target_img_re = torch.nn.functional.interpolate(input=target_img,
                                                         size=(int_preprocessed_height, int_preprocessed_width),
                                                         mode='bilinear', align_corners=False)
+
+        print("net's device!!!!!!!!!!!!!: ", next(self.net.parameters()).device)
+
 
         flow = self.net(target_img_re, source_img_re)
         flow = 20.0 * torch.nn.functional.interpolate(input=flow, size=(int_height, int_width), mode='bilinear',

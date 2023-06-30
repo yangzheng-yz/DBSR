@@ -26,6 +26,7 @@ class DBSRSyntheticActor(BaseActor):
 
     def __call__(self, data):
         # Run network
+        print("net's device: ", next(self.net.parameters()).device)
         pred, aux_dict = self.net(data['burst'])
 
         # Compute loss
@@ -62,6 +63,7 @@ class DBSRRealWorldActor(BaseActor):
         args:
             device - device to use. 'cpu' or 'cuda'
         """
+        print("!!!!!!!!!!!!!!!!net and sca's device: ", device)
         self.net.to(device)
         self.sca.to(device)
 

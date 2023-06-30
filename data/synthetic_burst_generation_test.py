@@ -141,15 +141,15 @@ def rgb2rawburstdatabase(image, burst_size, downsample_factor=1, burst_transform
     else:
         rgb_gain, red_gain, blue_gain = (1.0, 1.0, 1.0)
 
-    image = image / 255.0 
-    save_image(image, 'test/before_smoothstep.png')
+    # image = image / 255.0 
+    # save_image(image, 'test/before_tonemapping.png')
 
     # Approximately inverts global tone mapping.
     use_smoothstep = image_processing_params['smoothstep']
     if use_smoothstep:
         image = rgb2raw.invert_smoothstep(image)
 
-    save_image(image, 'test/after_smoothstep.png')
+    save_image(image, 'test/1_after_tonemapping.png')
     
     # Inverts gamma compression.
     use_gamma = image_processing_params['gamma']
@@ -157,16 +157,18 @@ def rgb2rawburstdatabase(image, burst_size, downsample_factor=1, burst_transform
         image = rgb2raw.gamma_expansion(image)
 
     # print(image.shape)
-    save_image(image, 'test/after_gamma.png')
+    save_image(image, 'test/2_after_gamma.png')
 
     # Inverts color correction.
     image = rgb2raw.apply_ccm(image, rgb2cam)
     
     # print(image.shape)
-    save_image(image, 'test/after_ccm.png')
+    save_image(image, 'test/3_after_ccm.png')
 
     # Approximately inverts white balance and brightening.
     image = rgb2raw.safe_invert_gains(image, rgb_gain, red_gain, blue_gain)
+
+    save_image(image, 'test/4_after_whitebalance.png')
 
     # Clip saturated pixels.
     image = image.clamp(0.0, 1.0)
@@ -181,7 +183,9 @@ def rgb2rawburstdatabase(image, burst_size, downsample_factor=1, burst_transform
                                                    transformation_params=burst_transformation_params,
                                                    interpolation_type=interpolation_type)
 
-    print(image.shape)
+    for idx, i in enumerate(image_burst_rgb):
+        save_image(i, 'test/5_after_pixelshift-%s-downsample.png' % idx)
+    # print(image.shape)
 
     # mosaic
     image_burst = rgb2raw.mosaic(image_burst_rgb.clone())
@@ -368,13 +372,19 @@ if __name__ == "__main__":
     
     img = torch.from_numpy(img.transpose((2, 0, 1)))
     
+    img = img[[2, 1, 0], :, :]
+    
     frame_crop = prutils.center_crop(img, crop_sz)
+    
+    frame_crop = frame_crop / 255.0
+    
+    save_image(frame_crop, 'test/after_crop.png')
     
     permutation = np.array([
         [0,0],
-        [1,0],
-        [1,1],
-        [0,1]
+        [5,0],
+        [10,0],
+        [15,0]
     ])
     
     burst_transformation_params = {'max_translation': 24.0,

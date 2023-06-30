@@ -1,4 +1,6 @@
 from admin.tensordict import TensorDict
+import time
+
 
 
 class BaseActor:
@@ -29,8 +31,11 @@ class BaseActor:
         """ Move the network to device
         args:
             device - device to use. 'cpu' or 'cuda'
+        
         """
+        print("!!!!!!!!!!!!!!!!net's device: ", device)
         self.net.to(device)
+        
 
     def train(self, mode=True):
         """ Set whether the network is in train mode.

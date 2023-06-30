@@ -59,10 +59,15 @@ def dbsrnet_cvpr2021(enc_init_dim, enc_num_res_blocks, enc_out_dim,
     alignment_net = PWCNet(load_pretrained=True,
                            weights_path='{}/pwcnet-network-default.pth'.format(env_settings().pretrained_nets_dir))
 
+    # print("pwcnet's device!!!!!!!!!!!!!: ", next(alignment_net.parameters()).device)
+
     encoder = dbsr_encoders.ResEncoderWarpAlignnet(enc_init_dim, enc_num_res_blocks, enc_out_dim,
                                                    alignment_net,
                                                    activation=activation,
                                                    train_alignmentnet=train_alignmentnet)
+    # print("encoder's device!!!!!!!!!!!!!: ", next(encoder.parameters()).device)
+ 
+    
 
     merging = dbsr_merging.WeightedSum(enc_out_dim, weight_pred_proj_dim, offset_feat_dim,
                                        num_offset_feat_extractor_res=num_offset_feat_extractor_res,

@@ -81,6 +81,7 @@ class SpatialColorAlignment(nn.Module):
         args:
             device - device to use. 'cpu' or 'cuda'
         """
+        print("!!!!!!!!!!!!!!!!alignment_net's device: ", device)
         self.alignment_net.to(device)
         self.gauss_kernel = self.gauss_kernel.to(device)
 
