@@ -33,13 +33,13 @@ def run(settings):
     settings.description = 'Default settings for training DBSR models on synthetic burst dataset(NightCity) with step: 4, random translation, crop size: (384, 384) '
     settings.batch_size = 16
     settings.num_workers = 8
-    settings.multi_gpu = False
+    settings.multi_gpu = True
     settings.print_interval = 1
 
     settings.crop_sz = (384, 384)
     settings.burst_sz = 4
     settings.downsample_factor = 4 # TODO: need to revise to 4?
-    settings.device = torch.device("cuda:2")
+    # settings.device = torch.device("cuda:2")
 
     # settings.burst_transformation_params = {'max_translation': 24.0,
     #                                         'max_rotation': 1.0,
@@ -93,7 +93,7 @@ def run(settings):
 
     # Train sampler and loader
     dataset_train = sampler.RandomImage([NightCity_train], [1],
-                                        samples_per_epoch=settings.batch_size * 300, processing=data_processing_train)
+                                        samples_per_epoch=settings.batch_size * 3, processing=data_processing_train)
     # dataset_val = sampler.RandomImage([NightCity_val], [1],
     #                                   samples_per_epoch=settings.batch_size * 1300, processing=data_processing_val)
     dataset_val = sampler.IndexedImage(NightCity_val, processing=data_processing_val)
@@ -124,7 +124,7 @@ def run(settings):
     objective = {'rgb': PixelWiseError(metric='l1', boundary_ignore=40), 'psnr': PSNR(boundary_ignore=40)}
 
     loss_weight = {'rgb': 1.0}
-    net.to(settings.device)
+    # net.to(settings.device)
     actor = dbsr_actors.DBSRSyntheticActor(net=net, objective=objective, loss_weight=loss_weight)
     # print("net's device!!!!!!!!!!!!!: ", next(net.parameters()).device)
 

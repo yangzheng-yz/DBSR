@@ -5,3 +5,5 @@ pretrained_networks/*.pth
 downloaded_datasets/
 
 models/
+
+model-*_output.txt
