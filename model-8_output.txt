@@ -1,0 +1,6 @@
+Training:  dbsr  model-8_synthetic
+train dataset length:  3
+val dataset length:  81
+basetrainer's device:  cuda:0
+!!!!!!!!!!!!!!!!net's device:  cuda:0
+No matching checkpoint file found
