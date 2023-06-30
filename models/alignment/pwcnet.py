@@ -16,7 +16,7 @@ backwarp_tenPartial = {}
 
 def backwarp(tenInput, tenFlow):
     device = tenInput.device
-    print("!!!!!!!!!!!!!!!!pwcnet's device: ", device)
+    # print("!!!!!!!!!!!!!!!!pwcnet's device: ", device)
     key = str(tenFlow.shape) + str(device)
     if key not in backwarp_tenGrid:
         tenHor = torch.linspace(-1.0 + (1.0 / tenFlow.shape[3]), 1.0 - (1.0 / tenFlow.shape[3]), tenFlow.shape[3]).view(1, 1, 1, -1).expand(-1, -1, tenFlow.shape[2], -1)
@@ -274,7 +274,7 @@ class PWCNet(torch.nn.Module):
                                                         size=(int_preprocessed_height, int_preprocessed_width),
                                                         mode='bilinear', align_corners=False)
 
-        print("net's device!!!!!!!!!!!!!: ", next(self.net.parameters()).device)
+        # print("net's device!!!!!!!!!!!!!: ", next(self.net.parameters()).device)
 
 
         flow = self.net(target_img_re, source_img_re)

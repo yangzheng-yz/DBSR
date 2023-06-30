@@ -24,20 +24,20 @@ from models.loss.image_quality_v2 import PSNR, PixelWiseError
 import numpy as np
 import torch
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
 
 
 
 def run(settings):
-    settings.description = 'Default settings for training DBSR models on synthetic burst dataset(NightCity) with step: 4, random translation, crop size: (384, 384) '
+    settings.description = 'Default settings for training DBSR models on synthetic burst dataset(NightCity) with step: 8, random translation, crop size: (384, 384) '
     settings.batch_size = 16
     settings.num_workers = 8
     settings.multi_gpu = False
     settings.print_interval = 1
 
     settings.crop_sz = (384, 384)
-    settings.burst_sz = 4
+    settings.burst_sz = 8
     settings.downsample_factor = 4 # TODO: need to revise to 4?
     # settings.device = torch.device("cuda:2")
 
@@ -50,8 +50,12 @@ def run(settings):
     permutation = np.array([
         [0,0],
         [0,1],
-        [1,1],
-        [1,0]
+        [0,2],
+        [0,3],
+        [0,-1],
+        [0,-2],
+        [0,-3],
+        [0,4]
     ])
     
     settings.burst_transformation_params = {'max_translation': 3.0,
