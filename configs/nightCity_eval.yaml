@@ -1,0 +1,11 @@
+random_ccm: True
+random_gains: True
+smoothstep: True
+gamma: True
+add_noise: True
+
+crop_sz: 384
+burst_sz: 4
+downsample_factor: 4
+
+return_rgb_busrt: True
