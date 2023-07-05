@@ -3,9 +3,7 @@ random_gains: True
 smoothstep: True
 gamma: True
 add_noise: True
-
+return_rgb_burst: True
 crop_sz: 384
 burst_sz: 4
 downsample_factor: 4
-
-return_rgb_busrt: True

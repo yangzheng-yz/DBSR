@@ -50,12 +50,13 @@ def cfg_from_yaml_file(cfg_file, config):
 def parse_config():
     parser = argparse.ArgumentParser(description='arg parser')
     parser.add_argument('--ckpt_path', type=str, default=None, help='checkpoint to be evaluated')
+    parser.add_argument('--cfg_file', type=str, default=None, help='config file')
     parser.add_argument('--dataset_path', type=str, default='/mnt/samsung/zheng/downloaded_datasets/NightCity_1024x512/val', help='dataset to be evaluated')
     parser.add_argument('--trajectory_path', type=str, default=None, help='to specify the pixel shift trajectory, the dir should include a .txt(trajectories) and a .pkl(meta_info)')
     parser.add_argument('--save_path', type=str, default=None, help='dir to save all output')    
     parser.add_argument('--use_saved_results', type=str, default=None, help='use previous predicted results path, no need GPU')    
 
-    parser.add_argument('--save_results', action='store_true', default=True, help='save the superresolution SR, the first LR, and HR in sRGB')
+    parser.add_argument('--save_results', action='store_true', default=False, help='save the superresolution SR, the first LR, and HR in sRGB')
     parser.add_argument('--save_pixelShifts', action='store_true', default=False, help='save the pixel shifted LRs and HR in linear sensor space')    
     
     args = parser.parse_args()
@@ -119,10 +120,28 @@ def main():
         permutations = pkl.load(f)
     
     scores_all_mean = {}
+    selected_images = ['Nagoya_1014.png', 'HK_0416.png', 'tokyo_0074.png', 'HK_0115.png', 'Dubai_0500.png'] # first 56, second 45, third 39, fourth 32, fifth 23
     for idx_traj, permutation in enumerate(permutations):
-        print("processing %sth trajectory of %s" % (idx_traj, args.trajectory_path))
+        print("Processing %sth trajectory of %s" % (idx_traj, args.trajectory_path))
+        
+        dir_path = '/'.join(args.trajectory_path.split('/')[:-1])
+        meta_infos_found = False
+        if os.path.exists(os.path.join(dir_path, 'val_meta_infos.pkl')):
+            with open(os.path.join(dir_path, 'val_meta_infos.pkl'), 'rb') as f:
+                meta_infos_val = pkl.load(f)
+            print(" *Using the predefined ISP parameters in %s" % os.path.join(dir_path, 'val_meta_infos.pkl'))
+            meta_infos_found = True
+            image_processing_params = {'random_ccm': cfg.random_ccm, 'random_gains': cfg.random_gains, 'smoothstep': cfg.smoothstep, 'gamma': cfg.gamma, 'add_noise': cfg.add_noise,
+                                       'predefined_params': meta_infos_val}
+
+        else:
+            print(" *Using random ISP parameters")
+            meta_infos_val = {} 
+            image_processing_params = {'random_ccm': cfg.random_ccm, 'random_gains': cfg.random_gains, 'smoothstep': cfg.smoothstep, 'gamma': cfg.gamma, 'add_noise': cfg.add_noise}
+            
         transform_val = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True), tfm.RandomHorizontalFlip())
-        image_processing_params = {'random_ccm': cfg.random_ccm, 'random_gains': cfg.random_gains, 'smoothstep': cfg.smoothstep, 'gamma': cfg.gamma, 'add_noise': cfg.add_noise}
+        
+
         burst_transformation_params_val = {'max_translation': 3.0,
                                             'max_rotation': 0.0,
                                             'max_shear': 0.0,
@@ -130,22 +149,28 @@ def main():
                                             'border_crop': 24,
                                             'random_pixelshift': False,
                                             'specified_translation': permutation}
+        
         data_processing_val = processing.SyntheticBurstDatabaseProcessing((cfg.crop_sz, cfg.crop_sz), cfg.burst_sz,
                                                                             cfg.downsample_factor,
                                                                             burst_transformation_params=burst_transformation_params_val,
                                                                             transform=transform_val,
                                                                             image_processing_params=image_processing_params,
                                                                             random_crop=False,
-                                                                            return_rgb_busrt=cfg.return_rgb_busrt)
+                                                                            return_rgb_busrt=cfg.return_rgb_burst)
+        
         dataset_val = sampler.IndexedImage(NightCity_val, processing=data_processing_val)
-        process_fn = SimplePostProcess(return_np=True)
+        
+        process_fn = SimplePostProcess(return_np=False)
 
         """The fourth part is to perform prediction"""
         for idx, data in enumerate(dataset_val):
-            print("evaluated %s/%s images of %s" % (idx, len(dataset_val)-1, args.dataset_path))
             burst = data['burst']
             gt = data['frame_gt']
-            meta_info = data['meta_info']
+            if meta_infos_found:
+                meta_info = meta_infos_val['%s' % data['image_name']]
+            else:
+                meta_info = data['meta_info']
+                meta_infos_val['%s' % data['image_name']] = meta_info
             burst_rgb = data['burst_rgb']
             assert cfg.return_rgb_burst, "Better open this button to save the results."
             meta_info['frame_num'] = idx
@@ -172,32 +197,43 @@ def main():
             for m, m_fn in metrics_all.items():
                 metric_value = m_fn(net_pred, gt.unsqueeze(0)).cpu().item()
                 scores[m].append(metric_value)
-                
+
             # Here we want to save result for visualization
-            if args.save_results and args.save_path is not None:
+            if args.save_results and args.save_path is not None and data['image_name'] in selected_images:
                 if not os.path.isdir(args.save_path):
                     os.makedirs('{}'.format(args.save_path), exist_ok=True)
                     
-                save_path_traj = os.path.join(args.save_path, '{:04d}' % idx_traj)
+                save_path_traj = os.path.join(args.save_path, '{:04d}'.format(idx_traj))
                 if not os.path.isdir(save_path_traj):
                     os.makedirs(save_path_traj, exist_ok=True)
-                
+
+                # net_pred_np = (net_pred.squeeze(0).permute(1, 2, 0).clamp(0.0, 1.0) * 2 ** 14).cpu().numpy().astype(
+                #     np.uint16)
                 HR_image = process_fn.process(gt.cpu(), meta_info)
                 LR_image = process_fn.process(burst_rgb[0], meta_info)
-                SR_image = process_fn.process(net_pred.cpu(), meta_info)
+                SR_image = process_fn.process(net_pred.squeeze(0).cpu(), meta_info)
                 
-                HR_image = cv2.resize(HR_image, dsize=(gt.shape[1], gt.shape[0]), interpolation=cv2.INTER_NEAREST)
-                LR_image = cv2.resize(LR_image, dsize=(gt.shape[1], gt.shape[0]), interpolation=cv2.INTER_NEAREST)
-                SR_image = cv2.resize(SR_image, dsize=(gt.shape[1], gt.shape[0]), interpolation=cv2.INTER_NEAREST)
+                # HR_image = gt.cpu()
+                # LR_image = burst_rgb[0]
+                # SR_image = net_pred.squeeze(0).cpu()
                 
                 HR_image = (HR_image.permute(1, 2, 0).clamp(0.0, 1.0) * 2 ** 14).numpy().astype(np.uint16)
                 LR_image = (LR_image.permute(1, 2, 0).clamp(0.0, 1.0) * 2 ** 14).numpy().astype(np.uint16)
                 SR_image = (SR_image.permute(1, 2, 0).clamp(0.0, 1.0) * 2 ** 14).numpy().astype(np.uint16)
                 
-                cv2.imwrite('{}/HR_{}.png'.format(save_path_traj, burst_name), HR_image)
-                cv2.imwrite('{}/LR_{}.png'.format(save_path_traj, burst_name), LR_image)
-                cv2.imwrite('{}/SR_{}.png'.format(save_path_traj, burst_name), SR_image)
+                # HR_image = cv2.resize(HR_image, dsize=(gt.shape[1], gt.shape[0]), interpolation=cv2.INTER_NEAREST)
+                LR_image = cv2.resize(LR_image, dsize=(HR_image.shape[1], HR_image.shape[0]), interpolation=cv2.INTER_NEAREST)
+                # SR_image = cv2.resize(SR_image, dsize=(gt.shape[1], gt.shape[0]), interpolation=cv2.INTER_NEAREST)
                 
+                cv2.imwrite('{}/{}_HR.png'.format(save_path_traj, burst_name.split('.')[0]), HR_image)
+                cv2.imwrite('{}/{}_LR.png'.format(save_path_traj, burst_name.split('.')[0]), LR_image)
+                cv2.imwrite('{}/{}_SR.png'.format(save_path_traj, burst_name.split('.')[0]), SR_image)
+            
+            print(" Evaluated %s/%s images of %s/%s, its psnr is %s" % (idx, len(dataset_val)-1, args.dataset_path, burst_name, scores['psnr'][-1]))
+
+        if not meta_infos_found:
+            with open(os.path.join(dir_path, 'val_meta_infos.pkl'), 'wb') as f:
+                pkl.dump(meta_infos_val, f)   
         # scores_all[n.get_display_name()] = scores
         scores_all_mean['%s_%sth-Traj'] = {m: sum(s) / len(s) for m, s in scores.items()}
     with open(os.path.join(args.save_path, 'results_of_%s-%s.pkl' % (args.ckpt_path.split('/')[-1].split('.')[0], args.trajectory_path.split('/')[-1].split('.')[0])), 'wb') as f:

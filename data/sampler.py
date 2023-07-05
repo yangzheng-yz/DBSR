@@ -37,7 +37,8 @@ class IndexedImage(torch.utils.data.Dataset):
         frame, meta_info = self.dataset.get_image(index)
 
         data = TensorDict({'frame': frame,
-                           'dataset': self.dataset.get_name()})
+                           'dataset': self.dataset.get_name(),
+                           'image_name': meta_info})
 
         return self.processing(data)
 
