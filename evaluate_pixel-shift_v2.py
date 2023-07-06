@@ -245,7 +245,7 @@ def main():
             with open(os.path.join(dir_path, 'val_meta_infos.pkl'), 'wb') as f:
                 pkl.dump(meta_infos_val, f)   
         # scores_all[n.get_display_name()] = scores
-        scores_all_mean['%s_%sth-Traj'] = {m: sum(s) / len(s) for m, s in scores.items()}
+        scores_all_mean['%s_%sth-Traj' % (args.ckpt_path.split('/')[-2], idx_traj)] = {m: sum(s) / len(s) for m, s in scores.items()}
         with open(os.path.join(args.save_path, 'results_of_%s-%s.pkl' % (args.ckpt_path.split('/')[-2], args.trajectory_path.split('/')[-1].split('.')[0])), 'wb') as f:
             pkl.dump(scores_all_mean, f)
 
