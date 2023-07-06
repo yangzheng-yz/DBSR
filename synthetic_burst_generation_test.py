@@ -16,9 +16,9 @@ import torch
 import random
 import cv2
 import numpy as np
-import camera_pipeline as rgb2raw
-import transforms as tfm
-import processing_utils as prutils
+import data.camera_pipeline as rgb2raw
+import data.transforms as tfm
+import data.processing_utils as prutils
 from utils.data_format_utils import torch_to_numpy, numpy_to_torch
 from torchvision.utils import save_image
 
@@ -189,6 +189,7 @@ def rgb2rawburstdatabase(image, burst_size, downsample_factor=1, burst_transform
 
     # mosaic
     image_burst = rgb2raw.mosaic(image_burst_rgb.clone())
+    print("raw shape: ", image_burst.shape)
 
     # Add noise
     if image_processing_params['add_noise']:
@@ -197,7 +198,8 @@ def rgb2rawburstdatabase(image, burst_size, downsample_factor=1, burst_transform
     else:
         shot_noise_level = 0
         read_noise_level = 0
-
+    print("shot_noise_level: ", shot_noise_level)
+    print("read_noise_level: ", read_noise_level)
     # Clip saturated pixels.
     image_burst = image_burst.clamp(0.0, 1.0)
 
@@ -364,7 +366,7 @@ def single2lrburstdatabase(image, burst_size, downsample_factor=1, transformatio
 
 if __name__ == "__main__":
     
-    image_path = "/mnt/samsung/zheng/downloaded_datasets/NightCity_1024x512/val_chicago-0006/Chicago_0006.png"
+    image_path = "/mnt/samsung/zheng/downloaded_datasets/NightCity_1024x512/val/Chicago_0006.png"
     
     img = cv2.imread(image_path)
     
@@ -372,7 +374,7 @@ if __name__ == "__main__":
     
     img = torch.from_numpy(img.transpose((2, 0, 1)))
     
-    img = img[[2, 1, 0], :, :]
+    # img = img[[2, 1, 0], :, :]
     
     frame_crop = prutils.center_crop(img, crop_sz)
     
@@ -383,8 +385,7 @@ if __name__ == "__main__":
     permutation = np.array([
         [0,0],
         [5,0],
-        [10,0],
-        [15,0]
+        [10,0]
     ])
     
     burst_transformation_params = {'max_translation': 24.0,
@@ -400,7 +401,7 @@ if __name__ == "__main__":
     
     downsample_factor = 4
     
-    burst_size = 4
+    burst_size = 3
     
     interpolation_type = 'bilinear'
     
@@ -411,3 +412,4 @@ if __name__ == "__main__":
                                                                             image_processing_params=image_processing_params,
                                                                             interpolation_type=interpolation_type
                                                                             )
+    

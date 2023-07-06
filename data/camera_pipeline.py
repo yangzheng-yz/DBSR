@@ -182,6 +182,7 @@ def random_noise_levels():
 def add_noise(image, shot_noise=0.01, read_noise=0.0005):
     """Adds random shot (proportional to image) and read (independent) noise."""
     variance = image * shot_noise + read_noise
+    # print("noise std: ", variance.sqrt().mean())
     noise = torch.FloatTensor(image.shape).normal_().to(image.device)*variance.sqrt()
     return image + noise
 

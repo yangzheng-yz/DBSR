@@ -235,9 +235,13 @@ def main():
                     LR_image = cv2.resize(LR_image, dsize=(HR_image.shape[1], HR_image.shape[0]), interpolation=cv2.INTER_NEAREST)
                     # SR_image = cv2.resize(SR_image, dsize=(gt.shape[1], gt.shape[0]), interpolation=cv2.INTER_NEAREST)
                     
-                    cv2.imwrite('{}/{}_HR.png'.format(save_path_traj, burst_name.split('.')[0]), HR_image)
-                    cv2.imwrite('{}/{}_LR.png'.format(save_path_traj, burst_name.split('.')[0]), LR_image)
-                    cv2.imwrite('{}/{}_SR.png'.format(save_path_traj, burst_name.split('.')[0]), SR_image)
+                    HR_image_cvwrite = HR_image[:, :, [2, 1, 0]]
+                    LR_image_cvwrite = LR_image[:, :, [2, 1, 0]]
+                    SR_image_cvwrite = SR_image[:, :, [2, 1, 0]]
+                    
+                    cv2.imwrite('{}/{}_HR.png'.format(save_path_traj, burst_name.split('.')[0]), HR_image_cvwrite)
+                    cv2.imwrite('{}/{}_LR.png'.format(save_path_traj, burst_name.split('.')[0]), LR_image_cvwrite)
+                    cv2.imwrite('{}/{}_SR.png'.format(save_path_traj, burst_name.split('.')[0]), SR_image_cvwrite)
             
             print(" Evaluated %s/%s images of %s/%s, its psnr is %s" % (idx, len(dataset_val)-1, args.dataset_path, burst_name, scores['psnr'][-1]))
 
