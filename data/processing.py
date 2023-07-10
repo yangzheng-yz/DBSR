@@ -200,7 +200,7 @@ class SyntheticBurstDatabaseProcessing(BaseProcessing):
                                                                                                burst_transformation_params=self.burst_transformation_params,
                                                                                                image_processing_params=self.image_processing_params,
                                                                                                interpolation_type=self.interpolation_type,
-                                                                                               image_name=data['image_name']
+                                                                                               image_name=data.get('image_name', None)
                                                                                                )
 
         # Crop border regions

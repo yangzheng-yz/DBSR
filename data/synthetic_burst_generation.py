@@ -130,6 +130,7 @@ def rgb2rawburstdatabase(image, burst_size, downsample_factor=1, burst_transform
     # Sample camera pipeline params
     if image_processing_params['random_ccm']:
         if image_processing_params.get('predefined_params', None) is not None:
+            assert image_name is not None, "You should pass the image_name into this function."
             rgb2cam = image_processing_params['predefined_params'][image_name]['rgb2cam']
         else:
             rgb2cam = rgb2raw.random_ccm()
@@ -140,6 +141,7 @@ def rgb2rawburstdatabase(image, burst_size, downsample_factor=1, burst_transform
     # Sample gains
     if image_processing_params['random_gains']:
         if image_processing_params.get('predefined_params', None) is not None:
+            assert image_name is not None, "You should pass the image_name into this function."
             rgb_gain = image_processing_params['predefined_params'][image_name]['rgb_gain']
             red_gain = image_processing_params['predefined_params'][image_name]['red_gain']
             blue_gain = image_processing_params['predefined_params'][image_name]['blue_gain']
@@ -183,6 +185,7 @@ def rgb2rawburstdatabase(image, burst_size, downsample_factor=1, burst_transform
     # Add noise
     if image_processing_params['add_noise']:
         if image_processing_params.get('predefined_params', None) is not None:
+            assert image_name is not None, "You should pass the image_name into this function."
             shot_noise_level = image_processing_params['predefined_params'][image_name]['shot_noise_level']
             read_noise_level = image_processing_params['predefined_params'][image_name]['read_noise_level']
         else:

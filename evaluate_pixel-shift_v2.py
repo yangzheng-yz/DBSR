@@ -152,6 +152,8 @@ def main():
         if args.specify_trajetory_num != -1:
             if idx_traj != args.specify_trajetory_num:
                 continue
+        # if idx_traj not in [0, 266]:
+        #     continue
         print("Processing %sth trajectory of %s" % (idx_traj, args.trajectory_path))
         
         dir_path = '/'.join(args.trajectory_path.split('/')[:-1])
@@ -272,7 +274,9 @@ def main():
                     cv2.imwrite('{}/{}_LR.png'.format(save_path_traj, burst_name.split('.')[0]), LR_image)
                     cv2.imwrite('{}/{}_SR.png'.format(save_path_traj, burst_name.split('.')[0]), SR_image)
             
-            print(" Evaluated %s/%s images of %s/%s, its psnr is %s, its ssim is %s, LRPSNR is %s, LRSSIM is %s" % (idx, len(dataset_val)-1, args.dataset_path, burst_name, scores['psnr'][-1], scores['ssim'][-1], metrics_all['psnr'](burst_rgb_tensor.unsqueeze(0), gt.unsqueeze(0)).cpu().item(), metrics_all['ssim'](burst_rgb_tensor.unsqueeze(0), gt.unsqueeze(0)).cpu().item()))
+                print(" Evaluated %s/%s images of %s/%s, its psnr is %s, its ssim is %s, LRPSNR is %s, LRSSIM is %s" % (idx, len(dataset_val)-1, args.dataset_path, burst_name, scores['psnr'][-1], scores['ssim'][-1], metrics_all['psnr'](burst_rgb_tensor.unsqueeze(0), gt.unsqueeze(0)).cpu().item(), metrics_all['ssim'](burst_rgb_tensor.unsqueeze(0), gt.unsqueeze(0)).cpu().item()))
+            else:
+                print(" Evaluated %s/%s images of %s/%s, its psnr is %s, its ssim is %s" % (idx, len(dataset_val)-1, args.dataset_path, burst_name, scores['psnr'][-1], scores['ssim'][-1]))
 
             if args.specify_image_name is not None:
                 break
@@ -281,6 +285,8 @@ def main():
                 pkl.dump(meta_infos_val, f)   
         # scores_all[n.get_display_name()] = scores
         scores_all_mean['%s_%sth-Traj' % (args.ckpt_path.split('/')[-2], idx_traj)] = {m: sum(s) / len(s) for m, s in scores.items()}
+        if not os.path.isdir(args.save_path):
+            os.makedirs('{}'.format(args.save_path), exist_ok=True)
         with open(os.path.join(args.save_path, 'results_of_%s-%s.pkl' % (args.ckpt_path.split('/')[-2], args.trajectory_path.split('/')[-1].split('.')[0])), 'wb') as f:
             pkl.dump(scores_all_mean, f)
 
