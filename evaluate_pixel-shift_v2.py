@@ -10,12 +10,36 @@ import tqdm
 import yaml
 from easydict import EasyDict
 import torch
+from skimage.metrics import peak_signal_noise_ratio as psnr
+from skimage.metrics import structural_similarity as ssim
+from skimage import io, img_as_float
 
 from evaluation.common_utils.network_param import NetworkParam
 from models.loss.image_quality_v2 import PSNR, SSIM, LPIPS
 from data.postprocessing_functions import SimplePostProcess
 
 cfg = EasyDict()
+
+def calculate_psnr(img1, img2):
+
+    # Convert the images to float
+    img1 = img_as_float(img1)
+    img2 = img_as_float(img2)
+
+    # Calculate the PSNR
+    psnr_value = psnr(img1, img2, data_range=img1.max() - img1.min())
+
+    return psnr_value
+
+def calculate_ssim(img1, img2):
+    # Convert the images to float
+    img1 = img_as_float(img1)
+    img2 = img_as_float(img2)
+
+    # Calculate the SSIM
+    ssim_value = ssim(img1, img2, multichannel=True)
+
+    return ssim_value
 
 def merge_new_config(config, new_config):
     if '_BASE_CONFIG_' in new_config:
@@ -145,14 +169,15 @@ def main():
             meta_infos_val = {} 
             image_processing_params = {'random_ccm': cfg.random_ccm, 'random_gains': cfg.random_gains, 'smoothstep': cfg.smoothstep, 'gamma': cfg.gamma, 'add_noise': cfg.add_noise}
             
-        transform_val = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True), tfm.RandomHorizontalFlip())
+        # transform_val = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True), tfm.RandomHorizontalFlip())
+        transform_val = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True))
         
 
         burst_transformation_params_val = {'max_translation': 3.0,
                                             'max_rotation': 0.0,
                                             'max_shear': 0.0,
                                             'max_scale': 0.0,
-                                            'border_crop': 24,
+                                            'border_crop': 24, #24,
                                             'random_pixelshift': False,
                                             'specified_translation': permutation}
         
@@ -166,7 +191,7 @@ def main():
         
         dataset_val = sampler.IndexedImage(NightCity_val, processing=data_processing_val)
         
-        process_fn = SimplePostProcess(return_np=False)
+        process_fn = SimplePostProcess(return_np=True)
 
         """The fourth part is to perform prediction"""
         for idx, data in enumerate(dataset_val):
@@ -198,10 +223,11 @@ def main():
             else:
                 with torch.no_grad():
                     net_pred, _ = net(burst)
-
+                
+                print("net_pred size: ", net_pred.size())
                 # Perform quantization to be consistent with evaluating on saved images
-                net_pred_int = (net_pred.clamp(0.0, 1.0) * 2 ** 14).short()
-                net_pred = net_pred_int.float() / (2 ** 14)
+                # net_pred_int = (net_pred.clamp(0.0, 1.0) * 2 ** 14).short()
+                # net_pred = net_pred_int.float() / (2 ** 14)
 
             for m, m_fn in metrics_all.items():
                 metric_value = m_fn(net_pred, gt.unsqueeze(0)).cpu().item()
@@ -227,24 +253,29 @@ def main():
                     # LR_image = burst_rgb[0]
                     # SR_image = net_pred.squeeze(0).cpu()
                     
-                    HR_image = (HR_image.permute(1, 2, 0).clamp(0.0, 1.0) * 2 ** 14).numpy().astype(np.uint16)
-                    LR_image = (LR_image.permute(1, 2, 0).clamp(0.0, 1.0) * 2 ** 14).numpy().astype(np.uint16)
-                    SR_image = (SR_image.permute(1, 2, 0).clamp(0.0, 1.0) * 2 ** 14).numpy().astype(np.uint16)
+                    # HR_image = (HR_image.permute(1, 2, 0).clamp(0.0, 1.0) * 2 ** 14).numpy().astype(np.uint16)
+                    # LR_image = (LR_image.permute(1, 2, 0).clamp(0.0, 1.0) * 2 ** 14).numpy().astype(np.uint16)
+                    # SR_image = (SR_image.permute(1, 2, 0).clamp(0.0, 1.0) * 2 ** 14).numpy().astype(np.uint16)
                     
                     # HR_image = cv2.resize(HR_image, dsize=(gt.shape[1], gt.shape[0]), interpolation=cv2.INTER_NEAREST)
-                    LR_image = cv2.resize(LR_image, dsize=(HR_image.shape[1], HR_image.shape[0]), interpolation=cv2.INTER_NEAREST)
+                    LR_image = cv2.resize(LR_image, dsize=(HR_image.shape[1], HR_image.shape[0]), interpolation=cv2.INTER_CUBIC)
                     # SR_image = cv2.resize(SR_image, dsize=(gt.shape[1], gt.shape[0]), interpolation=cv2.INTER_NEAREST)
+                    # HR_image_cvwrite = HR_image[:, :, [2, 1, 0]]
+                    # LR_image_cvwrite = LR_image[:, :, [2, 1, 0]]
+                    # SR_image_cvwrite = SR_image[:, :, [2, 1, 0]]
                     
-                    HR_image_cvwrite = HR_image[:, :, [2, 1, 0]]
-                    LR_image_cvwrite = LR_image[:, :, [2, 1, 0]]
-                    SR_image_cvwrite = SR_image[:, :, [2, 1, 0]]
-                    
-                    cv2.imwrite('{}/{}_HR.png'.format(save_path_traj, burst_name.split('.')[0]), HR_image_cvwrite)
-                    cv2.imwrite('{}/{}_LR.png'.format(save_path_traj, burst_name.split('.')[0]), LR_image_cvwrite)
-                    cv2.imwrite('{}/{}_SR.png'.format(save_path_traj, burst_name.split('.')[0]), SR_image_cvwrite)
+                    burst_rgb_np = burst_rgb[0].permute(1, 2, 0).numpy()
+                    burst_rgb_np = cv2.resize(burst_rgb_np, dsize=(HR_image.shape[1], HR_image.shape[0]), interpolation=cv2.INTER_CUBIC)
+                    burst_rgb_tensor = torch.from_numpy(burst_rgb_np)
+                    burst_rgb_tensor = burst_rgb_tensor.permute(2,0,1).to(device)
+                    cv2.imwrite('{}/{}_HR.png'.format(save_path_traj, burst_name.split('.')[0]), HR_image)
+                    cv2.imwrite('{}/{}_LR.png'.format(save_path_traj, burst_name.split('.')[0]), LR_image)
+                    cv2.imwrite('{}/{}_SR.png'.format(save_path_traj, burst_name.split('.')[0]), SR_image)
             
-            print(" Evaluated %s/%s images of %s/%s, its psnr is %s" % (idx, len(dataset_val)-1, args.dataset_path, burst_name, scores['psnr'][-1]))
+            print(" Evaluated %s/%s images of %s/%s, its psnr is %s, its ssim is %s, LRPSNR is %s, LRSSIM is %s" % (idx, len(dataset_val)-1, args.dataset_path, burst_name, scores['psnr'][-1], scores['ssim'][-1], metrics_all['psnr'](burst_rgb_tensor.unsqueeze(0), gt.unsqueeze(0)).cpu().item(), metrics_all['ssim'](burst_rgb_tensor.unsqueeze(0), gt.unsqueeze(0)).cpu().item()))
 
+            if args.specify_image_name is not None:
+                break
         if not meta_infos_found:
             with open(os.path.join(dir_path, 'val_meta_infos.pkl'), 'wb') as f:
                 pkl.dump(meta_infos_val, f)   
