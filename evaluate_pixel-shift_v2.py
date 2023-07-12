@@ -274,7 +274,9 @@ def main():
                     cv2.imwrite('{}/{}_LR.png'.format(save_path_traj, burst_name.split('.')[0]), LR_image)
                     cv2.imwrite('{}/{}_SR.png'.format(save_path_traj, burst_name.split('.')[0]), SR_image)
             
-                print(" Evaluated %s/%s images of %s/%s, its psnr is %s, its ssim is %s, LRPSNR is %s, LRSSIM is %s" % (idx, len(dataset_val)-1, args.dataset_path, burst_name, scores['psnr'][-1], scores['ssim'][-1], metrics_all['psnr'](burst_rgb_tensor.unsqueeze(0), gt.unsqueeze(0)).cpu().item(), metrics_all['ssim'](burst_rgb_tensor.unsqueeze(0), gt.unsqueeze(0)).cpu().item()))
+                    print(" Evaluated %s/%s images of %s/%s, its psnr is %s, its ssim is %s, LRPSNR is %s, LRSSIM is %s" % (idx, len(dataset_val)-1, args.dataset_path, burst_name, scores['psnr'][-1], scores['ssim'][-1], metrics_all['psnr'](burst_rgb_tensor.unsqueeze(0), gt.unsqueeze(0)).cpu().item(), metrics_all['ssim'](burst_rgb_tensor.unsqueeze(0), gt.unsqueeze(0)).cpu().item()))
+                else:
+                    print(" Evaluated %s/%s images of %s/%s, its psnr is %s, its ssim is %s" % (idx, len(dataset_val)-1, args.dataset_path, burst_name, scores['psnr'][-1], scores['ssim'][-1]))
             else:
                 print(" Evaluated %s/%s images of %s/%s, its psnr is %s, its ssim is %s" % (idx, len(dataset_val)-1, args.dataset_path, burst_name, scores['psnr'][-1], scores['ssim'][-1]))
 
