@@ -7,3 +7,5 @@ downloaded_datasets/
 models/
 
 model-*_output.txt
+
+*/__pycache__/*.pyc

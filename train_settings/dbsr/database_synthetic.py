@@ -22,10 +22,10 @@ import data.transforms as tfm
 from admin.multigpu import MultiGPU
 from models.loss.image_quality_v2 import PSNR, PixelWiseError
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
 def run(settings):
-    settings.description = 'Default settings for training DBSR models on synthetic burst dataset, with random pixel shift, trans(24), rot(1.0), burst size(8), use ori function'
+    settings.description = 'Default settings for training DBSR models on synthetic burst dataset, with random pixel shift, trans(24), rot(1.0), burst size(8), use database function'
     settings.batch_size = 16
     settings.num_workers = 8
     settings.multi_gpu = False
@@ -35,11 +35,25 @@ def run(settings):
     settings.burst_sz = 8
     settings.downsample_factor = 4
 
+    permutation = None
+
     settings.burst_transformation_params = {'max_translation': 24.0,
                                             'max_rotation': 1.0,
                                             'max_shear': 0.0,
                                             'max_scale': 0.0,
-                                            'border_crop': 24}
+                                            'border_crop': 24,
+                                            'random_pixelshift': True,
+                                            'specified_translation': permutation
+                                            }
+    burst_transformation_params_val = {'max_translation': 4.0,
+                                        'max_rotation': 0.0,
+                                        'max_shear': 0.0,
+                                        'max_scale': 0.0,
+                                        'border_crop': 4,
+                                        'random_pixelshift': True,
+                                        'specified_translation': permutation
+                                        }
+    
     settings.burst_reference_aligned = True
     settings.image_processing_params = {'random_ccm': True, 'random_gains': True, 'smoothstep': True, 'gamma': True, 'add_noise': True}
 
@@ -49,16 +63,18 @@ def run(settings):
     transform_train = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True), tfm.RandomHorizontalFlip())
     transform_val = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True), tfm.RandomHorizontalFlip())
 
-    data_processing_train = processing.SyntheticBurstProcessing(settings.crop_sz, settings.burst_sz,
+    data_processing_train = processing.SyntheticBurstDatabaseProcessing(settings.crop_sz, settings.burst_sz,
                                                                 settings.downsample_factor,
                                                                 burst_transformation_params=settings.burst_transformation_params,
                                                                 transform=transform_train,
-                                                                image_processing_params=settings.image_processing_params)
-    data_processing_val = processing.SyntheticBurstProcessing(settings.crop_sz, settings.burst_sz,
+                                                                image_processing_params=settings.image_processing_params,
+                                                                random_crop=True)
+    data_processing_val = processing.SyntheticBurstDatabaseProcessing(settings.crop_sz, settings.burst_sz,
                                                               settings.downsample_factor,
-                                                              burst_transformation_params=settings.burst_transformation_params,
+                                                              burst_transformation_params=burst_transformation_params_val,
                                                               transform=transform_val,
-                                                              image_processing_params=settings.image_processing_params)
+                                                              image_processing_params=settings.image_processing_params,
+                                                              random_crop=True)
 
     # Train sampler and loader
     dataset_train = sampler.RandomImage([zurich_raw2rgb_train], [1],
