@@ -4,6 +4,18 @@ smoothstep: True
 gamma: True
 add_noise: True
 return_rgb_burst: True
+
 crop_sz: 384
 burst_sz: 8
 downsample_factor: 4
+
+ckpt_path: /home/yutong/zheng/projects/dbsr_us/pretrained_networks/pretrained_syn/dbsr_synthetic_default.pth
+dataset_path: /mnt/data0/zheng/SyntheticDataset/test/canon
+trajectory_path: None
+save_path: None
+use_saved_results: None
+specify_trajetory_num: -1
+specify_image_id: None
+save_results: False
+save_pixelShifts: False
+split: test

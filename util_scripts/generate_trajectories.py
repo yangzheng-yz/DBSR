@@ -54,45 +54,63 @@ permutations = []
 #                               [1,2],
 #                               [2,2],
 #                               [1,1]]))
-permutations.append(np.array([[0,0],
-                              [0,1],
-                              [0,2],
-                              [0,3],
-                              [1,0],
-                              [1,1],
-                              [1,2],
-                              [1,3]]))
-permutations.append(np.array([[0,0],
-                              [0,1],
-                              [0,2],
-                              [0,3],
-                              [0,-1],
-                              [0,-2],
-                              [0,-3],
-                              [0,4]]))
-permutations.append(np.array([[0,0],
-                              [0,1],
-                              [0,2],
-                              [0,3],
-                              [2,0],
-                              [2,1],
-                              [2,2],
-                              [2,3]]))
-permutations.append(np.array([[0,0],
-                              [0,1],
-                              [0,2],
-                              [0,3],
-                              [3,0],
-                              [3,1],
-                              [3,2],
-                              [3,3]]))
 
-while len(permutations)!=1000:
-    p = np.random.randint(-3, 4, size=(step,2))
+# permutations.append(np.array([[0,0],
+#                               [0,1],
+#                               [0,2],
+#                               [0,3],
+#                               [1,0],
+#                               [1,1],
+#                               [1,2],
+#                               [1,3]]))
+# permutations.append(np.array([[0,0],
+#                               [0,1],
+#                               [0,2],
+#                               [0,3],
+#                               [2,0],
+#                               [2,1],
+#                               [2,2],
+#                               [2,3]]))
+# permutations.append(np.array([[0,0],
+#                               [0,1],
+#                               [0,2],
+#                               [0,3],
+#                               [3,0],
+#                               [3,1],
+#                               [3,2],
+#                               [3,3]]))
+# permutations.append(np.array([[0,0],
+#                               [0,1],
+#                               [0,2],
+#                               [0,3],
+#                               [0,4],
+#                               [0,5],
+#                               [0,6],
+#                               [0,7]]))
+# permutations.append(np.array([[0,0],
+#                               [0,2],
+#                               [0,6],
+#                               [0,10],
+#                               [0,14],
+#                               [0,18],
+#                               [0,22],
+#                               [0,23]]))
+# permutations.append(np.array([[0,0],
+#                               [1,1],
+#                               [2,2],
+#                               [3,3],
+#                               [4,4],
+#                               [5,5],
+#                               [6,6],
+#                               [7,7]]))
+
+
+while len(permutations)!=100:
+    p = np.random.randint(0, 24, size=(step,2))
     p[0,0]=0
     p[0,1]=0
     a=p[1:, :]
-    a=a[np.argsort(a[:, 0])]
+    a=a[np.lexsort((a[:, 1], a[:, 0]))]
     p[1:, :] = a
     found = False
     for j in permutations:
@@ -101,7 +119,9 @@ while len(permutations)!=1000:
             break
     if found:
         continue
+    elif len(p) != len(np.unique(p, axis=0)):
+        continue
     else:
         permutations.append(p)
-with open("trajectory_step-8_range-4.pkl", 'wb') as f:
+with open("zurich_trajectory_step-8_range-24.pkl", 'wb') as f:
     pkl.dump(permutations, f)

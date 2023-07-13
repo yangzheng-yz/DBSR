@@ -62,7 +62,7 @@ class ZurichRAW2RGB(BaseImageDataset):
         return image_list
 
     def get_image_info(self, im_id):
-        return {}
+        return "%s_%s" % (self.split, im_id)
 
     def _get_image(self, im_id):
         path = os.path.join(self.img_pth, self.image_list[im_id])
