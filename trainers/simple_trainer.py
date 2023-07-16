@@ -66,7 +66,7 @@ class SimpleTrainer(BaseTrainer):
         for i, data in enumerate(loader, 1):
             # get inputs
             if self.move_data_to_gpu:
-                print("!!!!!!!!!!!!!!!!!!!!data's device: ", self.device)
+                # print("!!!!!!!!!!!!!!!!!!!!data's device: ", self.device)
                 data = data.to(self.device)
 
             data['epoch'] = self.epoch

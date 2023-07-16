@@ -1,24 +1,24 @@
 import pickle as pkl
 import numpy as np
 
-step = 8
+step = 4
 permutations = []
-# permutations.append(np.array([[0,0],
-#                               [0,1],
-#                               [1,1],
-#                               [1,0]]))
-# permutations.append(np.array([[0,0],
-#                               [0,2],
-#                               [2,2],
-#                               [2,0]]))
-# permutations.append(np.array([[0,0],
-#                               [0,3],
-#                               [3,3],
-#                               [3,0]]))
-# permutations.append(np.array([[0,0],
-#                               [0,-1],
-#                               [-1,-1],
-#                               [-1,0]]))
+permutations.append(np.array([[0,0],
+                              [0,2],
+                              [2,2],
+                              [2,0]]))
+permutations.append(np.array([[0,0],
+                              [0,2.1],
+                              [2,2],
+                              [2,0]]))
+permutations.append(np.array([[0,0],
+                              [0,2],
+                              [2.1,2.1],
+                              [2,0]]))
+permutations.append(np.array([[0,0],
+                              [0,2],
+                              [2,2],
+                              [2.1,0]]))
 # permutations.append(np.array([[0,0],
 #                               [0,-2],
 #                               [-2,-2],
@@ -105,8 +105,8 @@ permutations = []
 #                               [7,7]]))
 
 
-while len(permutations)!=100:
-    p = np.random.randint(0, 24, size=(step,2))
+while len(permutations)!=300:
+    p = np.random.randint(0, 4, size=(step,2))
     p[0,0]=0
     p[0,1]=0
     a=p[1:, :]
@@ -122,6 +122,7 @@ while len(permutations)!=100:
     elif len(p) != len(np.unique(p, axis=0)):
         continue
     else:
+        print("now we have %s" % len(permutations))
         permutations.append(p)
-with open("zurich_trajectory_step-8_range-24.pkl", 'wb') as f:
+with open("zurich_trajectory_step-4_range-4.pkl", 'wb') as f:
     pkl.dump(permutations, f)

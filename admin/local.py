@@ -6,5 +6,5 @@ class EnvironmentSettings:
         self.save_data_path = '/home/yutong/zheng/projects/dbsr_us/synburst'    # Directory for saving network predictions for evaluation.
         self.zurichraw2rgb_dir = '/mnt/data0/zheng/SyntheticDataset'    # Zurich RAW 2 RGB paths
         self.nightcity_dir = '/mnt/data0/zheng/SyntheticDataset/NightCity_1024x512/'
-        self.burstsr_dir = ''    # BurstSR dataset path
-        self.synburstval_dir = '/mnt/data0/zheng/SyntheticDataset/SyntheticBurstVal'    # SyntheticBurst validation set path
+        self.burstsr_dir = '/mnt/data0/zheng/SyntheticDataset/real_world/burstsr_dataset'    # BurstSR dataset path
+        self.synburstval_dir = '/mnt/data0/zheng/SyntheticDataset/v al'    # SyntheticBurst validation set path

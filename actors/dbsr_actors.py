@@ -34,6 +34,11 @@ class DBSRSyntheticActor(BaseActor):
         # Compute loss
         loss_rgb_raw = self.objective['rgb'](pred, data['frame_gt'])
         loss_rgb = self.loss_weight['rgb'] * loss_rgb_raw
+        
+        if self.objective.get('perceptual', None) is not None:
+            loss_percept_raw = self.objective['perceptual'](pred, data['frame_gt'])
+            loss_percept = self.loss_weight['perceptual'] * loss_percept_raw
+            loss_rgb += loss_percept
 
         if 'psnr' in self.objective.keys():
             psnr = self.objective['psnr'](pred.clone().detach(), data['frame_gt'])

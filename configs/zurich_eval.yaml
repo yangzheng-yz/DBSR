@@ -10,13 +10,13 @@ burst_sz: 8
 downsample_factor: 4
 random_pixelshift: False
 
-ckpt_path: /home/yutong/zheng/projects/dbsr_us/pretrained_networks/pretrained_syn/dbsr_synthetic_default.pth
+ckpt_path: /mnt/data0/zheng/SyntheticDataset/training_results/checkpoints/dbsr/database_synthetic/DBSRNet_ep0100.pth.tar
 dataset_path: /mnt/data0/zheng/SyntheticDataset
 trajectory_path: /home/yutong/zheng/projects/dbsr_us/util_scripts/traj_files/zurich_trajectory_step-8_range-24.pkl
-save_path: /mnt/data0/zheng/SyntheticDataset/evaluation_results/pretrained_syn
+save_path: /mnt/data0/zheng/SyntheticDataset/evaluation_results/database_synthetic
 use_saved_results: None
-specify_trajetory_num: 0
-specify_image_id: -1
+specify_trajetory_num: 25
+specify_image_id: 28 # -1
 save_results: True
 save_pixelShifts: False
 split: test

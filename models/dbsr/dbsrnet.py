@@ -54,6 +54,7 @@ def dbsrnet_cvpr2021(enc_init_dim, enc_num_res_blocks, enc_out_dim,
                      icnrinit=False,
                      gauss_blur_sd=None,
                      gauss_ksz=3,
+                     use_pretrained=None
                      ):
     # backbone
     alignment_net = PWCNet(load_pretrained=True,
@@ -84,4 +85,7 @@ def dbsrnet_cvpr2021(enc_init_dim, enc_num_res_blocks, enc_out_dim,
                                               gauss_ksz=gauss_ksz)
 
     net = DBSRNet(encoder=encoder, merging=merging, decoder=decoder)
+    if use_pretrained is not None:
+        pretrained_weights = torch.load(use_pretrained)
+        net.load_state_dict(pretrained_weights)
     return net
