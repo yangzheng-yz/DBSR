@@ -23,30 +23,34 @@ from admin.multigpu import MultiGPU
 from models.loss.image_quality_v2 import PSNR, PixelWiseError
 import os
 import pickle as pkl
+import numpy as np
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 def run(settings):
-    settings.description = 'Default settings for training DBSR models on synthetic burst dataset, with specific pixel shift(No.0), range(4), burst size(4), use database function'
-    settings.batch_size = 16
+    settings.description = 'Default settings for training DBSR models on synthetic nir dataset, with specific pixel shift(4*4), range(4), burst size(16), use database function'
+    settings.batch_size = 4
     settings.num_workers = 8
     settings.multi_gpu = False
     settings.print_interval = 1
 
-    settings.crop_sz = (384, 384)
-    settings.burst_sz = 4
+    settings.crop_sz = (512, 640)
+    settings.burst_sz = 16
     settings.downsample_factor = 4
 
-    f=open("/home/yutong/zheng/projects/dbsr_us/util_scripts/traj_files/zurich_trajectory_step-4_range-4.pkl", 'rb')
-    permutations = pkl.load(f)
-    permutation = permutations[0]
-    f.close()
+    # f=open("/home/yutong/zheng/projects/dbsr_us/util_scripts/traj_files/zurich_trajectory_step-4_range-4.pkl", 'rb')
+    # permutations = pkl.load(f)
+    permutation = np.array([[0,0],[0,1],[0,2],[0,3],
+                            [1,0],[1,1],[1,2],[1,3],
+                            [2,0],[2,1],[2,2],[2,3],
+                            [3,0],[3,1],[3,2],[3,3]])
+    # f.close()
 
     settings.burst_transformation_params = {'max_translation': 24.0,
                                             'max_rotation': 1.0,
                                             'max_shear': 0.0,
                                             'max_scale': 0.0,
-                                            'border_crop': 24,
+                                            # 'border_crop': 0,
                                             'random_pixelshift': False,
                                             'specified_translation': permutation
                                             }
@@ -54,16 +58,16 @@ def run(settings):
                                         'max_rotation': 0.0,
                                         'max_shear': 0.0,
                                         'max_scale': 0.0,
-                                        'border_crop': 4,
+                                        # 'border_crop': 0,
                                         'random_pixelshift': False,
                                         'specified_translation': permutation
                                         }
     
     settings.burst_reference_aligned = True
-    settings.image_processing_params = {'random_ccm': True, 'random_gains': True, 'smoothstep': True, 'gamma': True, 'add_noise': True}
+    settings.image_processing_params = {'random_ccm': False, 'random_gains': False, 'smoothstep': False, 'gamma': False, 'add_noise': True}
 
-    zurich_raw2rgb_train = datasets.ZurichRAW2RGB(split='train')
-    zurich_raw2rgb_val = datasets.ZurichRAW2RGB(split='test')
+    nir_synthetic_train = datasets.nir_synthetic(split='train')
+    nir_synthetic_val = datasets.nir_synthetic(split='test')
 
     transform_train = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True), tfm.RandomHorizontalFlip())
     transform_val = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True), tfm.RandomHorizontalFlip())
@@ -73,19 +77,19 @@ def run(settings):
                                                                 burst_transformation_params=settings.burst_transformation_params,
                                                                 transform=transform_train,
                                                                 image_processing_params=settings.image_processing_params,
-                                                                random_crop=True)
+                                                                random_crop=False)
     data_processing_val = processing.SyntheticBurstDatabaseProcessing(settings.crop_sz, settings.burst_sz,
                                                               settings.downsample_factor,
                                                               burst_transformation_params=burst_transformation_params_val,
                                                               transform=transform_val,
                                                               image_processing_params=settings.image_processing_params,
-                                                              random_crop=True)
+                                                              random_crop=False)
 
     # Train sampler and loader
-    dataset_train = sampler.RandomImage([zurich_raw2rgb_train], [1],
-                                        samples_per_epoch=settings.batch_size * 1000, processing=data_processing_train)
-    dataset_val = sampler.RandomImage([zurich_raw2rgb_val], [1],
-                                      samples_per_epoch=settings.batch_size * 200, processing=data_processing_val)
+    dataset_train = sampler.RandomImage([nir_synthetic_train], [1],
+                                        samples_per_epoch=settings.batch_size * 200, processing=data_processing_train)
+    dataset_val = sampler.RandomImage([nir_synthetic_val], [1],
+                                      samples_per_epoch=settings.batch_size * 100, processing=data_processing_val)
 
     loader_train = DataLoader('train', dataset_train, training=True, num_workers=settings.num_workers,
                               stack_dim=0, batch_size=settings.batch_size)

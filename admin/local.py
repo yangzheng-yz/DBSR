@@ -7,4 +7,5 @@ class EnvironmentSettings:
         self.zurichraw2rgb_dir = '/mnt/data0/zheng/SyntheticDataset'    # Zurich RAW 2 RGB paths
         self.nightcity_dir = '/mnt/data0/zheng/SyntheticDataset/NightCity_1024x512/'
         self.burstsr_dir = '/mnt/data0/zheng/SyntheticDataset/real_world/burstsr_dataset'    # BurstSR dataset path
-        self.synburstval_dir = '/mnt/data0/zheng/SyntheticDataset/v al'    # SyntheticBurst validation set path
+        self.synburstval_dir = '/mnt/data0/zheng/SyntheticDataset/val'    # SyntheticBurst validation set path
+        self.nir_synthetic_dir = '/mnt/data0/zheng/NIR-II/MOESM'
