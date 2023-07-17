@@ -1,0 +1,22 @@
+random_ccm: False
+random_gains: False
+smoothstep: False
+gamma: False
+add_noise: True
+return_rgb_burst: True
+
+crop_sz: [512, 640]
+burst_sz: 16
+downsample_factor: 4
+random_pixelshift: False
+
+ckpt_path: /mnt/data0/zheng/SyntheticDataset/training_results/checkpoints/dbsr/burst16_range4_traj44_nir/DBSRNet_ep0100.pth.tar
+dataset_path: /mnt/data0/zheng/NIR-II/MOESM
+trajectory_path: /home/yutong/zheng/projects/dbsr_us/util_scripts/traj_files/nir_trajectory.pkl
+save_path: /mnt/data0/zheng/NIR-II/MOESM/evaluation_results/burst16_range4_traj44_nir
+use_saved_results: None
+specify_trajetory_num: 0
+specify_image_id: -1 # -1
+save_results: True
+save_pixelShifts: False
+split: test

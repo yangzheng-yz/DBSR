@@ -161,7 +161,9 @@ def rgb2rawburstdatabase(image, burst_size, downsample_factor=1, burst_transform
         image = rgb2raw.gamma_expansion(image)
 
     # Inverts color correction.
+    # print("image size: ", image.size())
     image = rgb2raw.apply_ccm(image, rgb2cam)
+    
 
     # Approximately inverts white balance and brightening.
     image = rgb2raw.safe_invert_gains(image, rgb_gain, red_gain, blue_gain)

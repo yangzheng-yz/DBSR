@@ -43,7 +43,7 @@ class nir_synthetic(BaseImageDataset):
     def initialize(self):
         split = self.split
         root = self.root
-        if split in ['train', 'test']:
+        if split in ['train', 'test', 'train_1', 'test_1']:
             self.img_pth = os.path.join(root, split)
         else:
             raise Exception('Unknown split {}'.format(split))
@@ -55,6 +55,12 @@ class nir_synthetic(BaseImageDataset):
             image_list = os.listdir(self.img_pth)
             image_list.sort()
         elif split == 'test':
+            image_list = os.listdir(self.img_pth)
+            image_list.sort()
+        elif split == 'test_1':
+            image_list = os.listdir(self.img_pth)
+            image_list.sort()
+        elif split == 'train_1':
             image_list = os.listdir(self.img_pth)
             image_list.sort()
         else:

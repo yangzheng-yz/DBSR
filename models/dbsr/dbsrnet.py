@@ -54,7 +54,8 @@ def dbsrnet_cvpr2021(enc_init_dim, enc_num_res_blocks, enc_out_dim,
                      icnrinit=False,
                      gauss_blur_sd=None,
                      gauss_ksz=3,
-                     use_pretrained=None
+                     use_pretrained=None,
+                     with_attention=False
                      ):
     # backbone
     alignment_net = PWCNet(load_pretrained=True,
@@ -65,7 +66,8 @@ def dbsrnet_cvpr2021(enc_init_dim, enc_num_res_blocks, enc_out_dim,
     encoder = dbsr_encoders.ResEncoderWarpAlignnet(enc_init_dim, enc_num_res_blocks, enc_out_dim,
                                                    alignment_net,
                                                    activation=activation,
-                                                   train_alignmentnet=train_alignmentnet)
+                                                   train_alignmentnet=train_alignmentnet,
+                                                   with_attention=with_attention)
     # print("encoder's device!!!!!!!!!!!!!: ", next(encoder.parameters()).device)
  
     

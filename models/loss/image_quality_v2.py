@@ -19,6 +19,23 @@ import models.loss.msssim as msssim
 import models.loss.spatial_color_alignment as sca_utils
 import math
 import lpips
+from torchvision.models import vgg19
+
+class PerceptualLoss(nn.Module):
+    def __init__(self, device='cuda'):  # Add a device parameter
+        super(PerceptualLoss, self).__init__()
+        vgg = vgg19(pretrained=True)
+        self.feature_extractor = nn.Sequential(*list(vgg.features)[:18]).eval()
+        for param in self.feature_extractor.parameters():
+            param.requires_grad = False
+
+        self.feature_extractor = self.feature_extractor.to(device)  # Move the model to the specified device
+
+    def forward(self, input, target):
+        input_features = self.feature_extractor(input)
+        target_features = self.feature_extractor(target)
+        loss = nn.functional.mse_loss(input_features, target_features)
+        return loss
 
 
 class PixelWiseError(nn.Module):
@@ -41,6 +58,8 @@ class PixelWiseError(nn.Module):
                 eps = 1e-3
                 return ((pred - gt) ** 2 + eps**2).sqrt().mean()
             self.loss_fn = charbonnier
+        elif metric == 'perceptual':
+            self.loss_fn = PerceptualLoss()
         else:
             raise Exception
 

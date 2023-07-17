@@ -17,6 +17,22 @@ import torch.nn as nn
 import models.layers.warp as lispr_warp
 import models.layers.blocks as blocks
 
+class ResBlockWithSelfAttention(nn.Module):
+    def __init__(self, in_dim, use_bn=False, activation='relu'):
+        super().__init__()
+
+        self.conv1 = blocks.conv_block(in_dim, in_dim, 3, stride=1, padding=1, batch_norm=use_bn, activation=activation)
+        self.conv2 = blocks.conv_block(in_dim, in_dim, 3, stride=1, padding=1, batch_norm=use_bn, activation=activation)
+        self.attention = SelfAttention(in_dim)
+
+    def forward(self, x):
+        out = self.conv1(x)
+        out = self.conv2(out)
+        out = self.attention(out)
+        out = out + x
+
+        return out
+
 
 class ResEncoderWarpAlignnet(nn.Module):
     """ Encodes the input images using a residual network. Uses the alignment_net to estimate optical flow between
@@ -24,7 +40,7 @@ class ResEncoderWarpAlignnet(nn.Module):
         using the estimated optical flow
     """
     def __init__(self, init_dim, num_res_blocks,
-                 out_dim, alignment_net, use_bn=False, activation='relu', train_alignmentnet=True,
+                 out_dim, alignment_net, use_bn=False, activation='relu', train_alignmentnet=True, with_attention=False,
                  warp_type='bilinear'):
         super().__init__()
         input_channels = 4
@@ -38,7 +54,10 @@ class ResEncoderWarpAlignnet(nn.Module):
 
         res_layers = []
         for _ in range(num_res_blocks):
-            res_layers.append(blocks.ResBlock(init_dim, init_dim, stride=1, batch_norm=use_bn, activation=activation))
+            if with_attention:
+                res_layers.append(blocks.ResBlock(init_dim, init_dim, stride=1, batch_norm=use_bn, activation=activation, attention='self_attention'))
+            else:
+                res_layers.append(blocks.ResBlock(init_dim, init_dim, stride=1, batch_norm=use_bn, activation=activation))
 
         self.res_layers = nn.Sequential(*res_layers)
 

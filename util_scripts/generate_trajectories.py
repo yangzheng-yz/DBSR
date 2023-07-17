@@ -3,22 +3,22 @@ import numpy as np
 
 step = 4
 permutations = []
-permutations.append(np.array([[0,0],
-                              [0,2],
-                              [2,2],
-                              [2,0]]))
-permutations.append(np.array([[0,0],
-                              [0,2.1],
-                              [2,2],
-                              [2,0]]))
-permutations.append(np.array([[0,0],
-                              [0,2],
-                              [2.1,2.1],
-                              [2,0]]))
-permutations.append(np.array([[0,0],
-                              [0,2],
-                              [2,2],
-                              [2.1,0]]))
+# permutations.append(np.array([[0,0],
+#                               [0,2],
+#                               [2,2],
+#                               [2,0]]))
+# permutations.append(np.array([[0,0],
+#                               [0,2.1],
+#                               [2,2],
+#                               [2,0]]))
+# permutations.append(np.array([[0,0],
+#                               [0,2],
+#                               [2.1,2.1],
+#                               [2,0]]))
+# permutations.append(np.array([[0,0],
+#                               [0,2],
+#                               [2,2],
+#                               [2.1,0]]))
 # permutations.append(np.array([[0,0],
 #                               [0,-2],
 #                               [-2,-2],
@@ -104,8 +104,17 @@ permutations.append(np.array([[0,0],
 #                               [6,6],
 #                               [7,7]]))
 
+permutations.append(np.array([[0,0],[0,1],[0,2],[0,3],
+                        [1,0],[1,1],[1,2],[1,3],
+                        [2,0],[2,1],[2,2],[2,3],
+                        [3,0],[3,1],[3,2],[3,3]]))
 
-while len(permutations)!=300:
+permutations.append(np.array([[0,0],[0,1],[0,2],
+                        [1,0],[1,1],[1,2],
+                        [2,0],[2,1],[2,2]]))
+
+
+while len(permutations)!=2:
     p = np.random.randint(0, 4, size=(step,2))
     p[0,0]=0
     p[0,1]=0
@@ -124,5 +133,5 @@ while len(permutations)!=300:
     else:
         print("now we have %s" % len(permutations))
         permutations.append(p)
-with open("zurich_trajectory_step-4_range-4.pkl", 'wb') as f:
+with open("nir_trajectory.pkl", 'wb') as f:
     pkl.dump(permutations, f)
