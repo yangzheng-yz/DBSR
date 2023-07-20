@@ -146,7 +146,7 @@ def main():
         permutations = pkl.load(f)
     
     scores_all_mean = {}
-    selected_images = ['Nagoya_1014.png', 'HK_0416.png', 'tokyo_0074.png', 'HK_0115.png', 'Dubai_0500.png'] # first 56, second 45, third 39, fourth 32, fifth 23
+    selected_images = os.listdir(os.path.join(args.dataset_path, 'val')) # first 56, second 45, third 39, fourth 32, fifth 23
     
     for idx_traj, permutation in enumerate(permutations):
         if args.specify_trajetory_num != -1:
@@ -226,7 +226,7 @@ def main():
                 with torch.no_grad():
                     net_pred, _ = net(burst)
                 
-                print("net_pred size: ", net_pred.size())
+                # print("net_pred size: ", net_pred.size())
                 # Perform quantization to be consistent with evaluating on saved images
                 # net_pred_int = (net_pred.clamp(0.0, 1.0) * 2 ** 14).short()
                 # net_pred = net_pred_int.float() / (2 ** 14)
@@ -260,7 +260,7 @@ def main():
                     # SR_image = (SR_image.permute(1, 2, 0).clamp(0.0, 1.0) * 2 ** 14).numpy().astype(np.uint16)
                     
                     # HR_image = cv2.resize(HR_image, dsize=(gt.shape[1], gt.shape[0]), interpolation=cv2.INTER_NEAREST)
-                    LR_image = cv2.resize(LR_image, dsize=(HR_image.shape[1], HR_image.shape[0]), interpolation=cv2.INTER_CUBIC)
+                    LR_image_cubic = cv2.resize(LR_image, dsize=(HR_image.shape[1], HR_image.shape[0]), interpolation=cv2.INTER_CUBIC)
                     # SR_image = cv2.resize(SR_image, dsize=(gt.shape[1], gt.shape[0]), interpolation=cv2.INTER_NEAREST)
                     # HR_image_cvwrite = HR_image[:, :, [2, 1, 0]]
                     # LR_image_cvwrite = LR_image[:, :, [2, 1, 0]]
@@ -271,6 +271,7 @@ def main():
                     burst_rgb_tensor = torch.from_numpy(burst_rgb_np)
                     burst_rgb_tensor = burst_rgb_tensor.permute(2,0,1).to(device)
                     cv2.imwrite('{}/{}_HR.png'.format(save_path_traj, burst_name.split('.')[0]), HR_image)
+                    cv2.imwrite('{}/{}_LR_cubic.png'.format(save_path_traj, burst_name.split('.')[0]), LR_image_cubic)
                     cv2.imwrite('{}/{}_LR.png'.format(save_path_traj, burst_name.split('.')[0]), LR_image)
                     cv2.imwrite('{}/{}_SR.png'.format(save_path_traj, burst_name.split('.')[0]), SR_image)
             

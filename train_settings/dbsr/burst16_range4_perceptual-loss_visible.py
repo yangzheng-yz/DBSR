@@ -25,36 +25,36 @@ import os
 import pickle as pkl
 import numpy as np
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 def run(settings):
-    settings.description = 'Default settings for training DBSR models on synthetic nir dataset, with train crop size(256*320) and val ori size, random pixel shift, range(4), burst size(16), use database function'
-    settings.batch_size = 4
+    settings.description = 'Default settings for training DBSR models on real nir visible dataset, range(4), burst size(16), use database function'
+    settings.batch_size = 16
     settings.num_workers = 8
     settings.multi_gpu = False
     settings.print_interval = 1
 
-    settings.crop_sz = (256, 320)
-    crop_sz_val = (512, 640)
+    settings.crop_sz = (512, 640)
     settings.burst_sz = 16
     settings.downsample_factor = 4
 
     # f=open("/home/yutong/zheng/projects/dbsr_us/util_scripts/traj_files/zurich_trajectory_step-4_range-4.pkl", 'rb')
     # permutations = pkl.load(f)
-    permutation = np.array([[0,0],[0,1],[0,2],[0,3],
-                            [1,0],[1,1],[1,2],[1,3],
-                            [2,0],[2,1],[2,2],[2,3],
-                            [3,0],[3,1],[3,2],[3,3]])
+    # permutation = np.array([[0,0],[0,1],[0,2],[0,3],
+    #                         [1,0],[1,1],[1,2],[1,3],
+    #                         [2,0],[2,1],[2,2],[2,3],
+    #                         [3,0],[3,1],[3,2],[3,3]]) # VISIBLE dataset do not need synthetic shifts
     # f.close()
 
-    settings.burst_transformation_params = {'max_translation': 4.0,
-                                            'max_rotation': 0.0,
+    settings.burst_transformation_params = {'max_translation': 24.0,
+                                            'max_rotation': 1.0,
                                             'max_shear': 0.0,
                                             'max_scale': 0.0,
                                             # 'border_crop': 0,
-                                            'random_pixelshift': True,
+                                            'random_pixelshift': False,
                                             'specified_translation': permutation
                                             }
+    
     burst_transformation_params_val = {'max_translation': 4.0,
                                         'max_rotation': 0.0,
                                         'max_shear': 0.0,
@@ -78,8 +78,8 @@ def run(settings):
                                                                 burst_transformation_params=settings.burst_transformation_params,
                                                                 transform=transform_train,
                                                                 image_processing_params=settings.image_processing_params,
-                                                                random_crop=True)
-    data_processing_val = processing.SyntheticBurstDatabaseProcessing(crop_sz_val, settings.burst_sz,
+                                                                random_crop=False)
+    data_processing_val = processing.SyntheticBurstDatabaseProcessing(settings.crop_sz, settings.burst_sz,
                                                               settings.downsample_factor,
                                                               burst_transformation_params=burst_transformation_params_val,
                                                               transform=transform_val,
@@ -105,8 +105,7 @@ def run(settings):
                                      weight_pred_proj_dim=64,
                                      num_weight_predictor_res=3,
                                      gauss_blur_sd=1.0,
-                                     icnrinit=True,
-                                     with_attention=True
+                                     icnrinit=True
                                      )
 
     # Wrap the network for multi GPU training

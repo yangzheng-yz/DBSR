@@ -137,7 +137,7 @@ def main():
         permutations = pkl.load(f)
     
     scores_all_mean = {}
-    selected_images_id = [0,1,2,3,4] 
+    selected_images_id = np.arange(0,1204,4) 
     
     for idx_traj, permutation in enumerate(permutations):
         if cfg.specify_trajetory_num != -1:
@@ -145,6 +145,8 @@ def main():
                 continue
         # if idx_traj not in [0, 266]:
         #     continue
+        # permutation_permuted = np.roll(permutation[1:], 1, axis=0)
+        # permutation[1:] = permutation_permuted 
         print("Processing %sth trajectory of %s" % (idx_traj, cfg.trajectory_path))
         
         dir_path = '/'.join(cfg.trajectory_path.split('/')[:-1])
@@ -257,7 +259,7 @@ def main():
                     # SR_image = (SR_image.permute(1, 2, 0).clamp(0.0, 1.0) * 2 ** 14).numpy().astype(np.uint16)
                     
                     # HR_image = cv2.resize(HR_image, dsize=(gt.shape[1], gt.shape[0]), interpolation=cv2.INTER_NEAREST)
-                    LR_image = cv2.resize(LR_image, dsize=(HR_image.shape[1], HR_image.shape[0]), interpolation=cv2.INTER_CUBIC)
+                    LR_image_cubic = cv2.resize(LR_image, dsize=(HR_image.shape[1], HR_image.shape[0]), interpolation=cv2.INTER_CUBIC)
                     # SR_image = cv2.resize(SR_image, dsize=(gt.shape[1], gt.shape[0]), interpolation=cv2.INTER_NEAREST)
                     # HR_image_cvwrite = HR_image[:, :, [2, 1, 0]]
                     # LR_image_cvwrite = LR_image[:, :, [2, 1, 0]]
@@ -268,6 +270,7 @@ def main():
                     burst_rgb_tensor = torch.from_numpy(burst_rgb_np)
                     burst_rgb_tensor = burst_rgb_tensor.permute(2,0,1).to(device)
                     cv2.imwrite('{}/{}_HR.png'.format(save_path_traj, burst_name.split('.')[0]), HR_image)
+                    cv2.imwrite('{}/{}_LR_cubic.png'.format(save_path_traj, burst_name.split('.')[0]), LR_image_cubic)
                     cv2.imwrite('{}/{}_LR.png'.format(save_path_traj, burst_name.split('.')[0]), LR_image)
                     cv2.imwrite('{}/{}_SR.png'.format(save_path_traj, burst_name.split('.')[0]), SR_image)
             

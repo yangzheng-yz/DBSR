@@ -267,7 +267,7 @@ def main():
                     # SR_image_cvwrite = SR_image[:, :, [2, 1, 0]]
                     
                     burst_rgb_np = burst_rgb[0].permute(1, 2, 0).numpy()
-                    burst_rgb_np = cv2.resize(burst_rgb_np, dsize=(HR_image.shape[1], HR_image.shape[0]), interpolation=cv2.INTER_NEAREST)
+                    burst_rgb_np = cv2.resize(burst_rgb_np, dsize=(HR_image.shape[1], HR_image.shape[0]), interpolation=cv2.INTER_CUBIC)
                     burst_rgb_tensor = torch.from_numpy(burst_rgb_np)
                     burst_rgb_tensor = burst_rgb_tensor.permute(2,0,1).to(device)
                     cv2.imwrite('{}/{}_HR.png'.format(save_path_traj, burst_name.split('.')[0]), HR_image)

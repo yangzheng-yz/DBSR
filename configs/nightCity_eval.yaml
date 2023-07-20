@@ -9,8 +9,8 @@ crop_sz: 384
 burst_sz: 8
 downsample_factor: 4
 
-ckpt_path: /home/yutong/zheng/projects/dbsr_us/pretrained_networks/pretrained_syn/dbsr_synthetic_default.pth
-dataset_path: /mnt/data0/zheng/SyntheticDataset/test/canon
+ckpt_path: /mnt/data0/zheng/NightCity_1024x512/training_results/checkpoints/dbsr/model-23_synthetic/DBSRNet_ep0100.pth.tar
+dataset_path: /mnt/data0/zheng/NightCity_1024x512
 trajectory_path: None
 save_path: None
 use_saved_results: None
@@ -18,4 +18,4 @@ specify_trajetory_num: -1
 specify_image_id: None
 save_results: False
 save_pixelShifts: False
-split: test
+split: val
