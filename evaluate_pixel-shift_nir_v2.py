@@ -1,5 +1,5 @@
 """
-This version is for the zurich dataset.
+This version is for the nir visible dataset.
 """
 import dataset as datasets
 from data import processing, sampler, DataLoader
@@ -21,6 +21,8 @@ from sys import argv
 from evaluation.common_utils.network_param import NetworkParam
 from models.loss.image_quality_v2 import PSNR, SSIM, LPIPS
 from data.postprocessing_functions import SimplePostProcess
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 cfg = EasyDict()
 
@@ -85,7 +87,7 @@ def main():
     cfg = parse_config()
     """The first part is to prepare the dataset and define the evaluation metrics"""
     assert cfg.dataset_path is not None, "You must specify the dataset path"
-    Zurich_test = datasets.ZurichRAW2RGB(root=cfg.dataset_path, split=cfg.split)   
+    nir_visible_val = datasets.nir_visible(burst_sz=cfg.burst_sz, split='test')
     
     metrics = ('psnr', 'ssim')
     device = 'cuda'
@@ -93,8 +95,6 @@ def main():
     metrics_all = {}
     scores = {}
     for m in metrics:
-        if not cfg.calculate_loss:
-            break
         if m == 'psnr':
             loss_fn = PSNR(boundary_ignore=boundary_ignore)
         elif m == 'ssim':
@@ -139,7 +139,7 @@ def main():
         permutations = pkl.load(f)
     
     scores_all_mean = {}
-    selected_images_id = np.arange(0,1204,4) 
+    selected_images_id = np.arange(0, 100000) 
     
     for idx_traj, permutation in enumerate(permutations):
         if cfg.specify_trajetory_num != -1:
@@ -147,16 +147,14 @@ def main():
                 continue
         # if idx_traj not in [0, 266]:
         #     continue
-        # permutation_permuted = np.roll(permutation[1:], 1, axis=0)
-        # permutation[1:] = permutation_permuted 
         print("Processing %sth trajectory of %s" % (idx_traj, cfg.trajectory_path))
         
         dir_path = '/'.join(cfg.trajectory_path.split('/')[:-1])
         meta_infos_found = False
-        if os.path.exists(os.path.join(dir_path, 'zurich_%s_meta_infos.pkl' % cfg.split)):
-            with open(os.path.join(dir_path, 'zurich_%s_meta_infos.pkl' % cfg.split), 'rb') as f:
+        if os.path.exists(os.path.join(dir_path, 'nir_visible_%s_meta_infos.pkl' % cfg.split)):
+            with open(os.path.join(dir_path, 'nir_visible_%s_meta_infos.pkl' % cfg.split), 'rb') as f:
                 meta_infos_val = pkl.load(f)
-            print(" *Using the predefined ISP parameters in %s" % os.path.join(dir_path, 'zurich_%s_meta_infos.pkl' % cfg.split))
+            print(" *Using the predefined ISP parameters in %s" % os.path.join(dir_path, 'nir_visible_%s_meta_infos.pkl' % cfg.split))
             meta_infos_found = True
             image_processing_params = {'random_ccm': cfg.random_ccm, 'random_gains': cfg.random_gains, 'smoothstep': cfg.smoothstep, 'gamma': cfg.gamma, 'add_noise': cfg.add_noise,
                                        'predefined_params': meta_infos_val}
@@ -168,25 +166,15 @@ def main():
             
         # transform_val = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True), tfm.RandomHorizontalFlip())
         transform_val = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True))
-        
 
-        burst_transformation_params_val = {'max_translation': 24.0,
-                                            'max_rotation': 1.0,
-                                            'max_shear': 0.0,
-                                            'max_scale': 0.0,
-                                            # 'border_crop': 24, #24,
-                                            'random_pixelshift': cfg.random_pixelshift,
-                                            'specified_translation': permutation}
-        
-        data_processing_val = processing.SyntheticBurstDatabaseProcessing((cfg.crop_sz, cfg.crop_sz), cfg.burst_sz,
-                                                                            cfg.downsample_factor,
-                                                                            burst_transformation_params=burst_transformation_params_val,
-                                                                            transform=transform_val,
-                                                                            image_processing_params=image_processing_params,
-                                                                            random_crop=False,
-                                                                            return_rgb_busrt=cfg.return_rgb_burst)
-        
-        dataset_val = sampler.IndexedImage(Zurich_test, processing=data_processing_val)
+        data_processing_val = processing.VisibleBurstProcessing((cfg.crop_sz[0], cfg.crop_sz[1]),
+                                                                cfg.downsample_factor,
+                                                                transform=transform_val,
+                                                                image_processing_params=image_processing_params,
+                                                                random_crop=False,
+                                                                random_flip=False,
+                                                                return_rgb_busrt=cfg.return_rgb_burst)        
+        dataset_val = sampler.IndexedImage(nir_visible_val, processing=data_processing_val)
         
         process_fn = SimplePostProcess(return_np=True)
 
@@ -196,11 +184,11 @@ def main():
             burst = data['burst']
             gt = data['frame_gt']
             if meta_infos_found:
-                meta_info = meta_infos_val['%s_%s' % (cfg.split,idx)]
+                meta_info = meta_infos_val['%s' % data['image_name']]
             else:
                 meta_info = data['meta_info']
-                meta_infos_val['%s_%s' % (cfg.split, idx)] = meta_info
-                with open(os.path.join(dir_path, 'zurich_%s_meta_infos.pkl' % cfg.split), 'wb') as f:
+                meta_infos_val['%s' % data['image_name']] = meta_info
+                with open(os.path.join(dir_path, 'nir_visible_%s_meta_infos.pkl' % cfg.split), 'wb') as f:
                     pkl.dump(meta_infos_val, f)
                     
             if int(cfg.specify_image_id) != -1:
@@ -211,7 +199,7 @@ def main():
             burst_rgb = data['burst_rgb']
             assert cfg.return_rgb_burst, "Better open this button to save the results."
             meta_info['frame_num'] = idx
-            burst_name = "%s_%s" % (cfg.split, idx)
+            burst_name = '%s' % data['image_name']
 
             burst = burst.to(device).unsqueeze(0)
             gt = gt.to(device)
@@ -261,7 +249,8 @@ def main():
                     # SR_image = (SR_image.permute(1, 2, 0).clamp(0.0, 1.0) * 2 ** 14).numpy().astype(np.uint16)
                     
                     # HR_image = cv2.resize(HR_image, dsize=(gt.shape[1], gt.shape[0]), interpolation=cv2.INTER_NEAREST)
-                    LR_image_cubic = cv2.resize(LR_image, dsize=(HR_image.shape[1], HR_image.shape[0]), interpolation=cv2.INTER_CUBIC)
+                    # LR_image = cv2.resize(LR_image, dsize=(HR_image.shape[1], HR_image.shape[0]), interpolation=cv2.INTER_CUBIC)
+                    LR_image_upsized = cv2.resize(LR_image, dsize=(HR_image.shape[1], HR_image.shape[0]), interpolation=cv2.INTER_NEAREST)
                     # SR_image = cv2.resize(SR_image, dsize=(gt.shape[1], gt.shape[0]), interpolation=cv2.INTER_NEAREST)
                     # HR_image_cvwrite = HR_image[:, :, [2, 1, 0]]
                     # LR_image_cvwrite = LR_image[:, :, [2, 1, 0]]
@@ -272,36 +261,25 @@ def main():
                     burst_rgb_tensor = torch.from_numpy(burst_rgb_np)
                     burst_rgb_tensor = burst_rgb_tensor.permute(2,0,1).to(device)
                     cv2.imwrite('{}/{}_HR.png'.format(save_path_traj, burst_name.split('.')[0]), HR_image)
-                    cv2.imwrite('{}/{}_LR_cubic.png'.format(save_path_traj, burst_name.split('.')[0]), LR_image_cubic)
-                    cv2.imwrite('{}/{}_LR.png'.format(save_path_traj, burst_name.split('.')[0]), LR_image)
+                    cv2.imwrite('{}/{}_LR_upsized.png'.format(save_path_traj, burst_name.split('.')[0]), LR_image_upsized)
+                    cv2.imwrite('{}/{}_LR.png'.format(save_path_traj, burst_name.split('.')[0]), LR_image)                    
                     cv2.imwrite('{}/{}_SR.png'.format(save_path_traj, burst_name.split('.')[0]), SR_image)
-
-                    if not cfg.calculate_loss:
-                        print(" Evaluated %s/%s images of %s/%s" % (idx, len(dataset_val)-1, cfg.dataset_path, burst_name))
-                        continue
-                    print(" Evaluated %s/%s images of %s/%s, its psnr is %s, its ssim is %s, LRPSNR is %s, LRSSIM is %s" % (idx, len(dataset_val)-1, cfg.dataset_path, burst_name, scores['psnr'][-1], scores['ssim'][-1], metrics_all['psnr'](burst_rgb_tensor.unsqueeze(0), gt.unsqueeze(0)).cpu().item(), metrics_all['ssim'](burst_rgb_tensor.unsqueeze(0), gt.unsqueeze(0)).cpu().item()))
+            
+                    print(" Evaluated %s/%s images of %s/%s, its psnr is %s, its ssim is %s, LRPSNR is %s, LRSSIM is %s" % (idx, len(dataset_val)-1, cfg.dataset_path, burst_name, scores['psnr'][-1], scores['ssim'][-1], metrics_all['psnr'](burst_rgb_tensor.unsqueeze(0), gt.unsqueeze(0)), metrics_all['ssim'](burst_rgb_tensor.unsqueeze(0), gt.unsqueeze(0))))
                 else:
-                    if not cfg.calculate_loss:
-                        print(" Evaluated %s/%s images of %s/%s" % (idx, len(dataset_val)-1, cfg.dataset_path, burst_name))
-                        continue
                     print(" Evaluated %s/%s images of %s/%s, its psnr is %s, its ssim is %s" % (idx, len(dataset_val)-1, cfg.dataset_path, burst_name, scores['psnr'][-1], scores['ssim'][-1]))
             else:
-                if not cfg.calculate_loss:
-                    print(" Evaluated %s/%s images of %s/%s" % (idx, len(dataset_val)-1, cfg.dataset_path, burst_name))
-                    continue
                 print(" Evaluated %s/%s images of %s/%s, its psnr is %s, its ssim is %s" % (idx, len(dataset_val)-1, cfg.dataset_path, burst_name, scores['psnr'][-1], scores['ssim'][-1]))
 
             if int(cfg.specify_image_id) != -1:
                 break
    
         # scores_all[n.get_display_name()] = scores
-        if cfg.calculate_loss:
-            scores_all_mean['%s_%sth-Traj' % (cfg.ckpt_path.split('/')[-2], idx_traj)] = {m: sum(s) / len(s) for m, s in scores.items()}
+        scores_all_mean['%s_%sth-Traj' % (cfg.ckpt_path.split('/')[-2], idx_traj)] = {m: sum(s) / len(s) for m, s in scores.items()}
         if not os.path.isdir(cfg.save_path):
             os.makedirs('{}'.format(cfg.save_path), exist_ok=True)
-        if cfg.calculate_loss:
-            with open(os.path.join(cfg.save_path, 'results_of_%s-%s.pkl' % (cfg.ckpt_path.split('/')[-2], cfg.trajectory_path.split('/')[-1].split('.')[0])), 'wb') as f:
-                pkl.dump(scores_all_mean, f)
+        with open(os.path.join(cfg.save_path, 'results_of_%s-%s.pkl' % (cfg.ckpt_path.split('/')[-2], cfg.trajectory_path.split('/')[-1].split('.')[0])), 'wb') as f:
+            pkl.dump(scores_all_mean, f)
 
 
 if __name__ == '__main__':

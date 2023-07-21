@@ -100,6 +100,7 @@ def apply_ccm(image, ccm):
     assert image.dim() == 3 and image.shape[0] == 3
 
     shape = image.shape
+    # print("image shape: ", shape)
     image = image.view(3, -1)
     ccm = ccm.to(image.device).type_as(image)
 
