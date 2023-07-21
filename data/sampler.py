@@ -36,9 +36,15 @@ class IndexedImage(torch.utils.data.Dataset):
     def __getitem__(self, index):
         frame, meta_info = self.dataset.get_image(index)
 
-        data = TensorDict({'frame': frame,
-                           'dataset': self.dataset.get_name(),
-                           'image_name': meta_info})
+        if isinstance(frame, dict):
+            data = TensorDict({'gt': frame['gt'],
+                               'burst': frame['burst'],
+                                'dataset': self.dataset.get_name(),
+                                'image_name': meta_info})
+        else:
+            data = TensorDict({'frame': frame,
+                             'dataset': self.dataset.get_name(),
+                             'image_name': meta_info})
 
         return self.processing(data)
 
@@ -78,9 +84,17 @@ class RandomImage(torch.utils.data.Dataset):
 
         # Load image
         frame, meta_info = dataset.get_image(im_id)
+        
+        if isinstance(frame, dict):
+            data = TensorDict({'gt': frame['gt'],
+                               'burst': frame['burst'],
+                                'dataset': dataset.get_name(),
+                                'image_name': meta_info})
+        else:
+            data = TensorDict({'frame': frame,
+                             'dataset': dataset.get_name(),
+                             'image_name': meta_info})
 
-        data = TensorDict({'frame': frame,
-                           'dataset': dataset.get_name()})
 
         return self.processing(data)
 

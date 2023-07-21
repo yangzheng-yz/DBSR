@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import torch
+import torch.nn.functional as F
 import random
 import cv2
 import numpy as np
@@ -204,6 +205,123 @@ def rgb2rawburstdatabase(image, burst_size, downsample_factor=1, burst_transform
                  'blue_gain': blue_gain, 'smoothstep': use_smoothstep, 'gamma': use_gamma,
                  'shot_noise_level': shot_noise_level, 'read_noise_level': read_noise_level}
     return image_burst, image, image_burst_rgb, flow_vectors, meta_info
+
+def burstrgb2raw(image_burst_rgb, image_gt=None, downsample_factor=1,
+                 image_processing_params=None, interpolation_type='bilinear', image_name=None):
+    """ Downsample the burst rgb by defined downsample_factor and transform to raw.
+
+    args:
+        image_burst_rgb - list(TensorImage)
+        downsample_factor - Amount of downsampling of the input sRGB image to generate the LR image
+        image_processing_params - Parameters of the inverse camera pipeline used to obtain RAW image from sRGB image
+        interpolation_type - interpolation operator used when performing affine transformations and downsampling
+    """
+
+    if image_processing_params is None:
+        image_processing_params = {}
+
+    _defaults = {'random_ccm': False, 'random_gains': False, 'smoothstep': False, 'gamma': False, 'add_noise': True}
+    for k, v in _defaults.items():
+        if k not in image_processing_params:
+            image_processing_params[k] = v
+
+    # Sample camera pipeline params
+    if image_processing_params['random_ccm']:
+        if image_processing_params.get('predefined_params', None) is not None:
+            assert image_name is not None, "You should pass the image_name into this function."
+            rgb2cam = image_processing_params['predefined_params'][image_name]['rgb2cam']
+        else:
+            rgb2cam = rgb2raw.random_ccm()
+    else:
+        rgb2cam = torch.eye(3).float()
+    cam2rgb = rgb2cam.inverse()
+
+    # Sample gains
+    if image_processing_params['random_gains']:
+        if image_processing_params.get('predefined_params', None) is not None:
+            assert image_name is not None, "You should pass the image_name into this function."
+            rgb_gain = image_processing_params['predefined_params'][image_name]['rgb_gain']
+            red_gain = image_processing_params['predefined_params'][image_name]['red_gain']
+            blue_gain = image_processing_params['predefined_params'][image_name]['blue_gain']
+        else:    
+            rgb_gain, red_gain, blue_gain = rgb2raw.random_gains()
+    else:
+        rgb_gain, red_gain, blue_gain = (1.0, 1.0, 1.0)
+
+    # Approximately inverts global tone mapping.
+    use_smoothstep = image_processing_params['smoothstep']
+    if use_smoothstep:
+        image_burst_rgb = [rgb2raw.invert_smoothstep(img) for img in image_burst_rgb]
+        if image_gt is not None:
+            image_gt = rgb2raw.invert_smoothstep(image_gt) 
+
+    # Inverts gamma compression.
+    use_gamma = image_processing_params['gamma']
+    if use_gamma:
+        image_burst_rgb = [rgb2raw.gamma_expansion(img) for img in image_burst_rgb]
+        if image_gt is not None:
+            image_gt = rgb2raw.gamma_expansion(image_gt) 
+
+    # Inverts color correction.
+    # print("image size: ", image.size())
+    image_burst_rgb = [rgb2raw.apply_ccm(img, rgb2cam) for img in image_burst_rgb]
+    if image_gt is not None:
+        image_gt = rgb2raw.apply_ccm(image_gt, rgb2cam) 
+
+
+    # Approximately inverts white balance and brightening.
+    image_burst_rgb = [rgb2raw.safe_invert_gains(img, rgb_gain, red_gain, blue_gain) for img in image_burst_rgb]
+    if image_gt is not None:
+        image_gt = rgb2raw.safe_invert_gains(image_gt, rgb_gain, red_gain, blue_gain) 
+
+    # Clip saturated pixels.
+    image_burst_rgb = [img.clamp(0.0, 1.0) for img in image_burst_rgb]
+    if image_gt is not None:
+        image_gt = image_gt.clamp(0.0, 1.0) 
+
+    # Generate LR burst
+    # image_burst_rgb, flow_vectors = single2lrburst(image, burst_size=burst_size,
+    #                                                downsample_factor=downsample_factor,
+    #                                                transformation_params=burst_transformation_params,
+    #                                                interpolation_type=interpolation_type)
+    # image_burst_rgb, flow_vectors = single2lrburstdatabase(image, burst_size=burst_size,
+    #                                                downsample_factor=downsample_factor,
+    #                                                transformation_params=burst_transformation_params,
+    #                                                interpolation_type=interpolation_type)
+
+    # print("image_gt: ", image_gt.size())
+    # print("image_burst_rgb: ", image_burst_rgb[0].size())
+    
+    # downsample the burst
+    image_burst_rgb = [F.interpolate(img.unsqueeze(0), scale_factor=1.0 / downsample_factor, mode=interpolation_type, align_corners=False) for img in image_burst_rgb]
+    image_burst_rgb = [img.squeeze(0) for img in image_burst_rgb]
+
+    # image_burst_rgb = np.array(image_burst_rgb)
+    image_burst_rgb_torch = torch.stack(image_burst_rgb)
+
+    # mosaic
+    image_burst = rgb2raw.mosaic(image_burst_rgb_torch.clone())
+
+    # Add noise
+    if image_processing_params['add_noise']:
+        if image_processing_params.get('predefined_params', None) is not None:
+            assert image_name is not None, "You should pass the image_name into this function."
+            shot_noise_level = image_processing_params['predefined_params'][image_name]['shot_noise_level']
+            read_noise_level = image_processing_params['predefined_params'][image_name]['read_noise_level']
+        else:
+            shot_noise_level, read_noise_level = rgb2raw.random_noise_levels()
+        image_burst = rgb2raw.add_noise(image_burst, shot_noise_level, read_noise_level)
+    else:
+        shot_noise_level = 0
+        read_noise_level = 0
+
+    # Clip saturated pixels.
+    image_burst = image_burst.clamp(0.0, 1.0)
+
+    meta_info = {'rgb2cam': rgb2cam, 'cam2rgb': cam2rgb, 'rgb_gain': rgb_gain, 'red_gain': red_gain,
+                 'blue_gain': blue_gain, 'smoothstep': use_smoothstep, 'gamma': use_gamma,
+                 'shot_noise_level': shot_noise_level, 'read_noise_level': read_noise_level}
+    return image_burst, image_gt, image_burst_rgb_torch, meta_info
 
 
 def get_tmat(image_shape, translation, theta, shear_values, scale_factors):

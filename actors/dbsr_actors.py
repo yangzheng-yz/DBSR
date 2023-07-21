@@ -27,8 +27,8 @@ class DBSRSyntheticActor(BaseActor):
     def __call__(self, data):
         # Run network
         # print("net's device: ", next(self.net.parameters()).device)
-        print("data burst info: ", type(data['burst']))
-        print(data['burst'].size())
+        # print("data burst info: ", type(data['burst']))
+        # print(data['burst'].size())
         pred, aux_dict = self.net(data['burst'])
 
         # Compute loss
@@ -44,10 +44,15 @@ class DBSRSyntheticActor(BaseActor):
             psnr = self.objective['psnr'](pred.clone().detach(), data['frame_gt'])
 
         loss = loss_rgb
-
-        stats = {'Loss/total': loss.item(),
-                 'Loss/rgb': loss_rgb.item(),
-                 'Loss/raw/rgb': loss_rgb_raw.item()}
+        if self.objective.get('perceptual', None) is not None:
+            stats = {'Loss/total': loss.item(),
+                    'Loss/rgb': loss_rgb.item() - loss_percept.item(),
+                    'Loss/percept': loss_percept.item(),
+                    'Loss/raw/rgb': loss_rgb_raw.item()}
+        else: 
+            stats = {'Loss/total': loss.item(),
+                    'Loss/rgb': loss_rgb.item(),
+                    'Loss/raw/rgb': loss_rgb_raw.item()}
 
         if 'psnr' in self.objective.keys():
             stats['Stat/psnr'] = psnr.item()

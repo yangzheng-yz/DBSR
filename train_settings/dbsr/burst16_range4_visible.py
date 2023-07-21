@@ -25,16 +25,16 @@ import os
 import pickle as pkl
 import numpy as np
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 def run(settings):
     settings.description = 'Default settings for training DBSR models on real nir visible dataset, range(4), burst size(16), use database function'
-    settings.batch_size = 16
+    settings.batch_size = 4
     settings.num_workers = 8
     settings.multi_gpu = False
     settings.print_interval = 1
 
-    settings.crop_sz = (512, 640)
+    settings.crop_sz = (448, 448)
     settings.burst_sz = 16
     settings.downsample_factor = 4
 
@@ -46,51 +46,53 @@ def run(settings):
     #                         [3,0],[3,1],[3,2],[3,3]]) # VISIBLE dataset do not need synthetic shifts
     # f.close()
 
-    settings.burst_transformation_params = {'max_translation': 24.0,
-                                            'max_rotation': 1.0,
-                                            'max_shear': 0.0,
-                                            'max_scale': 0.0,
-                                            # 'border_crop': 0,
-                                            'random_pixelshift': False,
-                                            'specified_translation': permutation
-                                            }
+    # settings.burst_transformation_params = {'max_translation': 24.0,
+    #                                         'max_rotation': 1.0,
+    #                                         'max_shear': 0.0,
+    #                                         'max_scale': 0.0,
+    #                                         # 'border_crop': 0,
+    #                                         'random_pixelshift': False,
+    #                                         'specified_translation': permutation
+    #                                         }
     
-    burst_transformation_params_val = {'max_translation': 4.0,
-                                        'max_rotation': 0.0,
-                                        'max_shear': 0.0,
-                                        'max_scale': 0.0,
-                                        # 'border_crop': 0,
-                                        'random_pixelshift': False,
-                                        'specified_translation': permutation
-                                        }
+    # burst_transformation_params_val = {'max_translation': 4.0,
+    #                                     'max_rotation': 0.0,
+    #                                     'max_shear': 0.0,
+    #                                     'max_scale': 0.0,
+    #                                     # 'border_crop': 0,
+    #                                     'random_pixelshift': False,
+    #                                     'specified_translation': permutation
+    #                                     }
     
     settings.burst_reference_aligned = True
     settings.image_processing_params = {'random_ccm': False, 'random_gains': False, 'smoothstep': False, 'gamma': False, 'add_noise': True}
 
-    nir_synthetic_train = datasets.nir_synthetic(split='train_1')
-    nir_synthetic_val = datasets.nir_synthetic(split='test_1')
+    nir_visible_train = datasets.nir_visible(burst_sz=settings.burst_sz, split='train')
+    nir_visible_val = datasets.nir_visible(burst_sz=settings.burst_sz, split='test')
 
-    transform_train = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True), tfm.RandomHorizontalFlip())
-    transform_val = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True), tfm.RandomHorizontalFlip())
+    transform_train = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True))
+    transform_val = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True))
 
-    data_processing_train = processing.SyntheticBurstDatabaseProcessing(settings.crop_sz, settings.burst_sz,
+    data_processing_train = processing.VisibleBurstProcessing(settings.crop_sz,
                                                                 settings.downsample_factor,
-                                                                burst_transformation_params=settings.burst_transformation_params,
+                                                                # burst_transformation_params=settings.burst_transformation_params,
                                                                 transform=transform_train,
                                                                 image_processing_params=settings.image_processing_params,
-                                                                random_crop=False)
-    data_processing_val = processing.SyntheticBurstDatabaseProcessing(settings.crop_sz, settings.burst_sz,
+                                                                random_crop=False,
+                                                                random_flip=True)
+    data_processing_val = processing.VisibleBurstProcessing(settings.crop_sz,
                                                               settings.downsample_factor,
-                                                              burst_transformation_params=burst_transformation_params_val,
+                                                            #   burst_transformation_params=burst_transformation_params_val,
                                                               transform=transform_val,
                                                               image_processing_params=settings.image_processing_params,
-                                                              random_crop=False)
+                                                              random_crop=False,
+                                                              random_flip=False)
 
     # Train sampler and loader
-    dataset_train = sampler.RandomImage([nir_synthetic_train], [1],
-                                        samples_per_epoch=settings.batch_size * 200, processing=data_processing_train)
-    dataset_val = sampler.RandomImage([nir_synthetic_val], [1],
-                                      samples_per_epoch=settings.batch_size * 100, processing=data_processing_val)
+    dataset_train = sampler.RandomImage([nir_visible_train], [1],
+                                        samples_per_epoch=settings.batch_size * 1000, processing=data_processing_train)
+    dataset_val = sampler.IndexedImage(nir_visible_val, processing=data_processing_val)
+
 
     loader_train = DataLoader('train', dataset_train, training=True, num_workers=settings.num_workers,
                               stack_dim=0, batch_size=settings.batch_size)
@@ -112,9 +114,9 @@ def run(settings):
     if settings.multi_gpu:
         net = MultiGPU(net, dim=0)
 
-    objective = {'rgb': PixelWiseError(metric='l1', boundary_ignore=40), 'psnr': PSNR(boundary_ignore=40), 'perceptual': PixelWiseError(metric='perceptual', boundary_ignore=40)}
+    objective = {'rgb': PixelWiseError(metric='l1', boundary_ignore=40), 'psnr': PSNR(boundary_ignore=40)} # , 'perceptual': PixelWiseError(metric='perceptual', boundary_ignore=40)}
 
-    loss_weight = {'rgb': 1.0, 'perceptual': 0.1}
+    loss_weight = {'rgb': 1.0} # , 'perceptual': 0.1}
 
     actor = dbsr_actors.DBSRSyntheticActor(net=net, objective=objective, loss_weight=loss_weight)
 
