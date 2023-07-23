@@ -89,7 +89,7 @@ def main():
     assert cfg.dataset_path is not None, "You must specify the dataset path"
     nir_visible_val = datasets.nir_visible(burst_sz=cfg.burst_sz, split='test')
     
-    metrics = ('psnr', 'ssim')
+    metrics = ('psnr', 'ssim', 'lr_psnr', 'lr_ssim')
     device = 'cuda'
     boundary_ignore = 40
     metrics_all = {}
@@ -102,6 +102,10 @@ def main():
         elif m == 'lpips':
             loss_fn = LPIPS(boundary_ignore=boundary_ignore)
             loss_fn.to(device)
+        elif m == 'lr_psnr':
+            loss_fn = PSNR(boundary_ignore=boundary_ignore)
+        elif m == 'lr_ssim':
+            loss_fn = SSIM(boundary_ignore=boundary_ignore, use_for_loss=False)
         else:
             raise Exception
         metrics_all[m] = loss_fn
@@ -221,6 +225,8 @@ def main():
                 # net_pred = net_pred_int.float() / (2 ** 14)
 
             for m, m_fn in metrics_all.items():
+                if 'lr' in m:
+                    continue
                 metric_value = m_fn(net_pred, gt.unsqueeze(0)).cpu().item()
                 scores[m].append(metric_value)
 
@@ -250,7 +256,7 @@ def main():
                     
                     # HR_image = cv2.resize(HR_image, dsize=(gt.shape[1], gt.shape[0]), interpolation=cv2.INTER_NEAREST)
                     # LR_image = cv2.resize(LR_image, dsize=(HR_image.shape[1], HR_image.shape[0]), interpolation=cv2.INTER_CUBIC)
-                    LR_image_upsized = cv2.resize(LR_image, dsize=(HR_image.shape[1], HR_image.shape[0]), interpolation=cv2.INTER_NEAREST)
+                    LR_image_upsized = cv2.resize(LR_image, dsize=(HR_image.shape[1], HR_image.shape[0]), interpolation=cv2.INTER_CUBIC)
                     # SR_image = cv2.resize(SR_image, dsize=(gt.shape[1], gt.shape[0]), interpolation=cv2.INTER_NEAREST)
                     # HR_image_cvwrite = HR_image[:, :, [2, 1, 0]]
                     # LR_image_cvwrite = LR_image[:, :, [2, 1, 0]]
@@ -264,7 +270,11 @@ def main():
                     cv2.imwrite('{}/{}_LR_upsized.png'.format(save_path_traj, burst_name.split('.')[0]), LR_image_upsized)
                     cv2.imwrite('{}/{}_LR.png'.format(save_path_traj, burst_name.split('.')[0]), LR_image)                    
                     cv2.imwrite('{}/{}_SR.png'.format(save_path_traj, burst_name.split('.')[0]), SR_image)
-            
+                    try:
+                        scores['lr_psnr'].append(metrics_all['lr_psnr'](burst_rgb_tensor.unsqueeze(0), gt.unsqueeze(0)).cpu().item())
+                        scores['lr_ssim'].append(metrics_all['lr_ssim'](burst_rgb_tensor.unsqueeze(0), gt.unsqueeze(0)).cpu().item())
+                    except:
+                        print('(warining!) Evaluated %s/%s images of %s/%s, it problemed lrpsnr is %s, ssim is %s' % (idx, len(dataset_val)-1, cfg.dataset_path, burst_name, metrics_all['psnr'](burst_rgb_tensor.unsqueeze(0), gt.unsqueeze(0)), metrics_all['ssim'](burst_rgb_tensor.unsqueeze(0), gt.unsqueeze(0))))
                     print(" Evaluated %s/%s images of %s/%s, its psnr is %s, its ssim is %s, LRPSNR is %s, LRSSIM is %s" % (idx, len(dataset_val)-1, cfg.dataset_path, burst_name, scores['psnr'][-1], scores['ssim'][-1], metrics_all['psnr'](burst_rgb_tensor.unsqueeze(0), gt.unsqueeze(0)), metrics_all['ssim'](burst_rgb_tensor.unsqueeze(0), gt.unsqueeze(0))))
                 else:
                     print(" Evaluated %s/%s images of %s/%s, its psnr is %s, its ssim is %s" % (idx, len(dataset_val)-1, cfg.dataset_path, burst_name, scores['psnr'][-1], scores['ssim'][-1]))
