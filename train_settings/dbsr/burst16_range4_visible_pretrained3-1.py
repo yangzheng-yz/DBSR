@@ -30,7 +30,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 def run(settings):
     settings.description = 'Default settings for training DBSR models on real nir visible dataset, range(4), burst size(16), use database function'
-    settings.batch_size = 7
+    settings.batch_size = 6
     settings.num_workers = 8
     settings.multi_gpu = False
     settings.print_interval = 1
