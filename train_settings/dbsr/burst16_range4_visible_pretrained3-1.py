@@ -68,8 +68,8 @@ def run(settings):
     settings.burst_reference_aligned = True
     settings.image_processing_params = {'random_ccm': False, 'random_gains': False, 'smoothstep': False, 'gamma': False, 'add_noise': True}
 
-    nir_visible_train = datasets.nir_visible(burst_sz=settings.burst_sz, split='train')
-    nir_visible_val = datasets.nir_visible(burst_sz=settings.burst_sz, split='test')
+    nir_visible_train = datasets.nir_visible(burst_sz=settings.burst_sz, split='train-1')
+    nir_visible_val = datasets.nir_visible(burst_sz=settings.burst_sz, split='test-1')
 
     transform_train = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True))
     transform_val = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True))
@@ -100,7 +100,7 @@ def run(settings):
     loader_val = DataLoader('val', dataset_val, training=False, num_workers=settings.num_workers,
                             stack_dim=0, batch_size=settings.batch_size, epoch_interval=1)
 
-    net = load_network('/home/yutong/zheng/projects/dbsr_us/pretrained_networks/pretrained_burst/dbsr_burstsr_default.pth')
+    net = load_network('/mnt/data0/zheng/training_results/checkpoints/dbsr/burst16_range4_visible_pretrained3/DBSRNet_ep0137.pth.tar')
     
     # net = dbsr_nets.dbsrnet_cvpr2021(enc_init_dim=64, enc_num_res_blocks=9, enc_out_dim=512,
     #                                  dec_init_conv_dim=64, dec_num_pre_res_blocks=5,
