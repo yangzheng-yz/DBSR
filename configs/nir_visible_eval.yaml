@@ -10,10 +10,10 @@ burst_sz: 16
 downsample_factor: 4
 random_pixelshift: False
 
-ckpt_path: /mnt/data0/zheng/training_results/checkpoints/dbsr/burst16_range4_visible_pretrained2/DBSRNet_ep0130.pth.tar
+ckpt_path: /home/yutong/zheng/projects/dbsr_us/pretrained_networks/pretrained_burst/dbsr_burstsr_default.pth
 dataset_path: /mnt/data0/zheng/nir_visible
 trajectory_path: /home/yutong/zheng/projects/dbsr_us/util_scripts/traj_files/nir_trajectory.pkl
-save_path: /mnt/data0/zheng/nir_visible/evaluation_results/burst16_range4_visible_pretrained2
+save_path: /mnt/data0/zheng/nir_visible/evaluation_results/dbsr_burstsr_default_visible
 use_saved_results: None
 specify_trajetory_num: 0
 specify_image_id: -1 # -1
