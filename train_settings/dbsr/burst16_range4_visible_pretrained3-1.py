@@ -26,7 +26,7 @@ import os
 import pickle as pkl
 import numpy as np
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 def run(settings):
     settings.description = 'Default settings for training DBSR models on real nir visible dataset, range(4), burst size(16), use database function'
