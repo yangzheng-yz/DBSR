@@ -15,19 +15,26 @@
 from actors.base_actor import BaseActor
 from models.loss.spatial_color_alignment import SpatialColorAlignment
 
+
 class DBSR_PSNetActor(BaseActor):
     """Actor for training Pixel Shift reinforcement learning model on synthetic bursts """
-    def __init__(self, net, objective, loss_weight=None):
-        super().__init__(net, objective)
+    def __init__(self, dbsr_encoder, policy_net, objective, loss_weight=None):
+        super().__init__(policy_net, objective)
+        self.dbsr_encoder = dbsr_encoder
 
     def __call__(self, data):
-        # Run network
-        actions_logits, aux_dict = self.net(data['burst'])
+        # Run DBSR encoder
+        encoded_burst = self.dbsr_encoder(data['burst'])
+
+        # Run policy network
+        actions_logits = self.net(encoded_burst)
 
         # Compute action probabilities
         actions_pdf = torch.nn.functional.softmax(actions_logits, dim=-1)
 
         return actions_pdf
+
+
 
 class DBSRSyntheticActor(BaseActor):
     """Actor for training DBSR model on synthetic bursts """

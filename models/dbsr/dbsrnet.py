@@ -20,6 +20,21 @@ from admin.model_constructor import model_constructor
 from models.alignment.pwcnet import PWCNet
 from admin.environment import env_settings
 
+class PolicyNet(nn.Module):
+    def __init__(self, dbsr_encoder, num_actions=5):
+        super(PolicyNet, self).__init__()
+        self.dbsr_encoder = dbsr_encoder
+        self.conv = nn.Conv2d(dbsr_encoder.output_channels, 64, kernel_size=3, padding=1)
+        self.fc = nn.Linear(64, num_actions)
+        self.num_actions = num_actions
+
+    def forward(self, burst):
+        x = self.dbsr_encoder(burst)
+        x = F.relu(self.conv(x))
+        x = x.view(x.size(0), -1)
+        x = self.fc(x)
+        actions_logits = x.view(-1, 3, self.num_actions)
+        return actions_logits
 
 class DBSRNet(nn.Module):
     """ Deep Burst Super-Resolution model"""

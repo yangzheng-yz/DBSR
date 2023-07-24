@@ -158,7 +158,7 @@ class SimpleTrainer(BaseTrainer):
         self.tensorboard_writer.write_epoch(self.stats, self.epoch)
 
 class SimpleTrainer_v2(BaseTrainer):
-    def __init__(self, actor, loaders, optimizer, settings, discount_factor=0.99, sr_net=None, lr_scheduler=None, iterations=7, interpolation_type='bilinear'):
+    def __init__(self, actor, loaders, optimizer, settings, permutation=None, discount_factor=0.99, sr_net=None, lr_scheduler=None, iterations=7, interpolation_type='bilinear'):
         """
         args:
             actor - The actor for training the network
@@ -191,6 +191,8 @@ class SimpleTrainer_v2(BaseTrainer):
         self.interpolation_type = interpolation_type
         
         self.discount_factor = discount_factor
+        
+        self.permutation = permutation
 
     def _set_default_settings(self):
         # Dict of all default values
@@ -257,7 +259,7 @@ class SimpleTrainer_v2(BaseTrainer):
 
         self._init_timing()
 
-        discount_factor = self.discount_factor  # set your discount factor
+        discount_factor = 0.99  # set your discount factor
 
         for i, data in enumerate(loader, 1):
             # get inputs
@@ -269,10 +271,13 @@ class SimpleTrainer_v2(BaseTrainer):
 
             batch_size = data['frame_gt'].size(0)
 
-            permutations = torch.tensor([[0,0],
-                                        [0,2],
-                                        [2,2],
-                                        [2,0]]).repeat(batch_size, 1, 1).to(self.device)
+            if self.permutation is not None:
+                permutations = torch.tensor(self.permutation).repeat(batch_size, 1, 1).to(self.device)
+            if self.permutation is not None:
+                permutations = torch.tensor(np.array([[0,0],
+                                            [0,2],
+                                            [2,2],
+                                            [2,0]])).repeat(batch_size, 1, 1).to(self.device)
 
             rewards = []
             log_probs = []
@@ -312,6 +317,10 @@ class SimpleTrainer_v2(BaseTrainer):
             log_probs = torch.stack(log_probs)
             loss_iter = -(log_probs * reward_normalized).mean()
 
+            # calculate PSNR for the initial and final burst
+            psnr_initial = reward_func['psnr'](preds[0], data['frame_gt'])
+            psnr_final = reward_func['psnr'](preds[-1], data['frame_gt'])
+
             # backward pass and update weights
             if loader.training:
                 self.optimizer.zero_grad()
@@ -320,10 +329,11 @@ class SimpleTrainer_v2(BaseTrainer):
 
                 # update statistics
                 batch_size = self.settings.batch_size
-                self._update_stats({'Loss/total': loss_iter.item()}, batch_size, loader)
+                self._update_stats({'Loss/total': loss_iter.item(), 'PSNR/initial': psnr_initial, 'PSNR/final': psnr_final}, batch_size, loader)
 
                 # print statistics
                 self._print_stats(i, loader, batch_size)
+
 
 
 
