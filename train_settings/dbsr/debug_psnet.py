@@ -139,6 +139,6 @@ def run(settings):
                            lr=2e-4)
 
     lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=40, gamma=0.2)
-    trainer = SimpleTrainer(actor, [loader_train, loader_val], optimizer, settings, lr_scheduler)
+    trainer = SimpleTrainer_v2(actor, [loader_train, loader_val], optimizer, settings, lr_scheduler)
 
     trainer.train(100, load_latest=True, fail_safe=True) # (epoch, )
