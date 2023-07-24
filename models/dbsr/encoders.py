@@ -63,6 +63,8 @@ class ResEncoderWarpAlignnet(nn.Module):
 
         self.out_layer = blocks.conv_block(init_dim, out_dim, 3, stride=1, padding=1, batch_norm=use_bn,
                                            activation=activation)
+        
+        self.out_dim = out_dim
 
     def forward(self, x):
         assert x.dim() == 5

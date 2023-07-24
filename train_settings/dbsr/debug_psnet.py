@@ -130,18 +130,8 @@ def run(settings):
     dbsr_encoder = load_network('/home/yutong/zheng/projects/dbsr_us/pretrained_networks/pretrained_burst/dbsr_burstsr_default.pth')
 
     dbsr_encoder = dbsr_net.encoder
-
-    # Create a dummy input with the correct input shape
-    # You may need to adjust the shape depending on your model
-    dummy_input = torch.randn(1, 4, 4, 224, 224)
-
-    # Pass the dummy input through the encoder
-    dummy_output = dbsr_encoder(dummy_input)
-
-    # Get the number of output channels
-    output_channels = dummy_output.size(1)
     
-    policy_net = dbsr_nets.PolicyNet(output_channels)  # Create the policy network
+    policy_net = dbsr_nets.PolicyNet(dbsr_encoder.out_dim)  # Create the policy network
 
     actor = dbsr_actors.DBSR_PSNetActor(dbsr_encoder=dbsr_encoder, net=policy_net, objective=objective, loss_weight=loss_weight)
 
