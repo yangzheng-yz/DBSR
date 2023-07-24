@@ -22,11 +22,11 @@ import data.transforms as tfm
 from admin.multigpu import MultiGPU
 from models.loss.image_quality_v2 import PSNR, PixelWiseError
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 def run(settings):
     settings.description = 'Default settings for training DBSR models on synthetic burst dataset, with random pixel shift, trans(24), rot(1.0), burst size(8), use ori function'
-    settings.batch_size = 16
+    settings.batch_size = 3
     settings.num_workers = 8
     settings.multi_gpu = False
     settings.print_interval = 1
