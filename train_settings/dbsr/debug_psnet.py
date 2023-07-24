@@ -131,8 +131,17 @@ def run(settings):
 
     dbsr_encoder = dbsr_net.encoder
 
-    # dbsr_encoder = ...  # Load your pre-trained DBSR encoder
-    policy_net = dbsr_nets.PolicyNet(dbsr_encoder.output_channels)  # Create the policy network
+    # Create a dummy input with the correct input shape
+    # You may need to adjust the shape depending on your model
+    dummy_input = torch.randn(1, 3, 224, 224)
+
+    # Pass the dummy input through the encoder
+    dummy_output = dbsr_encoder(dummy_input)
+
+    # Get the number of output channels
+    output_channels = dummy_output.size(1)
+    
+    policy_net = dbsr_nets.PolicyNet(output_channels)  # Create the policy network
 
     actor = dbsr_actors.DBSR_PSNetActor(dbsr_encoder=dbsr_encoder, net=policy_net, objective=objective, loss_weight=loss_weight)
 
