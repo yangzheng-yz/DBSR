@@ -19,7 +19,7 @@ from models.loss.spatial_color_alignment import SpatialColorAlignment
 class DBSR_PSNetActor(BaseActor):
     """Actor for training Pixel Shift reinforcement learning model on synthetic bursts """
     def __init__(self, dbsr_encoder, net, objective, loss_weight=None):
-        super().__init__(policy_net, objective)
+        super().__init__(net, objective)
         self.dbsr_encoder = dbsr_encoder
 
     def __call__(self, data):
