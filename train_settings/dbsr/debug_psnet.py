@@ -18,7 +18,7 @@ from utils.loading import load_network
 from data import processing, sampler, DataLoader
 import models.dbsr.dbsrnet as dbsr_nets
 import actors.dbsr_actors as dbsr_actors
-from trainers import SimpleTrainer
+from trainers import SimpleTrainer, SimpleTrainer_v2
 import data.transforms as tfm
 from admin.multigpu import MultiGPU
 from models.loss.image_quality_v2 import PSNR, PixelWiseError
@@ -127,7 +127,7 @@ def run(settings):
     loss_weight = {'rgb': 1.0}
 
     # 获取encoder部分
-    dbsr_encoder = load_network('/home/yutong/zheng/projects/dbsr_us/pretrained_networks/pretrained_burst/dbsr_burstsr_default.pth')
+    dbsr_encoder = load_network('/home/yutong/zheng/projects/DBSR/pretrained_networks/pretrained_burst/dbsr_burstsr_default.pth')
 
     dbsr_encoder = dbsr_net.encoder
     

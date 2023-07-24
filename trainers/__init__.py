@@ -1,1 +1,1 @@
-from .simple_trainer import SimpleTrainer
+from .simple_trainer import SimpleTrainer, SimpleTrainer_v2
