@@ -114,8 +114,7 @@ def run(settings):
                                      weight_pred_proj_dim=64,
                                      num_weight_predictor_res=3,
                                      gauss_blur_sd=1.0,
-                                     icnrinit=True,
-                                     use_pretrained='/home/yutong/zheng/projects/dbsr_us/pretrained_networks/pretrained_syn/dbsr_synthetic_default.pth'
+                                     icnrinit=True
                                      )
 
     # Wrap the network for multi GPU training
@@ -127,6 +126,8 @@ def run(settings):
     loss_weight = {'rgb': 1.0}
 
     # 获取encoder部分
+    dbsr_encoder = load_network('/home/yutong/zheng/dbsr_us/pretrained_networks/pretrained_syn/dbsr_synthetic_default.pth')
+
     dbsr_encoder = dbsr_net.encoder
 
     # dbsr_encoder = ...  # Load your pre-trained DBSR encoder
