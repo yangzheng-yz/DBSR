@@ -127,7 +127,7 @@ def run(settings):
     loss_weight = {'rgb': 1.0}
 
     # 获取encoder部分
-    dbsr_encoder = load_network('/home/yutong/zheng/dbsr_us/pretrained_networks/pretrained_syn/dbsr_synthetic_default.pth')
+    dbsr_encoder = load_network('/home/yutong/zheng/projects/dbsr_us/pretrained_networks/pretrained_burst/dbsr_burstsr_default.pth')
 
     dbsr_encoder = dbsr_net.encoder
 
