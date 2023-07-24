@@ -131,7 +131,7 @@ def run(settings):
 
     dbsr_encoder = dbsr_net.encoder
     
-    policy_net = dbsr_nets.PolicyNet(dbsr_encoder.out_dim)  # Create the policy network
+    policy_net = dbsr_nets.PolicyNet(dbsr_encoder)  # Create the policy network
 
     actor = dbsr_actors.DBSR_PSNetActor(dbsr_encoder=dbsr_encoder, net=policy_net, objective=objective, loss_weight=loss_weight)
 

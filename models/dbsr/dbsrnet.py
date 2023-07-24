@@ -25,7 +25,7 @@ class PolicyNet(nn.Module):
     def __init__(self, dbsr_encoder, num_actions=5):
         super(PolicyNet, self).__init__()
         self.dbsr_encoder = dbsr_encoder
-        self.conv = nn.Conv2d(dbsr_encoder.output_channels, 64, kernel_size=3, padding=1)
+        self.conv = nn.Conv2d(dbsr_encoder.out_dim, 64, kernel_size=3, padding=1)
         self.fc = nn.Linear(64, num_actions)
         self.num_actions = num_actions
 
