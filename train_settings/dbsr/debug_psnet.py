@@ -126,7 +126,7 @@ def run(settings):
     loss_weight = {'rgb': 1.0}
 
     # 加载预训练的模型
-    pretrained_weights = torch.load('/home/yutong/zheng/projects/dnsr_us/pretrained_networks/pretrained_syn/dbsr_synthetic_default.pth')
+    pretrained_weights = torch.load('/home/yutong/zheng/projects/dbsr_us/pretrained_networks/pretrained_syn/dbsr_synthetic_default.pth')
     dbsr_net.load_state_dict(pretrained_weights)
 
     # 获取encoder部分
