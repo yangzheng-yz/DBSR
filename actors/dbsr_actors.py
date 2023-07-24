@@ -15,6 +15,48 @@
 from actors.base_actor import BaseActor
 from models.loss.spatial_color_alignment import SpatialColorAlignment
 
+class DBSR_PSNetActor(BaseActor):
+    """Actor for training Pixel Shift reinforcement learning model on synthetic bursts """
+    def __init__(self, net, objective, loss_weight=None):
+        super().__init__(net, objective)
+        if loss_weight is None:
+            loss_weight = {'rgb': 1.0}
+        self.loss_weight = loss_weight
+
+    def __call__(self, data):
+        # Run network
+        # print("net's device: ", next(self.net.parameters()).device)
+        # print("data burst info: ", type(data['burst']))
+        # print(data['burst'].size())
+        pred, aux_dict = self.net(data['burst'])
+
+        # Compute loss
+        loss_rgb_raw = self.objective['rgb'](pred, data['frame_gt'])
+        loss_rgb = self.loss_weight['rgb'] * loss_rgb_raw
+        
+        if self.objective.get('perceptual', None) is not None:
+            loss_percept_raw = self.objective['perceptual'](pred, data['frame_gt'])
+            loss_percept = self.loss_weight['perceptual'] * loss_percept_raw
+            loss_rgb += loss_percept
+
+        if 'psnr' in self.objective.keys():
+            psnr = self.objective['psnr'](pred.clone().detach(), data['frame_gt'])
+
+        loss = loss_rgb
+        if self.objective.get('perceptual', None) is not None:
+            stats = {'Loss/total': loss.item(),
+                    'Loss/rgb': loss_rgb.item() - loss_percept.item(),
+                    'Loss/percept': loss_percept.item(),
+                    'Loss/raw/rgb': loss_rgb_raw.item()}
+        else: 
+            stats = {'Loss/total': loss.item(),
+                    'Loss/rgb': loss_rgb.item(),
+                    'Loss/raw/rgb': loss_rgb_raw.item()}
+
+        if 'psnr' in self.objective.keys():
+            stats['Stat/psnr'] = psnr.item()
+
+        return loss, stats
 
 class DBSRSyntheticActor(BaseActor):
     """Actor for training DBSR model on synthetic bursts """
