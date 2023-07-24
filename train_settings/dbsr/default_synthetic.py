@@ -98,4 +98,4 @@ def run(settings):
     lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=40, gamma=0.2)
     trainer = SimpleTrainer(actor, [loader_train, loader_val], optimizer, settings, lr_scheduler)
 
-    trainer.train(100, load_latest=True, fail_safe=True)
+    trainer.train(1000, load_latest=True, fail_safe=True)
