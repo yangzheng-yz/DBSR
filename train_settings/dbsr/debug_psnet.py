@@ -133,7 +133,7 @@ def run(settings):
 
     # Create a dummy input with the correct input shape
     # You may need to adjust the shape depending on your model
-    dummy_input = torch.randn(1, 3, 224, 224)
+    dummy_input = torch.randn(1, 4, 4, 224, 224)
 
     # Pass the dummy input through the encoder
     dummy_output = dbsr_encoder(dummy_input)
