@@ -68,7 +68,7 @@ class SimpleTrainer(BaseTrainer):
             if self.move_data_to_gpu:
                 # print("!!!!!!!!!!!!!!!!!!!!data's device: ", self.device)
                 data = data.to(self.device)
-
+            print("ADSSDSDSDSDS: ", data['burst'].size())
             # print("!!!!!!gt size: ", data['frame_gt'].size()) # (batch_size, channels, height, width)
             
             data['epoch'] = self.epoch
@@ -229,7 +229,7 @@ class SimpleTrainer(BaseTrainer):
 #                     reward_iter += reward
 #                     loss_iter = loss
 #                     actions = sample_actions(actions_pdf)
-#                     permutations = update_permutations(actions)
+#                     permutations = update_permutations(permutations, actions)
 #                     data['burst'] = apply_actions(permutations)
                     
 #                 else:
@@ -240,13 +240,15 @@ class SimpleTrainer(BaseTrainer):
 #                     reward_iter += reward
 #                     loss_iter += loss
 #                     actions = sample_actions(actions_pdf)
-#                     permutations = update_permutations(actions)
+#                     permutations = update_permutations(permutations, actions)
 #                     data['burst'] = apply_actions(permutations)
+            
+#             loss_iter = loss_iter * reward_iter
                        
 #             # backward pass and update weights
 #             if loader.training:
 #                 self.optimizer.zero_grad()
-#                 loss.backward()
+#                 loss_iter.backward()
 #                 self.optimizer.step()
 
 #                 # update statistics
