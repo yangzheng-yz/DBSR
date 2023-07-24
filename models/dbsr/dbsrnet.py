@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import torch
 import torch.nn as nn
 import models.dbsr.encoders as dbsr_encoders
 import models.dbsr.decoders as dbsr_decoders
