@@ -114,7 +114,8 @@ def run(settings):
                                      weight_pred_proj_dim=64,
                                      num_weight_predictor_res=3,
                                      gauss_blur_sd=1.0,
-                                     icnrinit=True
+                                     icnrinit=True,
+                                     use_pretrained='/home/yutong/zheng/projects/dbsr_us/pretrained_networks/pretrained_syn/dbsr_synthetic_default.pth'
                                      )
 
     # Wrap the network for multi GPU training
@@ -124,10 +125,6 @@ def run(settings):
     objective = {'rgb': PixelWiseError(metric='l1', boundary_ignore=40), 'psnr': PSNR(boundary_ignore=40)}
 
     loss_weight = {'rgb': 1.0}
-
-    # 加载预训练的模型
-    pretrained_weights = torch.load('/home/yutong/zheng/projects/dbsr_us/pretrained_networks/pretrained_syn/dbsr_synthetic_default.pth')
-    dbsr_net.load_state_dict(pretrained_weights)
 
     # 获取encoder部分
     dbsr_encoder = dbsr_net.encoder
