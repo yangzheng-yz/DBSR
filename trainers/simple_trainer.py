@@ -69,14 +69,14 @@ class SimpleTrainer(BaseTrainer):
                 # print("!!!!!!!!!!!!!!!!!!!!data's device: ", self.device)
                 data = data.to(self.device)
 
-            print("!!!!!!gt size: ", data['frame_gt'].size())
+            # print("!!!!!!gt size: ", data['frame_gt'].size()) # (batch_size, channels, height, width)
             
             data['epoch'] = self.epoch
             data['settings'] = self.settings
 
             # forward pass
             loss, stats = self.actor(data)
-
+            print("!!!!!!!!!!!loss: ", loss)
             # backward pass and update weights
             if loader.training:
                 self.optimizer.zero_grad()
@@ -154,7 +154,7 @@ class SimpleTrainer(BaseTrainer):
         self.tensorboard_writer.write_epoch(self.stats, self.epoch)
 
 # class SimpleTrainer_v2(BaseTrainer):
-#     def __init__(self, actor, loaders, optimizer, settings, lr_scheduler=None, iterations=7):
+#     def __init__(self, actor, loaders, optimizer, settings, sr_net=None, lr_scheduler=None, iterations=7):
 #         """
 #         args:
 #             actor - The actor for training the network
@@ -178,6 +178,9 @@ class SimpleTrainer(BaseTrainer):
 #         self.move_data_to_gpu = getattr(settings, 'move_data_to_gpu', True)
         
 #         self.iterations = iterations
+        
+#         assert sr_net is not None, "You must specify a pretrained SR model to calculate reward"
+#         self.sr_net = sr_net
 
 #     def _set_default_settings(self):
 #         # Dict of all default values
@@ -205,18 +208,46 @@ class SimpleTrainer(BaseTrainer):
 
 #             data['epoch'] = self.epoch
 #             data['settings'] = self.settings
-
+            
+#             batch_size = len(data['frame_gt'])
+            
+#             permutations = np.array([[0,0],
+#                                      [0,2],
+#                                      [2,2],
+#                                      [2,0]])
+            
+#             loss_iter = 0
+#             reward_iter = 0
+            
 #             for it in range(self.iterations):
 #                 # forward pass
 #                 if it == 0:
                     
-#                     loss, stats, actions = self.actor(data)
-
-#                     # backward pass and update weights
-#                     if loader.training:
-#                         self.optimizer.zero_grad()
-#                         loss.backward()
-#                         self.optimizer.step()
+#                     loss, stats, actions_pdf = self.actor(data)
+#                     pred, _ = self.sr_net(data['burst'])
+#                     reward = calculate_reward(data['frame_gt'], pred, data['cubic'])
+#                     reward_iter += reward
+#                     loss_iter = loss
+#                     actions = sample_actions(actions_pdf)
+#                     permutations = update_permutations(actions)
+#                     data['burst'] = apply_actions(permutations)
+                    
+#                 else:
+                    
+#                     loss, stats, actions_pdf = self.actor(data)
+#                     pred, _ = self.sr_net(data['burst'])
+#                     reward = calculate_reward(data['frame_gt'], pred, data['cubic'])
+#                     reward_iter += reward
+#                     loss_iter += loss
+#                     actions = sample_actions(actions_pdf)
+#                     permutations = update_permutations(actions)
+#                     data['burst'] = apply_actions(permutations)
+                       
+#             # backward pass and update weights
+#             if loader.training:
+#                 self.optimizer.zero_grad()
+#                 loss.backward()
+#                 self.optimizer.step()
 
 #                 # update statistics
 #                 # batch_size = data['train_images'].shape[loader.stack_dim]
