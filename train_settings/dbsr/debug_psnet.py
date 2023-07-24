@@ -129,7 +129,7 @@ def run(settings):
     # 获取encoder部分
     dbsr_encoder = dbsr_net.encoder
 
-    dbsr_encoder = ...  # Load your pre-trained DBSR encoder
+    # dbsr_encoder = ...  # Load your pre-trained DBSR encoder
     policy_net = PolicyNet(dbsr_encoder.output_channels)  # Create the policy network
 
     actor = dbsr_actors.DBSR_PSNetActor(dbsr_encoder=dbsr_encoder, net=policy_net, objective=objective, loss_weight=loss_weight)
