@@ -69,7 +69,7 @@ def run(settings):
     settings.image_processing_params = {'random_ccm': False, 'random_gains': False, 'smoothstep': False, 'gamma': False, 'add_noise': True}
 
     nir_visible_train = datasets.nir_visible(burst_sz=settings.burst_sz, split='train-2')
-    nir_visible_val = datasets.nir_visible(burst_sz=settings.burst_sz, split='test-2')
+    nir_visible_val = datasets.nir_visible(burst_sz=settings.burst_sz, split='test')
 
     transform_train = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True))
     transform_val = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True))
