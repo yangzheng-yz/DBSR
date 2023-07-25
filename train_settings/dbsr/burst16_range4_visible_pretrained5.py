@@ -100,7 +100,7 @@ def run(settings):
     loader_val = DataLoader('val', dataset_val, training=False, num_workers=settings.num_workers,
                             stack_dim=0, batch_size=settings.batch_size, epoch_interval=1)
 
-    net = load_network('~/zheng/projects/dbsr_us/pretrained_networks/pretrained_burst/dbsr_burstsr_default.pth')
+    net = load_network('/home/yutong/zheng/projects/dbsr_us/pretrained_networks/pretrained_burst/dbsr_burstsr_default.pth')
     
     # net = dbsr_nets.dbsrnet_cvpr2021(enc_init_dim=64, enc_num_res_blocks=9, enc_out_dim=512,
     #                                  dec_init_conv_dim=64, dec_num_pre_res_blocks=5,
