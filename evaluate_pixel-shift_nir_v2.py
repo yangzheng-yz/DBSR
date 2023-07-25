@@ -22,7 +22,7 @@ from evaluation.common_utils.network_param import NetworkParam
 from models.loss.image_quality_v2 import PSNR, SSIM, LPIPS
 from data.postprocessing_functions import SimplePostProcess
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 cfg = EasyDict()
 
