@@ -20,3 +20,4 @@ specify_image_id: -1 # -1
 save_results: True
 save_pixelShifts: False
 split: test
+burst_need_downsample: true

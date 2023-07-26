@@ -225,7 +225,7 @@ class VisibleBurstProcessing(BaseProcessing):
     noise. """
     def __init__(self, crop_sz, downsample_factor, crop_scale_range=None, crop_ar_range=None,
                  burst_transformation_params={}, image_processing_params=None,
-                 interpolation_type='bilinear', return_rgb_busrt=False, random_crop=False, random_flip=False,
+                 interpolation_type='bilinear', return_rgb_busrt=False, random_crop=False, random_flip=False, burst_need_downsample=True,
                  *args, **kwargs):
         """
         args:
@@ -262,6 +262,8 @@ class VisibleBurstProcessing(BaseProcessing):
         self.random_flip = random_flip
 
         self.image_processing_params = image_processing_params
+        
+        self.burst_need_downsample = burst_need_downsample
 
     def __call__(self, data: TensorDict):
         # Augmentation, e.g. convert to tensor
@@ -318,6 +320,10 @@ class VisibleBurstProcessing(BaseProcessing):
         #                                                                                        image_processing_params=self.image_processing_params,
         #                                                                                        interpolation_type=self.interpolation_type
         #                                                                                        )
+        
+        if not self.burst_need_downsample:
+            self.downsample_factor = 1.0
+        
         burst, frame_gt, burst_rgb, meta_info = syn_burst_generation.burstrgb2raw(burst_crop_flipped,
                                                                     image_gt=gt_crop_flipped,
                                                                     downsample_factor=self.downsample_factor,

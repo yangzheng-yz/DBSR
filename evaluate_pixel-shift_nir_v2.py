@@ -171,13 +171,19 @@ def main():
         # transform_val = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True), tfm.RandomHorizontalFlip())
         transform_val = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True))
 
+        if cfg.burst_need_downsample == 'true':
+            cfg.burst_need_downsample = True
+        else:
+            cfg.burst_need_downsample = False
+
         data_processing_val = processing.VisibleBurstProcessing((cfg.crop_sz[0], cfg.crop_sz[1]),
                                                                 cfg.downsample_factor,
                                                                 transform=transform_val,
                                                                 image_processing_params=image_processing_params,
                                                                 random_crop=False,
                                                                 random_flip=False,
-                                                                return_rgb_busrt=cfg.return_rgb_burst)        
+                                                                return_rgb_busrt=cfg.return_rgb_burst,
+                                                                burst_need_downsample=cfg.burst_need_downsample)        
         dataset_val = sampler.IndexedImage(nir_visible_val, processing=data_processing_val)
         
         process_fn = SimplePostProcess(return_np=True)

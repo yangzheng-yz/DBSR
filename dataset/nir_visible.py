@@ -17,6 +17,7 @@ import numpy as np
 from dataset.base_image_dataset import BaseImageDataset
 from data.image_loader import opencv_loader
 from admin.environment import env_settings
+import cv2
 
 class nir_visible(BaseImageDataset):
     """
