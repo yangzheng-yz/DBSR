@@ -87,7 +87,7 @@ def main():
     cfg = parse_config()
     """The first part is to prepare the dataset and define the evaluation metrics"""
     assert cfg.dataset_path is not None, "You must specify the dataset path"
-    nir_visible_val = datasets.nir_visible(burst_sz=cfg.burst_sz, split='test')
+    nir_visible_val = datasets.nir_visible(root=cfg.dataset_path, burst_sz=cfg.burst_sz, split='test')
     
     metrics = ('psnr', 'ssim', 'lr_psnr', 'lr_ssim')
     device = 'cuda'
