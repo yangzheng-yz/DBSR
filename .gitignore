@@ -6,6 +6,15 @@ downloaded_datasets/
 
 model-*_output.txt
 
-*/__pycache__/*.pyc
+data/__pycache__/*
+admin/__pycache__/*
+actors/__pycache__/*
+dataset/__pycache__/*
+evaluation/__pycache__/*
+models/__pycache__/*
+train_settings/__pycache__/*
+trainers/__pycache__/*
+util_scripts/__pycache__/*
+utils/__pycache__/*
 
 synburst/

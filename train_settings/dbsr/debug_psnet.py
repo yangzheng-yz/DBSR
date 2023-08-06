@@ -25,7 +25,7 @@ from models.loss.image_quality_v2 import PSNR, PixelWiseError
 import numpy as np
 import torch
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "5"
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 
