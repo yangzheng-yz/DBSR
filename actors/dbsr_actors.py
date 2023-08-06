@@ -14,23 +14,37 @@
 
 from actors.base_actor import BaseActor
 from models.loss.spatial_color_alignment import SpatialColorAlignment
+import torch
 
 
 class DBSR_PSNetActor(BaseActor):
     """Actor for training Pixel Shift reinforcement learning model on synthetic bursts """
-    def __init__(self, dbsr_encoder, net, objective, loss_weight=None):
+    def __init__(self, sr_encoder, sr_merging, net, objective, loss_weight=None):
         super().__init__(net, objective)
-        self.dbsr_encoder = dbsr_encoder
+        self.sr_encoder = sr_encoder
+        self.sr_merging = sr_merging
+
+    def to(self, device):
+        """ Move the network to device
+        args:
+            device - device to use. 'cpu' or 'cuda'
+        """
+        print("!!!!!!!!!!!!!!!!policynet and sr_net's device: ", device)
+        self.net.to(device)
+        self.sr_encoder.to(device)
+        self.sr_merging.to(device)
 
     def __call__(self, data):
         # Run DBSR encoder
-        encoded_burst = self.dbsr_encoder(data['burst'])
+        with torch.no_grad():
+            encoded_burst = self.sr_encoder(data['burst'])
+            merged_feature = self.sr_merging(encoded_burst)
 
         # Run policy network
-        actions_logits = self.net(encoded_burst)
+        actions_logits = self.net(merged_feature['fused_enc'])
 
         # Compute action probabilities
-        actions_pdf = torch.nn.functional.softmax(actions_logits, dim=-1)
+        actions_pdf = torch.nn.functional.softmax(actions_logits, dim=-1) # []
 
         return actions_pdf
 

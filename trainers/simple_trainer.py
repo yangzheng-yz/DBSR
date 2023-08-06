@@ -19,6 +19,7 @@ from admin.stats import AverageMeter, StatValue
 from admin.tensorboard import TensorboardWriter
 import torch
 import time
+import numpy as np
 from models.loss.image_quality_v2 import PSNR, PixelWiseError
 import data.camera_pipeline as rgb2raw
 import data.synthetic_burst_generation as syn_burst_generation
@@ -158,7 +159,7 @@ class SimpleTrainer(BaseTrainer):
         self.tensorboard_writer.write_epoch(self.stats, self.epoch)
 
 class SimpleTrainer_v2(BaseTrainer):
-    def __init__(self, actor, loaders, optimizer, settings, permutation=None, discount_factor=0.99, sr_net=None, lr_scheduler=None, iterations=7, interpolation_type='bilinear'):
+    def __init__(self, actor, loaders, optimizer, settings, init_permutation=None, discount_factor=0.99, sr_net=None, lr_scheduler=None, iterations=15, interpolation_type='bilinear'):
         """
         args:
             actor - The actor for training the network
@@ -187,12 +188,13 @@ class SimpleTrainer_v2(BaseTrainer):
         
         assert sr_net is not None, "You must specify a pretrained SR model to calculate reward"
         self.sr_net = sr_net
+        self.sr_net = self.sr_net.to(self.device)
         
         self.interpolation_type = interpolation_type
         
         self.discount_factor = discount_factor
         
-        self.permutation = permutation
+        self.init_permutation = init_permutation
 
     def _set_default_settings(self):
         # Dict of all default values
@@ -214,7 +216,7 @@ class SimpleTrainer_v2(BaseTrainer):
     def _update_permutations(self, permutations, actions):
         """Update permutations based on the actions."""
         batch_size, num_images, _ = permutations.shape
-        action_offsets = torch.tensor([[0, 0], [0, -1], [0, 1], [-1, 0], [1, 0]]).to(actions.device)
+        action_offsets = torch.tensor([[0, 0], [0, -1], [0, 1], [-1, 0], [1, 0]])
         for i in range(1, num_images):  # start from 1 because the base frame does not move
             permutations[:, i] = permutations[:, i] + action_offsets[actions[:, i-1]]
         return permutations
@@ -225,7 +227,8 @@ class SimpleTrainer_v2(BaseTrainer):
         psnr_current = reward_func['psnr'](pred_current.clone().detach(), frame_gt)
         psnr_last = reward_func['psnr'](pred_last.clone().detach(), frame_gt)
         reward = psnr_current - psnr_last
-        return reward
+
+        return reward # Tensor
 
     def _apply_actions(self, images, permutations, downsample_factor):
         """Apply actions to a batch of images."""
@@ -235,7 +238,9 @@ class SimpleTrainer_v2(BaseTrainer):
         burst_size = permutations.size(1)
         transformed_images = []
         for i in range(batch_size):
-            image = images[i]
+            image = images[i].cpu()
+            # print("image type: ", image.device)
+            # time.sleep(1000)
             burst_transformation_params = {'max_translation': 24.0,
                                         'max_rotation': 1.0,
                                         'max_shear': 0.0,
@@ -248,7 +253,8 @@ class SimpleTrainer_v2(BaseTrainer):
                                                         interpolation_type=self.interpolation_type)
             image_burst = rgb2raw.mosaic(image_burst_rgb.clone())
             transformed_images.append(image_burst)
-        return torch.stack(transformed_images).to(device)
+            transformed_images_stacked = torch.stack(transformed_images).to(device)
+        return transformed_images_stacked
 
 
     def cycle_dataset(self, loader):
@@ -262,26 +268,29 @@ class SimpleTrainer_v2(BaseTrainer):
         discount_factor = 0.99  # set your discount factor
 
         for i, data in enumerate(loader, 1):
+            # print("data type: ", data.keys())
+            # time.sleep(1000)
             # get inputs
             if self.move_data_to_gpu:
-                data = {k: v.to(self.device) for k, v in data.items()}
-
+                data = data.to(self.device)
+                # data = {k: v.to(self.device) for k, v in data.items()}
+            # print("After data load Memory Allocated:", torch.cuda.memory_allocated() / (1024 ** 2), "MB")
+            # print("Memory Cached:", torch.cuda.memory_cached() / (1024 ** 2), "MB")
             data['epoch'] = self.epoch
             data['settings'] = self.settings
 
             batch_size = data['frame_gt'].size(0)
 
-            if self.permutation is not None:
-                permutations = torch.tensor(self.permutation).repeat(batch_size, 1, 1).to(self.device)
-            if self.permutation is not None:
+            if self.init_permutation is not None:
+                permutations = torch.tensor(self.init_permutation).repeat(batch_size, 1, 1)
+            else:
                 permutations = torch.tensor(np.array([[0,0],
                                             [0,2],
                                             [2,2],
-                                            [2,0]])).repeat(batch_size, 1, 1).to(self.device)
+                                            [2,0]])).repeat(batch_size, 1, 1)
 
             rewards = []
             log_probs = []
-
             preds = []
 
             pred, _ = self.sr_net(data['burst'])
@@ -294,46 +303,76 @@ class SimpleTrainer_v2(BaseTrainer):
                 actions_pdf = self.actor(data)
 
                 # sample and apply actions
-                actions = _sample_actions(actions_pdf)
-                permutations = _update_permutations(permutations, actions)
-                data['burst'] = _apply_actions(data['frame_gt'], permutations, downsample_factor=self.downsample_factor)
+                actions = self._sample_actions(actions_pdf)
+                permutations = self._update_permutations(permutations, actions)
+                data['burst'] = self._apply_actions(data['frame_gt'], permutations, downsample_factor=self.downsample_factor)
+                # print("After _apply_actions Memory Allocated:", torch.cuda.memory_allocated() / (1024 ** 2), "MB")
 
                 # updates preds and calculate reward
                 with torch.no_grad():
                     pred, _ = self.sr_net(data['burst'])
+                # print("After updates preds Memory Allocated:", torch.cuda.memory_allocated() / (1024 ** 2), "MB")
+
                 preds.append(pred)
-                reward = _calculate_reward(data['frame_gt'], preds[-1], pred[-2], reward_func=reward_func)
+                # print("!@#length preds: ", len(preds))
+                # time.sleep(1000)
+                reward = self._calculate_reward(data['frame_gt'], preds[-1], preds[-2], reward_func=reward_func)
                 rewards.append(reward)
 
                 # calculate log probabilities of the sampled actions
                 log_prob = torch.log(actions_pdf.gather(2, actions.unsqueeze(-1)).squeeze(-1))
                 log_probs.append(log_prob)
+                # print("After calculate log probabilities Memory Allocated:", torch.cuda.memory_allocated() / (1024 ** 2), "MB")
+
 
             # calculate discounted reward
             reward_iter = sum((discount_factor ** i) * reward for i, reward in enumerate(rewards))
             reward_normalized = reward_iter / float(self.iterations)
+            # print("After calculate discounted reward Memory Allocated:", torch.cuda.memory_allocated() / (1024 ** 2), "MB")
 
             # calculate loss
             log_probs = torch.stack(log_probs)
             loss_iter = -(log_probs * reward_normalized).mean()
+            # print("After calculate loss Memory Allocated:", torch.cuda.memory_allocated() / (1024 ** 2), "MB")
 
             # calculate PSNR for the initial and final burst
             psnr_initial = reward_func['psnr'](preds[0], data['frame_gt'])
             psnr_final = reward_func['psnr'](preds[-1], data['frame_gt'])
+            # print("After calculate PSNR Memory Allocated:", torch.cuda.memory_allocated() / (1024 ** 2), "MB")
+
 
             # backward pass and update weights
             if loader.training:
                 self.optimizer.zero_grad()
-                loss_iter.backward()
+                (-loss_iter).backward()
                 self.optimizer.step()
 
                 # update statistics
                 batch_size = self.settings.batch_size
-                self._update_stats({'Loss/total': loss_iter.item(), 'PSNR/initial': psnr_initial, 'PSNR/final': psnr_final}, batch_size, loader)
+                self._update_stats({'Loss/total': loss_iter.item(), 'PSNR/initial': psnr_initial.item(), 'PSNR/final': psnr_final.item(), "Improvement": psnr_final.item()-psnr_initial.item()}, batch_size, loader)
 
                 # print statistics
                 self._print_stats(i, loader, batch_size)
+            # print("After backward pass Memory Allocated:", torch.cuda.memory_allocated() / (1024 ** 2), "MB")
 
+            del data
+            if "data" in locals():
+                print("`data` has not been deleted!")
+
+            del permutations
+            if "permutations" in locals():
+                print("`permutations` has not been deleted!")
+
+            del rewards
+            if "rewards" in locals():
+                print("`rewards` has not been deleted!")
+            del log_probs
+            if "log_probs" in locals():
+                print("`log_probs` has not been deleted!")
+            del preds
+            if "preds" in locals():
+                print("`preds` has not been deleted!")            
+            
 
 
 

@@ -74,8 +74,8 @@ class PixelWiseError(nn.Module):
 
         # Valid indicates image regions which should be used for loss calculation
         if valid is None:
-            print("pred: ", pred.size())
-            print("gt: ", gt.size())
+            # print("pred: ", pred.size())
+            # print("gt: ", gt.size())
             err = self.loss_fn(pred, gt)
         else:
             err = self.loss_fn(pred, gt, reduction='none')

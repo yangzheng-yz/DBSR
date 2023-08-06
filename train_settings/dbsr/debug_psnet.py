@@ -25,22 +25,23 @@ from models.loss.image_quality_v2 import PSNR, PixelWiseError
 import numpy as np
 import torch
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "5"
+os.environ["CUDA_VISIBLE_DEVICES"] = "6"
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 
+torch.backends.cudnn.enabled = True
+torch.backends.cudnn.benchmark = True
 
 def run(settings):
     settings.description = 'Default settings for training DBSR models on synthetic burst dataset(NightCity) with step(6), amplify factor(4), crop size(384,384), random translation'
-    settings.batch_size = 2
-    settings.num_workers = 8
+    settings.batch_size = 4
+    settings.num_workers = 16
     settings.multi_gpu = False
     settings.print_interval = 1
 
     settings.crop_sz = (384, 384)
     settings.burst_sz = 4
     settings.downsample_factor = 4 # TODO: need to revise to 4?
-    # settings.device = torch.device("cuda:0")
 
     # settings.burst_transformation_params = {'max_translation': 24.0,
     #                                         'max_rotation': 1.0,
@@ -71,7 +72,7 @@ def run(settings):
                                         'specified_translation': permutation}
     
     settings.burst_reference_aligned = True
-    settings.image_processing_params = {'random_ccm': False, 'random_gains': False, 'smoothstep': False, 'gamma': False, 'add_noise': True}
+    settings.image_processing_params = {'random_ccm': True, 'random_gains': True, 'smoothstep': True, 'gamma': True, 'add_noise': True}
 
     zurich_raw2rgb_train = datasets.ZurichRAW2RGB(split='train')
     zurich_raw2rgb_val = datasets.ZurichRAW2RGB(split='test')  
@@ -127,18 +128,19 @@ def run(settings):
     loss_weight = {'rgb': 1.0}
 
     # 获取encoder部分
-    dbsr_encoder = load_network('/home/yutong/zheng/projects/DBSR/pretrained_networks/pretrained_burst/dbsr_burstsr_default.pth')
+    dbsr_net = load_network('/home/yutong/zheng/DBSR/pretrained_networks/dbsr_synthetic_default.pth')
 
-    dbsr_encoder = dbsr_net.encoder
+    sr_encoder = dbsr_net.encoder
+    sr_merging = dbsr_net.merging
     
-    policy_net = dbsr_nets.PolicyNet(dbsr_encoder)  # Create the policy network
+    policy_net = dbsr_nets.PolicyNet(out_dim=512)  # Create the policy network
 
-    actor = dbsr_actors.DBSR_PSNetActor(dbsr_encoder=dbsr_encoder, net=policy_net, objective=objective, loss_weight=loss_weight)
+    actor = dbsr_actors.DBSR_PSNetActor(sr_encoder=sr_encoder, sr_merging=sr_merging, net=policy_net, objective=objective, loss_weight=loss_weight)
 
     optimizer = optim.Adam([{'params': actor.net.parameters(), 'lr': 1e-4}],
                            lr=2e-4)
 
     lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=40, gamma=0.2)
-    trainer = SimpleTrainer_v2(actor, [loader_train, loader_val], optimizer, settings, lr_scheduler)
+    trainer = SimpleTrainer_v2(actor, [loader_train, loader_val], optimizer, settings, lr_scheduler=lr_scheduler, sr_net=dbsr_net)
 
     trainer.train(100, load_latest=True, fail_safe=True) # (epoch, )
