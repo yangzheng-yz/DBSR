@@ -287,6 +287,8 @@ class AgentTrainer(BaseTrainer):
 
                 rewards.append(reward)
 
+                state = next_state
+                
                 # calculate log probabilities of the sampled actions
                 log_prob = torch.log(actions_pdf.gather(2, actions.unsqueeze(-1)).squeeze(-1))
                 log_probs.append(log_prob)                
