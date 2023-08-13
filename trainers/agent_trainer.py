@@ -152,7 +152,7 @@ class AgentTrainer(BaseTrainer):
                 
         return permutations
     
-    def update_permutations_and_actions(actions_batch, initial_permutations_batch):
+    def update_permutations_and_actions(self, actions_batch, initial_permutations_batch):
         movements = {
             0: (-1, 0),  # Left
             1: (1, 0),   # Right
@@ -187,63 +187,21 @@ class AgentTrainer(BaseTrainer):
         
         return updated_permutations_batch, updated_actions_batch
 
-
-    def _calculate_reward(self, frame_gt, pred_current, pred_last, reward_func=None):
-        """Calculate the reward as the difference of PSNR between current and last prediction."""
-        assert reward_func is not None, "You must specify a reward function."
-        if self.reward_type == 'psnr':
-            metric_current = reward_func[self.reward_type](pred_current, frame_gt)
-            metric_last = reward_func[self.reward_type](pred_last, frame_gt)
-            reward = metric_current - metric_last
-        elif self.reward_type == 'ssim':
-            metric_current = reward_func[self.reward_type](pred_current, frame_gt)
-            metric_last = reward_func[self.reward_type](pred_last, frame_gt)
-            reward = 10*(metric_current - metric_last)    
-        # print('last: ', metric_last.item())
-        # print('current: ', metric_current.item())
-        return reward # Tensor
-
-    def _apply_actions(self, images, permutations, downsample_factor):
-        """Apply actions to a batch of images."""
-        device = images.device
-        # images = images.cpu()
-        batch_size = images.size(0)
-        burst_size = permutations.size(1)
-        transformed_images = []
-        for i in range(batch_size):
-            image = images[i].cpu()
-            # print("image type: ", image.device)
-            # time.sleep(1000)
-            burst_transformation_params = {'max_translation': 24.0,
-                                        'max_rotation': 1.0,
-                                        'max_shear': 0.0,
-                                        'max_scale': 0.0,
-                                        'random_pixelshift': False,
-                                        'specified_translation': permutations[i]}
-            image_burst_rgb, _ = syn_burst_generation.single2lrburstdatabase(image, burst_size=burst_size,
-                                                        downsample_factor=self.downsample_factor,
-                                                        transformation_params=burst_transformation_params,
-                                                        interpolation_type=self.interpolation_type)
-            image_burst = rgb2raw.mosaic(image_burst_rgb.clone())
-            transformed_images.append(image_burst)
-            transformed_images_stacked = torch.stack(transformed_images).to(device)
-        return transformed_images_stacked
-
-    def step_environment(self, dists, batch_hr, permutations):
+    def step_environment(self, dists, HR_batch, permutations):
         actions = [dist.sample() for dist in dists]
-        
-        next_state, reward = self.apply_actions_to_env(actions, batch_hr)
-        return next_state, reward
+        actions, permutations = update_permutations_and_actions(actions, permutations)
+        next_state, reward = self.apply_actions_to_env(HR_batch, permutations)
+        return next_state, reward, actions, permutations
 
-    def apply_actions_to_env(self, actions, batch_hr):
+    def apply_actions_to_env(self, HR_batch, permutations_batch):
         """Apply actions to a batch of images."""
-        device = images.device
+        device = HR_batch.device
         # images = images.cpu()
-        batch_size = images.size(0)
-        burst_size = permutations.size(1)
+        batch_size = HR_batch.size(0)
+        burst_size = permutations_batch.size(1)
         transformed_images = []
         for i in range(batch_size):
-            image = images[i].cpu()
+            HR = HR_batch[i].cpu()
             # print("image type: ", image.device)
             # time.sleep(1000)
             burst_transformation_params = {'max_translation': 24.0,
@@ -251,8 +209,8 @@ class AgentTrainer(BaseTrainer):
                                         'max_shear': 0.0,
                                         'max_scale': 0.0,
                                         'random_pixelshift': False,
-                                        'specified_translation': permutations[i]}
-            image_burst_rgb, _ = syn_burst_generation.single2lrburstdatabase(image, burst_size=burst_size,
+                                        'specified_translation': permutations_batch[i]}
+            image_burst_rgb, _ = syn_burst_generation.single2lrburstdatabase(HR, burst_size=burst_size,
                                                         downsample_factor=self.downsample_factor,
                                                         transformation_params=burst_transformation_params,
                                                         interpolation_type=self.interpolation_type)
@@ -267,36 +225,38 @@ class AgentTrainer(BaseTrainer):
 
         self.actor.train(loader.training)
         torch.set_grad_enabled(loader.training)
-        torch.autograd.set_detect_anomaly(True)
+        # torch.autograd.set_detect_anomaly(True)
 
         self._init_timing()
 
         discount_factor = self.discount_factor # set your discount factor
 
         for i, data in enumerate(loader, 1):
-            # print("data type: ", data.keys())
-            # time.sleep(1000)
-            # get inputs
+
             if self.move_data_to_gpu:
                 data = data.to(self.device)
-                # data = {k: v.to(self.device) for k, v in data.items()}
-            # print("After data load Memory Allocated:", torch.cuda.memory_allocated() / (1024 ** 2), "MB")
-            # print("Memory Cached:", torch.cuda.memory_cached() / (1024 ** 2), "MB")
+
             data['epoch'] = self.epoch
             data['settings'] = self.settings
 
             batch_size = data['frame_gt'].size(0)
-            selected_indices = [0, 2, 8, 10]
-            selected_data = data['burst'][:, selected_indices].clone()
-            selected_indices = torch.tensor(np.array([0, 2, 8, 10])).repeat(batch_size, 1)
-            # selected_data = data['burst'][selected_indices].clone()
-            rewards = []
             log_probs = []
-            preds = []
-            print("selected data size: ", selected_data.dim())
-            # time.sleep(1000)
-            pred, _ = self.sr_net(selected_data)
+            values    = []
+            rewards   = []
+            masks     = []
+            preds     = []
+            entropy   =  0
+            pred, _   = self.sr_net(data['burst'])
             preds.append(pred.clone())
+
+            if self.init_permutation is not None:
+                permutations = torch.tensor(self.init_permutation).repeat(batch_size, 1, 1)
+            else:
+                permutations = torch.tensor(np.array([[0,0],
+                                            [0,2],
+                                            [2,2],
+                                            [2,0]])).repeat(batch_size, 1, 1)
+            
             if self.reward_type == 'psnr':
                 reward_func = {'psnr': PSNR(boundary_ignore=40)}
             elif self.reward_type == 'ssim':
@@ -304,59 +264,45 @@ class AgentTrainer(BaseTrainer):
             else:
                 assert 0 == 1, "wrong reward type"
 
+            state = data['burst'].clone()
+
             for it in range(self.iterations):
-                # forward pass, to produce action_pdf
-                actions_pdf = self.actor(selected_data)
+                dists, value = self.actor(state)
+                next_state, reward, actions, permutations = self.step_environment(dists, data['frame_gt'], permutations)
                 
                 # sample and apply actions
                 actions = self._sample_actions_v2(actions_pdf)
-                # permutations = self._update_permutations(permutations, actions)
                 selected_indices = self._update_selections(selected_indices, actions)
                 print("%s iteration selected indices: " % it, selected_indices)
-                # data['burst'] = self._apply_actions(data['frame_gt'], permutations, downsample_factor=self.downsample_factor)
                 batch_indices = torch.arange(batch_size)[:, None]
                 selected_data = data['burst'][batch_indices, selected_indices].clone()
-                # print("%s iteration selected data dim: " % it, selected_data.dim())
-
-                # print("After _apply_actions Memory Allocated:", torch.cuda.memory_allocated() / (1024 ** 2), "MB")
 
                 # updates preds and calculate reward
                 with torch.no_grad():
-                    # pred, _ = self.sr_net(data['burst'])
                     pred, _ = self.sr_net(selected_data)
-                # print("After updates preds Memory Allocated:", torch.cuda.memory_allocated() / (1024 ** 2), "MB")
 
                 preds.append(pred.clone())
-                # print("!@#length preds: ", len(preds))
-                # time.sleep(1000)
+
                 reward = self._calculate_reward(data['frame_gt'], preds[-1], preds[-2], reward_func=reward_func)
-                # print("outside last: ", reward_func[self.reward_type](preds[-2], data['frame_gt']))
-                # print("outside current: ", reward_func[self.reward_type](preds[-1], data['frame_gt']))
+
                 rewards.append(reward)
 
                 # calculate log probabilities of the sampled actions
                 log_prob = torch.log(actions_pdf.gather(2, actions.unsqueeze(-1)).squeeze(-1))
-                log_probs.append(log_prob)
-                # print("After calculate log probabilities Memory Allocated:", torch.cuda.memory_allocated() / (1024 ** 2), "MB")
-                # print("%s iteration permutation: " % it, permutations)
-                
+                log_probs.append(log_prob)                
 
             # calculate discounted reward
             reward_iter = sum((discount_factor ** i) * reward for i, reward in enumerate(rewards))
             reward_normalized = reward_iter / float(self.iterations)
-            # print("After calculate discounted reward Memory Allocated:", torch.cuda.memory_allocated() / (1024 ** 2), "MB")
 
             # calculate loss
             log_probs = torch.stack(log_probs)
-            # loss_iter = -(log_probs * reward_normalized).mean()
             loss_iter = -(log_probs * reward_iter).sum()
-            # print("After calculate loss Memory Allocated:", torch.cuda.memory_allocated() / (1024 ** 2), "MB")
 
             # calculate metric for the initial and final burst
             metric_initial = reward_func[self.reward_type](pred, data['frame_gt'])
             metric_final = reward_func[self.reward_type](preds[-1], data['frame_gt'])
             metrix_init_final = reward_func[self.reward_type](preds[-1], pred)
-            # print("After calculate PSNR Memory Allocated:", torch.cuda.memory_allocated() / (1024 ** 2), "MB")
 
 
             # backward pass and update weights
@@ -371,25 +317,7 @@ class AgentTrainer(BaseTrainer):
 
             # print statistics
             self._print_stats(i, loader, batch_size)
-            # print("After backward pass Memory Allocated:", torch.cuda.memory_allocated() / (1024 ** 2), "MB")
-
-            # del data
-            # if "data" in locals():
-            #     print("`data` has not been deleted!")
-
-            # del permutations
-            # if "permutations" in locals():
-            #     print("`permutations` has not been deleted!")
-
-            # del rewards
-            # if "rewards" in locals():
-            #     print("`rewards` has not been deleted!")
-            # del log_probs
-            # if "log_probs" in locals():
-            #     print("`log_probs` has not been deleted!")
-            # del preds
-            # if "preds" in locals():
-            #     print("`preds` has not been deleted!")            
+       
             
 
 
