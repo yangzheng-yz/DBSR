@@ -36,7 +36,7 @@ class ActorCritic(nn.Module):
             nn.ReLU()
         )
         self.actor_lstm = nn.LSTM(64, hidden_size, batch_first=True)
-        self.actor_linear = nn.Linear(hidden_size, 4 * (num_frames - 1))
+        self.actor_linear = nn.Linear(hidden_size, 5 * (num_frames - 1))
         
         # Critic Network
         self.critic_conv = nn.Sequential(
@@ -56,7 +56,7 @@ class ActorCritic(nn.Module):
         x_actor = x_actor.view(batch_size, num_frames, -1)  # Reshape back to [batch_size, num_frames, features]
         _, (h_n, _) = self.actor_lstm(x_actor)
         action_logits = self.actor_linear(h_n.squeeze(0))
-        action_logits = action_logits.view(batch_size, num_frames - 1, 4)  # Reshape to [batch_size, num_frames-1, 4]
+        action_logits = action_logits.view(batch_size, num_frames - 1, 5)  # Reshape to [batch_size, num_frames-1, 5]
         probs = F.softmax(action_logits, dim=-1)
         dists = [Categorical(p) for p in probs.split(1, dim=1)]
         
@@ -136,15 +136,6 @@ class AgentTrainer(BaseTrainer):
         actions = torch.multinomial(action_pdf.view(-1, num_actions), 1)
         actions = actions.view(batch_size, burst_size_1)
         return actions
-
-    # def _update_permutations(self, permutations, actions):
-    #     """Update permutations based on the actions."""
-    #     batch_size, num_images, _ = permutations.shape
-    #     action_offsets = torch.tensor([[0, 0], [0, -1], [0, 1], [-1, 0], [1, 0]])
-    #     for i in range(1, num_images):  # start from 1 because the base frame does not move
-    #         permutations[:, i][0] = permutations[:, i] + action_offsets[actions[:, i-1]]
-            
-    #     return permutations
     
     def _update_permutations(self, permutations, actions):
         """Update permutations based on the actions."""
@@ -161,20 +152,41 @@ class AgentTrainer(BaseTrainer):
                 
         return permutations
     
-    def _update_selections(self, selected_indices, actions):
-        """Update permutations based on the actions."""
-        batch_size, burst_size= selected_indices.shape
-        action_offsets = torch.tensor([0,1,-1])
-        for i in range(1, burst_size):  # start from 1 because the base frame does not move
-            selected_indices[:, i] = selected_indices[:, i] + action_offsets[actions[:, i-1]]
+    def update_permutations_and_actions(actions_batch, initial_permutations_batch):
+        movements = {
+            0: (-1, 0),  # Left
+            1: (1, 0),   # Right
+            2: (0, -1),  # Up
+            3: (0, 1),    # Down
+            4: (0, 0)     # Stay still
+        }
         
-        # # Clip the values between 0 and 3 using modulo and loop
-        # while torch.any(selected_indices[:,[1,2,3]] < 1):
-        #     selected_indices[:,[1,2,3]][selected_indices[:,[1,2,3]] < 1] = 1
-        # while torch.any(selected_indices[:,[1,2,3]] > 15):
-        #     selected_indices[:,[1,2,3]][selected_indices[:,[1,2,3]] > 15] = 15
-                
-        return selected_indices
+        updated_permutations_batch = []
+        updated_actions_batch = []
+        for actions, initial_permutations in zip(actions_batch, initial_permutations_batch):
+            updated_permutations = list(initial_permutations)
+            updated_actions = list(actions)
+            for idx, action in enumerate(actions):
+                movement = movements[action]
+                updated_permutation = (
+                    initial_permutations[idx+1][0] + movement[0],
+                    initial_permutations[idx+1][1] + movement[1]
+                )
+                # Clip to boundaries
+                updated_permutation = (
+                    min(max(updated_permutation[0], 0), 3),
+                    min(max(updated_permutation[1], 0), 3)
+                )
+                # Check for duplicates, if there's a duplicate, select "stay still" action
+                if updated_permutation in updated_permutations:
+                    updated_permutation = initial_permutations[idx+1]
+                    updated_actions[idx] = 4  # Stay still action
+                updated_permutations[idx+1] = updated_permutation
+            updated_permutations_batch.append(updated_permutations)
+            updated_actions_batch.append(updated_actions)
+        
+        return updated_permutations_batch, updated_actions_batch
+
 
     def _calculate_reward(self, frame_gt, pred_current, pred_last, reward_func=None):
         """Calculate the reward as the difference of PSNR between current and last prediction."""
