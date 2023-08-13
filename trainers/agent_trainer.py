@@ -25,27 +25,49 @@ import data.camera_pipeline as rgb2raw
 import data.synthetic_burst_generation as syn_burst_generation
 
 class ActorCritic(nn.Module):
-    def __init__(self, num_inputs, num_outputs, hidden_size, std=0.0):
+    def __init__(self, num_frames, num_channels, hidden_size):
         super(ActorCritic, self).__init__()
         
-        self.critic = nn.Sequential(
-            nn.Linear(num_inputs, hidden_size),
+        # Actor Network
+        self.actor_conv = nn.Sequential(
+            nn.Conv2d(num_channels, 32, kernel_size=3, stride=1, padding=1),
             nn.ReLU(),
-            nn.Linear(hidden_size, 1)
+            nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
+            nn.ReLU()
         )
+        self.actor_lstm = nn.LSTM(64, hidden_size, batch_first=True)
+        self.actor_linear = nn.Linear(hidden_size, 4 * (num_frames - 1))
         
-        self.actor = nn.Sequential(
-            nn.Linear(num_inputs, hidden_size),
+        # Critic Network
+        self.critic_conv = nn.Sequential(
+            nn.Conv2d(num_channels, 32, kernel_size=3, stride=1, padding=1),
             nn.ReLU(),
-            nn.Linear(hidden_size, num_outputs),
-            nn.Softmax(dim=1),
+            nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
+            nn.ReLU()
         )
-        
+        self.critic_linear = nn.Linear(64, 1)
+
     def forward(self, x):
-        value = self.critic(x)
-        probs = self.actor(x)
-        dist  = Categorical(probs)
-        return dist, value
+        batch_size, num_frames, channels, height, width = x.size()
+        x = x.view(-1, channels, height, width)  # Reshape to [batch_size*num_frames, channels, height, width]
+        
+        # Actor
+        x_actor = self.actor_conv(x)
+        x_actor = x_actor.view(batch_size, num_frames, -1)  # Reshape back to [batch_size, num_frames, features]
+        _, (h_n, _) = self.actor_lstm(x_actor)
+        action_logits = self.actor_linear(h_n.squeeze(0))
+        action_logits = action_logits.view(batch_size, num_frames - 1, 4)  # Reshape to [batch_size, num_frames-1, 4]
+        probs = F.softmax(action_logits, dim=-1)
+        dists = [Categorical(p) for p in probs.split(1, dim=1)]
+        
+        # Critic
+        x_critic = self.critic_conv(x)
+        x_critic = x_critic.view(batch_size, num_frames, -1).mean(dim=1)  # Average over frames
+        value = self.critic_linear(x_critic)
+        
+        return dists, value
+
+
 
 class AgentTrainer(BaseTrainer):
     def __init__(self, actor, loaders, optimizer, settings, 
@@ -89,6 +111,7 @@ class AgentTrainer(BaseTrainer):
         self.init_permutation = init_permutation
         
         self.reward_type = reward_type
+        
         
     def _set_default_settings(self):
         # Dict of all default values
@@ -164,8 +187,8 @@ class AgentTrainer(BaseTrainer):
             metric_current = reward_func[self.reward_type](pred_current, frame_gt)
             metric_last = reward_func[self.reward_type](pred_last, frame_gt)
             reward = 10*(metric_current - metric_last)    
-        print('last: ', metric_last.item())
-        print('current: ', metric_current.item())
+        # print('last: ', metric_last.item())
+        # print('current: ', metric_current.item())
         return reward # Tensor
 
     def _apply_actions(self, images, permutations, downsample_factor):
@@ -193,6 +216,39 @@ class AgentTrainer(BaseTrainer):
             transformed_images.append(image_burst)
             transformed_images_stacked = torch.stack(transformed_images).to(device)
         return transformed_images_stacked
+
+    def step_environment(self, dists, batch_hr, permutations):
+        actions = [dist.sample() for dist in dists]
+        
+        next_state, reward = self.apply_actions_to_env(actions, batch_hr)
+        return next_state, reward
+
+    def apply_actions_to_env(self, actions, batch_hr):
+        """Apply actions to a batch of images."""
+        device = images.device
+        # images = images.cpu()
+        batch_size = images.size(0)
+        burst_size = permutations.size(1)
+        transformed_images = []
+        for i in range(batch_size):
+            image = images[i].cpu()
+            # print("image type: ", image.device)
+            # time.sleep(1000)
+            burst_transformation_params = {'max_translation': 24.0,
+                                        'max_rotation': 1.0,
+                                        'max_shear': 0.0,
+                                        'max_scale': 0.0,
+                                        'random_pixelshift': False,
+                                        'specified_translation': permutations[i]}
+            image_burst_rgb, _ = syn_burst_generation.single2lrburstdatabase(image, burst_size=burst_size,
+                                                        downsample_factor=self.downsample_factor,
+                                                        transformation_params=burst_transformation_params,
+                                                        interpolation_type=self.interpolation_type)
+            image_burst = rgb2raw.mosaic(image_burst_rgb.clone())
+            transformed_images.append(image_burst)
+            transformed_images_stacked = torch.stack(transformed_images).to(device)
+        return transformed_images_stacked
+
  
     def cycle_dataset(self, loader):
         """Do a cycle of training or validation."""
