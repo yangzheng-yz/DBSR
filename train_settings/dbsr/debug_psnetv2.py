@@ -1,4 +1,5 @@
 # This version try to use loss descent
+
 # Copyright (c) 2021 Huawei Technologies Co., Ltd.
 # Licensed under CC BY-NC-SA 4.0 (Attribution-NonCommercial-ShareAlike 4.0 International) (the "License");
 # you may not use this file except in compliance with the License.
@@ -35,7 +36,7 @@ torch.backends.cudnn.benchmark = True
 
 def run(settings):
     settings.description = 'Default settings for training DBSR models on synthetic burst dataset(NightCity) with step(6), amplify factor(4), crop size(384,384), random translation'
-    settings.batch_size = 1
+    settings.batch_size = 4
     settings.num_workers = 16
     settings.multi_gpu = False
     settings.print_interval = 1

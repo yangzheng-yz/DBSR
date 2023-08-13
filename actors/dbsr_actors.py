@@ -37,7 +37,7 @@ class DBSR_PSNetActor(BaseActor):
     def __call__(self, data):
         # Run DBSR encoder
         with torch.no_grad():
-            encoded_burst = self.sr_encoder(data['burst'])
+            encoded_burst = self.sr_encoder(data)
             merged_feature = self.sr_merging(encoded_burst)
 
         # Run policy network

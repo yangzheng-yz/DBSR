@@ -16,6 +16,7 @@ import torch
 import torch.nn as nn
 import models.layers.warp as lispr_warp
 import models.layers.blocks as blocks
+import time
 
 class ResBlockWithSelfAttention(nn.Module):
     def __init__(self, in_dim, use_bn=False, activation='relu'):
@@ -67,7 +68,8 @@ class ResEncoderWarpAlignnet(nn.Module):
         self.out_dim = out_dim
 
     def forward(self, x):
-        assert x.dim() == 5
+        # print("x dim is: ", x.size())
+        assert x.dim() == 5, "x dim is %s, rather than 5" % x.dim()
 
         # Compute alignment vectors wrt reference frame
         x_rgb = torch.stack((x[:, :, 0], x[:, :, 1:3].mean(dim=2), x[:, :, 3]), dim=2)

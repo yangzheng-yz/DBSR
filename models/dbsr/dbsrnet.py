@@ -54,6 +54,37 @@ class PolicyNet(nn.Module):
 
         return actions_logits
 
+class PolicyNet_v2(nn.Module):
+    def __init__(self, out_dim=4, num_actions=3):
+        super(PolicyNet_v2, self).__init__()
+        self.conv = nn.Conv2d(out_dim, 64, kernel_size=3, padding=1)
+        self.fc_action1 = nn.Conv2d(64, num_actions, kernel_size=1)
+        self.fc_action2 = nn.Conv2d(64, num_actions, kernel_size=1)
+        self.fc_action3 = nn.Conv2d(64, num_actions, kernel_size=1)
+        self.num_actions = num_actions
+
+    def forward(self, x):    
+        # print("x size1: ", x.size())
+        x = F.relu(self.conv(x))
+        # print("x size2: ", x.size())
+        # Global Average Pooling
+        x = F.adaptive_avg_pool2d(x, (1, 1))
+        # x = x.view(x.size(0), -1)
+        # print("x size3: ", x.size())
+        x1 = self.fc_action1(x)
+        x2 = self.fc_action2(x)
+        x3 = self.fc_action3(x)
+        # print("x size4: ", x.size())
+        action1_logits = x1.squeeze(-1).squeeze(-1).view(-1, self.num_actions)
+        action2_logits = x2.squeeze(-1).squeeze(-1).view(-1, self.num_actions)
+        action3_logits = x3.squeeze(-1).squeeze(-1).view(-1, self.num_actions)
+        actions_logits = torch.stack([action1_logits, action2_logits, action3_logits], dim=1) #[batch_size, three actions for three shifted images, num_actions]
+        
+        # print("x size5: ", actions_logits.size())
+        # time.sleep(1000)
+
+        return actions_logits
+
 class DBSRNet(nn.Module):
     """ Deep Burst Super-Resolution model"""
     def __init__(self, encoder, merging, decoder):
