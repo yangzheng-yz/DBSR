@@ -24,7 +24,28 @@ from models.loss.image_quality_v2 import PSNR, PixelWiseError, SSIM
 import data.camera_pipeline as rgb2raw
 import data.synthetic_burst_generation as syn_burst_generation
 
-
+class ActorCritic(nn.Module):
+    def __init__(self, num_inputs, num_outputs, hidden_size, std=0.0):
+        super(ActorCritic, self).__init__()
+        
+        self.critic = nn.Sequential(
+            nn.Linear(num_inputs, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, 1)
+        )
+        
+        self.actor = nn.Sequential(
+            nn.Linear(num_inputs, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, num_outputs),
+            nn.Softmax(dim=1),
+        )
+        
+    def forward(self, x):
+        value = self.critic(x)
+        probs = self.actor(x)
+        dist  = Categorical(probs)
+        return dist, value
 
 class AgentTrainer(BaseTrainer):
     def __init__(self, actor, loaders, optimizer, settings, 
@@ -172,128 +193,6 @@ class AgentTrainer(BaseTrainer):
             transformed_images.append(image_burst)
             transformed_images_stacked = torch.stack(transformed_images).to(device)
         return transformed_images_stacked
-
-
-    # def cycle_dataset(self, loader):
-    #     """Do a cycle of training or validation."""
-
-    #     self.actor.train(loader.training)
-    #     torch.set_grad_enabled(loader.training)
-
-    #     self._init_timing()
-
-    #     discount_factor = self.discount_factor # set your discount factor
-
-    #     for i, data in enumerate(loader, 1):
-    #         # print("data type: ", data.keys())
-    #         # time.sleep(1000)
-    #         # get inputs
-    #         if self.move_data_to_gpu:
-    #             data = data.to(self.device)
-    #             # data = {k: v.to(self.device) for k, v in data.items()}
-    #         # print("After data load Memory Allocated:", torch.cuda.memory_allocated() / (1024 ** 2), "MB")
-    #         # print("Memory Cached:", torch.cuda.memory_cached() / (1024 ** 2), "MB")
-    #         data['epoch'] = self.epoch
-    #         data['settings'] = self.settings
-
-    #         batch_size = data['frame_gt'].size(0)
-
-    #         if self.init_permutation is not None:
-    #             permutations = torch.tensor(self.init_permutation).repeat(batch_size, 1, 1)
-    #         else:
-    #             permutations = torch.tensor(np.array([[0,0],
-    #                                         [0,0],
-    #                                         [0,0],
-    #                                         [0,0]])).repeat(batch_size, 1, 1)
-
-    #         rewards = []
-    #         log_probs = []
-    #         preds = []
-
-    #         pred, _ = self.sr_net(data['burst'])
-    #         preds.append(pred)
-    #         if self.reward_type == 'psnr':
-    #             reward_func = {'psnr': PSNR(boundary_ignore=40)}
-    #         elif self.reward_type == 'ssim':
-    #             reward_func = {'ssim': SSIM(boundary_ignore=40)}
-    #         else:
-    #             assert 0 == 1, "wrong reward type"
-
-    #         for it in range(self.iterations):
-    #             # forward pass, to produce action_pdf
-    #             actions_pdf = self.actor(data)
-                
-    #             # sample and apply actions
-    #             actions = self._sample_actions(actions_pdf)
-    #             permutations = self._update_permutations(permutations, actions)
-    #             data['burst'] = self._apply_actions(data['frame_gt'], permutations, downsample_factor=self.downsample_factor)
-    #             # print("After _apply_actions Memory Allocated:", torch.cuda.memory_allocated() / (1024 ** 2), "MB")
-
-    #             # updates preds and calculate reward
-    #             with torch.no_grad():
-    #                 pred, _ = self.sr_net(data['burst'])
-    #             # print("After updates preds Memory Allocated:", torch.cuda.memory_allocated() / (1024 ** 2), "MB")
-
-    #             preds.append(pred)
-    #             # print("!@#length preds: ", len(preds))
-    #             # time.sleep(1000)
-    #             reward = self._calculate_reward(data['frame_gt'], preds[-1], preds[-2], reward_func=reward_func)
-    #             rewards.append(reward)
-
-    #             # calculate log probabilities of the sampled actions
-    #             log_prob = torch.log(actions_pdf.gather(2, actions.unsqueeze(-1)).squeeze(-1))
-    #             log_probs.append(log_prob)
-    #             # print("After calculate log probabilities Memory Allocated:", torch.cuda.memory_allocated() / (1024 ** 2), "MB")
-    #             print("%s iteration permutation: " % it, permutations)
-
-    #         # calculate discounted reward
-    #         reward_iter = sum((discount_factor ** i) * reward for i, reward in enumerate(rewards))
-    #         reward_normalized = reward_iter / float(self.iterations)
-    #         # print("After calculate discounted reward Memory Allocated:", torch.cuda.memory_allocated() / (1024 ** 2), "MB")
-
-    #         # calculate loss
-    #         log_probs = torch.stack(log_probs)
-    #         # loss_iter = -(log_probs * reward_normalized).mean()
-    #         loss_iter = -(log_probs * reward_iter).sum()
-    #         # print("After calculate loss Memory Allocated:", torch.cuda.memory_allocated() / (1024 ** 2), "MB")
-
-    #         # calculate metric for the initial and final burst
-    #         metric_initial = reward_func[self.reward_type](pred, data['frame_gt'])
-    #         metric_final = reward_func[self.reward_type](preds[-1], data['frame_gt'])
-    #         # print("After calculate PSNR Memory Allocated:", torch.cuda.memory_allocated() / (1024 ** 2), "MB")
-
-
-    #         # backward pass and update weights
-    #         if loader.training:
-    #             self.optimizer.zero_grad()
-    #             (loss_iter).backward()
-    #             self.optimizer.step()
-
-    #         # update statistics
-    #         batch_size = self.settings.batch_size
-    #         self._update_stats({'Loss/total': loss_iter.item(), ('%s/initial' % self.reward_type): metric_initial.item(), ('%s/final' % self.reward_type): metric_final.item(), "Improvement": metric_final.item()-metric_initial.item()}, batch_size, loader)
-
-    #         # print statistics
-    #         self._print_stats(i, loader, batch_size)
-    #         # print("After backward pass Memory Allocated:", torch.cuda.memory_allocated() / (1024 ** 2), "MB")
-
-    #         del data
-    #         if "data" in locals():
-    #             print("`data` has not been deleted!")
-
-    #         del permutations
-    #         if "permutations" in locals():
-    #             print("`permutations` has not been deleted!")
-
-    #         del rewards
-    #         if "rewards" in locals():
-    #             print("`rewards` has not been deleted!")
-    #         del log_probs
-    #         if "log_probs" in locals():
-    #             print("`log_probs` has not been deleted!")
-    #         del preds
-    #         if "preds" in locals():
-    #             print("`preds` has not been deleted!")            
  
     def cycle_dataset(self, loader):
         """Do a cycle of training or validation."""
@@ -363,8 +262,8 @@ class AgentTrainer(BaseTrainer):
                 # print("!@#length preds: ", len(preds))
                 # time.sleep(1000)
                 reward = self._calculate_reward(data['frame_gt'], preds[-1], preds[-2], reward_func=reward_func)
-                print("outside last: ", reward_func[self.reward_type](preds[-2], data['frame_gt']))
-                print("outside current: ", reward_func[self.reward_type](preds[-1], data['frame_gt']))
+                # print("outside last: ", reward_func[self.reward_type](preds[-2], data['frame_gt']))
+                # print("outside current: ", reward_func[self.reward_type](preds[-1], data['frame_gt']))
                 rewards.append(reward)
 
                 # calculate log probabilities of the sampled actions
