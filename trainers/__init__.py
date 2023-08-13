@@ -1,1 +1,1 @@
-from .simple_trainer import SimpleTrainer, SimpleTrainer_v2
+from .simple_trainer import SimpleTrainer, SimpleTrainer_v2, AgentTrainer
