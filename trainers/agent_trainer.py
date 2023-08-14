@@ -215,9 +215,12 @@ class AgentTrainer(BaseAgentTrainer):
 
         return reward_tensor # list(Tensor)
 
-    def compute_returns(next_value, rewards, masks=None, gamma=0.99):
+    def compute_returns(self, next_value, rewards, masks=None, gamma=0.99):
         R = next_value
         returns = []
+        print("gamma type: ", type(gamma))
+        print("reward type: ", type(rewards[0]))
+        print("next_value type: ", type(next_value))
         for step in reversed(range(len(rewards))):
             R = rewards[step] + gamma * R                       
 
@@ -278,7 +281,7 @@ class AgentTrainer(BaseAgentTrainer):
                 with torch.no_grad():
                     # print("device of model: ", next(self.sr_net.parameters()).device)
                     # print("device of nextstate: ", next_state.size())
-                    pred, _ = self.sr_net(next_state)
+                    pred, _ = self.sr_net(next_state.clone())
                 preds.append(pred.clone())
 
                 reward = self._calculate_reward(data['frame_gt'], preds[-1], preds[-2], reward_func=reward_func, batch=True)
@@ -297,12 +300,13 @@ class AgentTrainer(BaseAgentTrainer):
                 values.append(value)
                 
                 state = next_state.clone()
-
-            _, next_value = self.actor(next_state)
-            returns = self.compute_returns(next_value, rewards, gamma=discount_factor) #, masks)
-            print("returns info, size %s, type %s" % (len(returns), type(returns)))
-            print("log_probs info, size %s, type %s" % (len(log_probs), type(log_probs)))
-            print("values info, size %s, type %s" % (len(values), type(values)))
+            
+            _, next_value = self.actor(state)
+            # print("what is the output: ", type(next_value))
+            returns = self.compute_returns(next_value, rewards, gamma=discount_factor)
+            # print("returns info, size %s, type %s" % (len(returns), type(returns)))
+            # print("log_probs info, size %s, type %s" % (len(log_probs), type(log_probs)))
+            # print("values info, size %s, type %s" % (len(values), type(values)))
 
 
             log_probs = torch.cat(log_probs)
@@ -317,18 +321,18 @@ class AgentTrainer(BaseAgentTrainer):
             loss = actor_loss + 0.5 * critic_loss - 0.001 * entropy
 
             # calculate metric for the initial and final burst
-            metric_initial = reward_func[self.reward_type](pred.clone(), data['frame_gt'].clone())
+            metric_initial = reward_func[self.reward_type](preds[0].clone(), data['frame_gt'].clone())
             metric_final = reward_func[self.reward_type](preds[-1].clone(), data['frame_gt'].clone())
 
             # backward pass and update weights
             if loader.training:
                 self.optimizer.zero_grad()
-                (loss_iter).backward()
+                (loss).backward()
                 self.optimizer.step()
 
             # update statistics
             batch_size = self.settings.batch_size
-            self._update_stats({'Loss/total': loss_iter.item(), ('%s/initial' % self.reward_type): metric_initial.item(), ('%s/final' % self.reward_type): metric_final.item(), "Improvement": ((metric_final.item()-metric_initial.item())/i)}, batch_size, loader)
+            self._update_stats({'Loss/total': loss.item(), ('%s/initial' % self.reward_type): metric_initial.item(), ('%s/final' % self.reward_type): metric_final.item(), "Improvement": ((metric_final.item()-metric_initial.item())/i)}, batch_size, loader)
 
             # print statistics
             self._print_stats(i, loader, batch_size)

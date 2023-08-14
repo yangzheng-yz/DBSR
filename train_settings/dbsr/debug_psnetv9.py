@@ -37,7 +37,7 @@ os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
 def run(settings):
     settings.description = 'Default settings for training DBSR models on synthetic burst dataset(NightCity) with step(6), amplify factor(4), crop size(384,384), random translation'
-    settings.batch_size = 2
+    settings.batch_size = 32
     settings.num_workers = 16
     settings.multi_gpu = False
     settings.print_interval = 1
