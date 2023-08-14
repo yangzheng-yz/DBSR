@@ -15,7 +15,50 @@
 from actors.base_actor import BaseActor
 from models.loss.spatial_color_alignment import SpatialColorAlignment
 import torch
+import torch.nn as nn
 
+class ActorCritic(nn.Module):
+    def __init__(self, num_frames, num_channels, hidden_size):
+        super(ActorCritic, self).__init__()
+        
+        # Actor Network
+        self.actor_conv = nn.Sequential(
+            nn.Conv2d(num_channels, 32, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
+            nn.ReLU()
+        )
+        self.actor_lstm = nn.LSTM(64, hidden_size, batch_first=True)
+        self.actor_linear = nn.Linear(hidden_size, 5 * (num_frames - 1))
+        
+        # Critic Network
+        self.critic_conv = nn.Sequential(
+            nn.Conv2d(num_channels, 32, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
+            nn.ReLU()
+        )
+        self.critic_linear = nn.Linear(64, 1)
+
+    def forward(self, x):
+        batch_size, num_frames, channels, height, width = x.size()
+        x = x.view(-1, channels, height, width)  # Reshape to [batch_size*num_frames, channels, height, width]
+        
+        # Actor
+        x_actor = self.actor_conv(x)
+        x_actor = x_actor.view(batch_size, num_frames, -1)  # Reshape back to [batch_size, num_frames, features]
+        _, (h_n, _) = self.actor_lstm(x_actor)
+        action_logits = self.actor_linear(h_n.squeeze(0))
+        action_logits = action_logits.view(batch_size, num_frames - 1, 5)  # Reshape to [batch_size, num_frames-1, 5]
+        probs = F.softmax(action_logits, dim=-1)
+        dists = [Categorical(p) for p in probs.split(1, dim=1)]
+        
+        # Critic
+        x_critic = self.critic_conv(x)
+        x_critic = x_critic.view(batch_size, num_frames, -1).mean(dim=1)  # Average over frames
+        value = self.critic_linear(x_critic)
+        
+        return dists, value
 
 class DBSR_PSNetActor(BaseActor):
     """Actor for training Pixel Shift reinforcement learning model on synthetic bursts """

@@ -14,62 +14,18 @@
 
 import os
 from collections import OrderedDict
-from trainers.base_trainer import BaseTrainer
+from trainers.base_agent_trainer import BaseTrainer
 from admin.stats import AverageMeter, StatValue
 from admin.tensorboard import TensorboardWriter
 import torch
+import torch.nn as nn
 import time
 import numpy as np
 from models.loss.image_quality_v2 import PSNR, PixelWiseError, SSIM
 import data.camera_pipeline as rgb2raw
 import data.synthetic_burst_generation as syn_burst_generation
 
-class ActorCritic(nn.Module):
-    def __init__(self, num_frames, num_channels, hidden_size):
-        super(ActorCritic, self).__init__()
-        
-        # Actor Network
-        self.actor_conv = nn.Sequential(
-            nn.Conv2d(num_channels, 32, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
-            nn.ReLU()
-        )
-        self.actor_lstm = nn.LSTM(64, hidden_size, batch_first=True)
-        self.actor_linear = nn.Linear(hidden_size, 5 * (num_frames - 1))
-        
-        # Critic Network
-        self.critic_conv = nn.Sequential(
-            nn.Conv2d(num_channels, 32, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
-            nn.ReLU()
-        )
-        self.critic_linear = nn.Linear(64, 1)
-
-    def forward(self, x):
-        batch_size, num_frames, channels, height, width = x.size()
-        x = x.view(-1, channels, height, width)  # Reshape to [batch_size*num_frames, channels, height, width]
-        
-        # Actor
-        x_actor = self.actor_conv(x)
-        x_actor = x_actor.view(batch_size, num_frames, -1)  # Reshape back to [batch_size, num_frames, features]
-        _, (h_n, _) = self.actor_lstm(x_actor)
-        action_logits = self.actor_linear(h_n.squeeze(0))
-        action_logits = action_logits.view(batch_size, num_frames - 1, 5)  # Reshape to [batch_size, num_frames-1, 5]
-        probs = F.softmax(action_logits, dim=-1)
-        dists = [Categorical(p) for p in probs.split(1, dim=1)]
-        
-        # Critic
-        x_critic = self.critic_conv(x)
-        x_critic = x_critic.view(batch_size, num_frames, -1).mean(dim=1)  # Average over frames
-        value = self.critic_linear(x_critic)
-        
-        return dists, value
-
-
-
-class AgentTrainer(BaseTrainer):
+class AgentTrainer(BaseAgentTrainer):
     def __init__(self, actor, loaders, optimizer, settings, 
                  init_permutation=None, discount_factor=0.99, sr_net=None, 
                  lr_scheduler=None, iterations=15, 
@@ -233,6 +189,17 @@ class AgentTrainer(BaseTrainer):
             reward = 10*(metric_current - metric_last)    
 
         return reward # list(Tensor)
+
+    def compute_returns(next_value, rewards, masks=None, gamma=0.99):
+        R = next_value
+        returns = []
+        for step in reversed(range(len(rewards))):
+            if masks is None:
+                R = rewards[step] + gamma * R                       
+            else:
+                R = rewards[step] + gamma * R * masks[step]
+            returns.insert(0, R)
+        return returns
     
     def cycle_dataset(self, loader):
         """Do a cycle of training or validation."""
@@ -303,22 +270,27 @@ class AgentTrainer(BaseTrainer):
                 
                 state = next_state.clone()
 
-            _, next_value = model(next_state)
-            returns = compute_returns(next_value, rewards, masks)
+            _, next_value = self.actor(next_state)
+            returns = compute_returns(next_value, rewards, gamma=self.discount_factor) #, masks)
+            print("returns info, size %s, type %s" % (len(returns), type(returns)))
+            print("log_probs info, size %s, type %s" % (len(log_probs), type(log_probs)))
+            print("values info, size %s, type %s" % (len(values), type(values)))
 
-            # calculate discounted reward
-            reward_iter = sum((discount_factor ** i) * reward for i, reward in enumerate(rewards))
-            reward_normalized = reward_iter / float(self.iterations)
 
-            # calculate loss
-            log_probs = torch.stack(log_probs)
-            loss_iter = -(log_probs * reward_iter).sum()
+            log_probs = torch.cat(log_probs)
+            returns   = torch.cat(returns).detach()
+            values    = torch.cat(values)
+
+            advantage = returns - values
+
+            actor_loss  = -(log_probs * advantage.detach()).mean()
+            critic_loss = advantage.pow(2).mean()
+
+            loss = actor_loss + 0.5 * critic_loss - 0.001 * entropy
 
             # calculate metric for the initial and final burst
-            metric_initial = reward_func[self.reward_type](pred, data['frame_gt'])
-            metric_final = reward_func[self.reward_type](preds[-1], data['frame_gt'])
-            metrix_init_final = reward_func[self.reward_type](preds[-1], pred)
-
+            metric_initial = reward_func[self.reward_type](pred.clone(), data['frame_gt'].clone())
+            metric_final = reward_func[self.reward_type](preds[-1].clone(), data['frame_gt'].clone())
 
             # backward pass and update weights
             if loader.training:
@@ -328,7 +300,7 @@ class AgentTrainer(BaseTrainer):
 
             # update statistics
             batch_size = self.settings.batch_size
-            self._update_stats({'Loss/total': loss_iter.item(), ('%s/initial' % self.reward_type): metric_initial.item(), ('%s/final' % self.reward_type): metric_final.item(), "Improvement": metric_final.item()-metric_initial.item(), "Init_final": metrix_init_final}, batch_size, loader)
+            self._update_stats({'Loss/total': loss_iter.item(), ('%s/initial' % self.reward_type): metric_initial.item(), ('%s/final' % self.reward_type): metric_final.item(), "Improvement": ((metric_final.item()-metric_initial.item())/i)}, batch_size, loader)
 
             # print statistics
             self._print_stats(i, loader, batch_size)

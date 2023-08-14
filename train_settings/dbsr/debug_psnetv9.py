@@ -20,7 +20,7 @@ from utils.loading import load_network
 from data import processing, sampler, DataLoader
 import models.dbsr.dbsrnet as dbsr_nets
 import actors.dbsr_actors as dbsr_actors
-from trainers import SimpleTrainer, SimpleTrainer_v2
+from trainers import SimpleTrainer, SimpleTrainer_v2, AgentTrainer
 import data.transforms as tfm
 from admin.multigpu import MultiGPU
 from models.loss.image_quality_v2 import PSNR, PixelWiseError
@@ -42,7 +42,7 @@ def run(settings):
     settings.print_interval = 1
 
     settings.crop_sz = (384, 384)
-    settings.burst_sz = 16
+    settings.burst_sz = 4
     settings.downsample_factor = 4 # TODO: need to revise to 4?
 
     # settings.burst_transformation_params = {'max_translation': 24.0,
@@ -50,24 +50,11 @@ def run(settings):
     #                                         'max_shear': 0.0,
     #                                         'max_scale': 0.0,
     #                                         'border_crop': 24}
-    
     permutation = np.array([
         [0,0],
-        [0,1],
         [0,2],
-        [0,3],
-        [1,0],
-        [1,1],
-        [1,2],
-        [1,3],
-        [2,0],
-        [2,1],
         [2,2],
-        [2,3],
-        [3,0],
-        [3,1],
-        [3,2],
-        [3,3],
+        [2,0]
     ])
     
     settings.burst_transformation_params = {'max_translation': 3.0,
@@ -149,13 +136,15 @@ def run(settings):
     
     policy_net = dbsr_nets.PolicyNet_v2(out_dim=512)  # Create the policy network
 
-    actor = dbsr_actors.DBSR_PSNetActor(sr_encoder=sr_encoder, sr_merging=sr_merging, net=policy_net, objective=objective, loss_weight=loss_weight)
+    actor = dbsr_actors.ActorCritic(num_frames=settings.burst_sz, num_channels=4, hidden_size=5)
 
-    optimizer = optim.Adam([{'params': actor.net.parameters(), 'lr': 1e-4}],
+    # optimizer = optim.Adam(actor.parameters())
+
+    optimizer = optim.Adam([{'params': actor.parameters(), 'lr': 1e-4}],
                            lr=2e-4)
 
     lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=40, gamma=0.2)
-    trainer = SimpleTrainer_v2(actor, [loader_train, loader_val], optimizer, settings, lr_scheduler=lr_scheduler, 
+    trainer = AgentTrainer(actor, [loader_train, loader_val], optimizer, settings, lr_scheduler=lr_scheduler, 
                                sr_net=dbsr_net, iterations=4, reward_type='psnr',
                                discount_factor=0.99)
 
