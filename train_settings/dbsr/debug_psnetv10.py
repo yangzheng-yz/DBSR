@@ -1,4 +1,4 @@
-# This version try to use loss descent and timestep 4, for debug
+# This version try to use loss descent and timestep 7, for debug
 
 # Copyright (c) 2021 Huawei Technologies Co., Ltd.
 # Licensed under CC BY-NC-SA 4.0 (Attribution-NonCommercial-ShareAlike 4.0 International) (the "License");
@@ -135,6 +135,8 @@ def run(settings):
     sr_encoder = dbsr_net.encoder
     sr_merging = dbsr_net.merging
     
+    policy_net = dbsr_nets.PolicyNet_v2(out_dim=512)  # Create the policy network
+
     actor = dbsr_actors.ActorCritic(num_frames=settings.burst_sz, num_channels=4, hidden_size=5)
 
     # optimizer = optim.Adam(actor.parameters())
@@ -144,7 +146,7 @@ def run(settings):
 
     lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=40, gamma=0.2)
     trainer = AgentTrainer(actor, [loader_train, loader_val], optimizer, settings, lr_scheduler=lr_scheduler, 
-                               sr_net=dbsr_net, iterations=4, reward_type='psnr',
+                               sr_net=dbsr_net, iterations=7, reward_type='psnr',
                                discount_factor=0.99)
 
     trainer.train(100, load_latest=True, fail_safe=True) # (epoch, )
