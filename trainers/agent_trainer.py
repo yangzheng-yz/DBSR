@@ -218,9 +218,9 @@ class AgentTrainer(BaseAgentTrainer):
     def compute_returns(self, next_value, rewards, masks=None, gamma=0.99):
         R = next_value
         returns = []
-        print("gamma type: ", type(gamma))
-        print("reward type: ", type(rewards[0]))
-        print("next_value type: ", type(next_value))
+        # print("gamma type: ", type(gamma))
+        # print("reward type: ", type(rewards[0]))
+        # print("next_value type: ", type(next_value))
         for step in reversed(range(len(rewards))):
             R = rewards[step] + gamma * R                       
 
