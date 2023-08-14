@@ -94,7 +94,7 @@ class BaseAgentTrainer:
     def save_checkpoint(self):
         """Saves a checkpoint of the network and other variables."""
 
-        net = self.actor.net.module if multigpu.is_multi_gpu(self.actor.net) else self.actor.net
+        net = self.actor.module if multigpu.is_multi_gpu(self.actor) else self.actor
 
         actor_type = type(self.actor).__name__
         net_type = type(net).__name__
@@ -135,7 +135,7 @@ class BaseAgentTrainer:
                 Loads the file from the given absolute path (str).
         """
 
-        net = self.actor.net.module if multigpu.is_multi_gpu(self.actor.net) else self.actor.net
+        net = self.actor.module if multigpu.is_multi_gpu(self.actor) else self.actor
 
         actor_type = type(self.actor).__name__
         net_type = type(net).__name__

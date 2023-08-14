@@ -3,16 +3,47 @@ train dataset length:  100
 val dataset length:  1204
 WARNING: Keyword argument "backbone_pretrained" not found when loading network. It was ignored.
 basetrainer's device:  cuda:0
-Training crashed at epoch -1
+No matching checkpoint file found
+device of model:  cuda:0
+device of data:  cuda:0
+Training crashed at epoch 1
 Traceback for the error!
 Traceback (most recent call last):
-  File "/home/yutong/zheng/DBSR/trainers/base_trainer.py", line 66, in train
-    self.load_checkpoint()
-  File "/home/yutong/zheng/DBSR/trainers/base_trainer.py", line 138, in load_checkpoint
-    net = self.actor.net.module if multigpu.is_multi_gpu(self.actor.net) else self.actor.net
-  File "/home/yutong/anaconda3/envs/yzsr/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1177, in __getattr__
-    raise AttributeError("'{}' object has no attribute '{}'".format(
-AttributeError: 'ActorCritic' object has no attribute 'net'
+  File "/home/yutong/zheng/DBSR/trainers/base_agent_trainer.py", line 71, in train
+    self.train_epoch()
+  File "/home/yutong/zheng/DBSR/trainers/agent_trainer.py", line 326, in train_epoch
+    self.cycle_dataset(loader)
+  File "/home/yutong/zheng/DBSR/trainers/agent_trainer.py", line 266, in cycle_dataset
+    pred, _ = self.sr_net(next_state)
+  File "/home/yutong/anaconda3/envs/yzsr/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1102, in _call_impl
+    return forward_call(*input, **kwargs)
+  File "/home/yutong/zheng/DBSR/models/dbsr/dbsrnet.py", line 98, in forward
+    out_enc = self.encoder(im)
+  File "/home/yutong/anaconda3/envs/yzsr/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1102, in _call_impl
+    return forward_call(*input, **kwargs)
+  File "/home/yutong/zheng/DBSR/models/dbsr/encoders.py", line 84, in forward
+    offsets = self.alignment_net(x_oth.view(-1, *x_oth.shape[-3:]), x_ref.view(-1, *x_ref.shape[-3:]))
+  File "/home/yutong/anaconda3/envs/yzsr/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1102, in _call_impl
+    return forward_call(*input, **kwargs)
+  File "/home/yutong/zheng/DBSR/models/alignment/pwcnet.py", line 280, in forward
+    flow = self.net(target_img_re, source_img_re)
+  File "/home/yutong/anaconda3/envs/yzsr/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1102, in _call_impl
+    return forward_call(*input, **kwargs)
+  File "/home/yutong/zheng/DBSR/models/alignment/pwcnet.py", line 228, in forward
+    objEstimate = self.netSix(tenFirst[-1], tenSecond[-1], None)
+  File "/home/yutong/anaconda3/envs/yzsr/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1102, in _call_impl
+    return forward_call(*input, **kwargs)
+  File "/home/yutong/zheng/DBSR/models/alignment/pwcnet.py", line 164, in forward
+    tenVolume = torch.nn.functional.leaky_relu(input=correlation.FunctionCorrelation(tenFirst=tenFirst, tenSecond=tenSecond), negative_slope=0.1, inplace=False)
+  File "/home/yutong/zheng/DBSR/external/pwcnet/correlation/correlation.py", line 387, in FunctionCorrelation
+    return _FunctionCorrelation.apply(tenFirst, tenSecond)
+  File "/home/yutong/zheng/DBSR/external/pwcnet/correlation/correlation.py", line 294, in forward
+    cupy_launch('kernel_Correlation_rearrange', cupy_kernel('kernel_Correlation_rearrange', {
+  File "cupy/cuda/function.pyx", line 224, in cupy.cuda.function.Function.__call__
+  File "cupy/cuda/function.pyx", line 206, in cupy.cuda.function._launch
+  File "cupy_backends/cuda/api/driver.pyx", line 253, in cupy_backends.cuda.api.driver.launchKernel
+  File "cupy_backends/cuda/api/driver.pyx", line 60, in cupy_backends.cuda.api.driver.check_status
+cupy_backends.cuda.api.driver.CUDADriverError: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
 
 Restarting training from last epoch ...
 Finished training!

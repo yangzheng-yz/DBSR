@@ -14,7 +14,7 @@
 
 import os
 from collections import OrderedDict
-from trainers.base_agent_trainer import BaseTrainer
+from trainers.base_agent_trainer import BaseAgentTrainer
 from admin.stats import AverageMeter, StatValue
 from admin.tensorboard import TensorboardWriter
 import torch
@@ -116,14 +116,16 @@ class AgentTrainer(BaseAgentTrainer):
             3: (0, 1),    # Down
             4: (0, 0)     # Stay still
         }
-        
-        updated_permutations_batch = []
-        updated_actions_batch = []
+
+        updated_permutations_list = []
+        updated_actions_list = []
         for actions, initial_permutations in zip(actions_batch, initial_permutations_batch):
+            actions = actions.cpu()
+            initial_permutations = initial_permutations.cpu()
             updated_permutations = list(initial_permutations)
             updated_actions = list(actions)
             for idx, action in enumerate(actions):
-                movement = movements[action]
+                movement = movements[action.item()]
                 updated_permutation = (
                     initial_permutations[idx+1][0] + movement[0],
                     initial_permutations[idx+1][1] + movement[1]
@@ -138,14 +140,20 @@ class AgentTrainer(BaseAgentTrainer):
                     updated_permutation = initial_permutations[idx+1]
                     updated_actions[idx] = 4  # Stay still action
                 updated_permutations[idx+1] = updated_permutation
-            updated_permutations_batch.append(updated_permutations)
-            updated_actions_batch.append(updated_actions)
-        
-        return updated_permutations_batch, updated_actions_batch
+            updated_permutations_list.append(updated_permutations)
+            updated_actions_list.append(updated_actions)
+
+        # Convert lists of lists to numpy arrays and then to tensors
+        updated_permutations_tensor = torch.tensor(np.array(updated_permutations_list), dtype=torch.int64)
+        updated_actions_tensor = torch.tensor(np.array(updated_actions_list), dtype=torch.int64)
+
+        return updated_permutations_tensor, updated_actions_tensor
+
+
 
     def step_environment(self, dists, HR_batch, permutations):
         actions = [dist.sample() for dist in dists]
-        actions, permutations = update_permutations_and_actions(actions, permutations)
+        actions, permutations = self.update_permutations_and_actions(actions, permutations)
         next_state = self.apply_actions_to_env(HR_batch, permutations)
         return next_state, actions, permutations
 
@@ -253,6 +261,8 @@ class AgentTrainer(BaseAgentTrainer):
 
                 # updates preds and calculate reward
                 with torch.no_grad():
+                    print("device of model: ", next(self.sr_net.parameters()).device)
+                    print("device of data: ", next_state.device)
                     pred, _ = self.sr_net(next_state)
                 preds.append(pred.clone())
 

@@ -16,6 +16,9 @@ from actors.base_actor import BaseActor
 from models.loss.spatial_color_alignment import SpatialColorAlignment
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+from torch.distributions import Categorical
+
 
 class ActorCritic(nn.Module):
     def __init__(self, num_frames, num_channels, hidden_size):
@@ -28,7 +31,7 @@ class ActorCritic(nn.Module):
             nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
             nn.ReLU()
         )
-        self.actor_lstm = nn.LSTM(64, hidden_size, batch_first=True)
+        self.actor_lstm = nn.LSTM(147456, hidden_size, batch_first=True)
         self.actor_linear = nn.Linear(hidden_size, 5 * (num_frames - 1))
         
         # Critic Network
@@ -38,7 +41,7 @@ class ActorCritic(nn.Module):
             nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
             nn.ReLU()
         )
-        self.critic_linear = nn.Linear(64, 1)
+        self.critic_linear = nn.Linear(147456, 1)
 
     def forward(self, x):
         batch_size, num_frames, channels, height, width = x.size()
