@@ -106,7 +106,7 @@ class PSNR(nn.Module):
 
         return psnr
 
-    def forward(self, pred, gt, valid=None):
+    def forward(self, pred, gt, valid=None, batch=False):
         if valid is None:
             psnr_all = [self.psnr(p.unsqueeze(0), g.unsqueeze(0)) for p, g in
                         zip(pred, gt)]
@@ -119,7 +119,11 @@ class PSNR(nn.Module):
             psnr = 0
         else:
             psnr = sum(psnr_all) / len(psnr_all)
-        return psnr
+        
+        if batch:
+            return psnr_all
+        else:
+            return psnr
 
 
 class SSIM(nn.Module):

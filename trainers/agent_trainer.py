@@ -190,8 +190,8 @@ class AgentTrainer(BaseTrainer):
     def step_environment(self, dists, HR_batch, permutations):
         actions = [dist.sample() for dist in dists]
         actions, permutations = update_permutations_and_actions(actions, permutations)
-        next_state, reward = self.apply_actions_to_env(HR_batch, permutations)
-        return next_state, reward, actions, permutations
+        next_state = self.apply_actions_to_env(HR_batch, permutations)
+        return next_state, actions, permutations
 
     def apply_actions_to_env(self, HR_batch, permutations_batch):
         """Apply actions to a batch of images."""
@@ -201,7 +201,7 @@ class AgentTrainer(BaseTrainer):
         burst_size = permutations_batch.size(1)
         transformed_images = []
         for i in range(batch_size):
-            HR = HR_batch[i].cpu()
+            HR = HR_batch[i].clone().cpu()
             # print("image type: ", image.device)
             # time.sleep(1000)
             burst_transformation_params = {'max_translation': 24.0,
@@ -217,9 +217,23 @@ class AgentTrainer(BaseTrainer):
             image_burst = rgb2raw.mosaic(image_burst_rgb.clone())
             transformed_images.append(image_burst)
             transformed_images_stacked = torch.stack(transformed_images).to(device)
+        
         return transformed_images_stacked
 
- 
+    def _calculate_reward(self, frame_gt, pred_current, pred_last, reward_func=None, batch=True):
+        """Calculate the reward as the difference of PSNR between current and last prediction."""
+        assert reward_func is not None and reward_func != 'ssim', "You must specify psnr."
+        if self.reward_type == 'psnr':
+            metric_current = reward_func[self.reward_type](pred_current, frame_gt, batch=batch)
+            metric_last = reward_func[self.reward_type](pred_last, frame_gt, batch=batch)
+            reward = metric_current - metric_last
+        elif self.reward_type == 'ssim':
+            metric_current = reward_func[self.reward_type](pred_current, frame_gt)
+            metric_last = reward_func[self.reward_type](pred_last, frame_gt)
+            reward = 10*(metric_current - metric_last)    
+
+        return reward # list(Tensor)
+    
     def cycle_dataset(self, loader):
         """Do a cycle of training or validation."""
 
@@ -268,30 +282,29 @@ class AgentTrainer(BaseTrainer):
 
             for it in range(self.iterations):
                 dists, value = self.actor(state)
-                next_state, reward, actions, permutations = self.step_environment(dists, data['frame_gt'], permutations)
-                
-                # sample and apply actions
-                actions = self._sample_actions_v2(actions_pdf)
-                selected_indices = self._update_selections(selected_indices, actions)
-                print("%s iteration selected indices: " % it, selected_indices)
-                batch_indices = torch.arange(batch_size)[:, None]
-                selected_data = data['burst'][batch_indices, selected_indices].clone()
+                next_state, actions, permutations = self.step_environment(dists, data['frame_gt'], permutations)
 
                 # updates preds and calculate reward
                 with torch.no_grad():
-                    pred, _ = self.sr_net(selected_data)
-
+                    pred, _ = self.sr_net(next_state)
                 preds.append(pred.clone())
 
-                reward = self._calculate_reward(data['frame_gt'], preds[-1], preds[-2], reward_func=reward_func)
+                reward = self._calculate_reward(data['frame_gt'], preds[-1], preds[-2], reward_func=reward_func, batch=True)
+                log_prob = dists[0].log_prob(actions[0])
+                for id in range(1,len(dists)):
+                    log_prob += dists[id].log_prob(actions[id])
+                for dist in dists:
+                    entropy += dist.entropy().mean()
+                entropy = entropy / (len(dists) - 1)    
 
-                rewards.append(reward)
-
-                state = next_state
+                rewards.append(torch.FloatTensor(reward).unsqueeze(1).to(self.device)) # (timestep, batch_size, 1)
+                log_probs.append(log_prob) # (timestep, batch, )
+                values.append(value)
                 
-                # calculate log probabilities of the sampled actions
-                log_prob = torch.log(actions_pdf.gather(2, actions.unsqueeze(-1)).squeeze(-1))
-                log_probs.append(log_prob)                
+                state = next_state.clone()
+
+            _, next_value = model(next_state)
+            returns = compute_returns(next_value, rewards, masks)
 
             # calculate discounted reward
             reward_iter = sum((discount_factor ** i) * reward for i, reward in enumerate(rewards))
