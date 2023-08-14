@@ -109,6 +109,7 @@ class AgentTrainer(BaseAgentTrainer):
         return permutations
     
     def update_permutations_and_actions(self, actions_batch, initial_permutations_batch):
+        device = actions_batch.device
         movements = {
             0: (-1, 0),  # Left
             1: (1, 0),   # Right
@@ -122,38 +123,52 @@ class AgentTrainer(BaseAgentTrainer):
         for actions, initial_permutations in zip(actions_batch, initial_permutations_batch):
             actions = actions.cpu()
             initial_permutations = initial_permutations.cpu()
-            updated_permutations = list(initial_permutations)
-            updated_actions = list(actions)
+            new_actions = actions.clone()
+            new_permutations = initial_permutations.clone()
+            # updated_permutations = list(initial_permutations)
+            # updated_actions = list(actions)
+            # print("initial permutations: ", new_permutations)
             for idx, action in enumerate(actions):
                 movement = movements[action.item()]
-                updated_permutation = (
-                    initial_permutations[idx+1][0] + movement[0],
-                    initial_permutations[idx+1][1] + movement[1]
-                )
+                # print("%sth burst frame movement: " % idx, movement)
+                new_permutations[idx+1][0] = initial_permutations[idx+1][0].item() + movement[0]
+                new_permutations[idx+1][1] = initial_permutations[idx+1][1].item() + movement[1] 
+                # print("new_permutations[idx+1]", new_permutations[idx+1])
+
                 # Clip to boundaries
-                updated_permutation = (
-                    min(max(updated_permutation[0], 0), 3),
-                    min(max(updated_permutation[1], 0), 3)
-                )
+                new_permutations[idx+1][0] = min(max(new_permutations[idx+1][0].item(), 0), 3)
+                new_permutations[idx+1][1] = min(max(new_permutations[idx+1][1].item(), 0), 3)
+
                 # Check for duplicates, if there's a duplicate, select "stay still" action
-                if updated_permutation in updated_permutations:
-                    updated_permutation = initial_permutations[idx+1]
-                    updated_actions[idx] = 4  # Stay still action
-                updated_permutations[idx+1] = updated_permutation
-            updated_permutations_list.append(updated_permutations)
-            updated_actions_list.append(updated_actions)
+                duplicated = False
+                for i in range(idx+1):
+                    if (new_permutations[idx+1][0] == initial_permutations[i][0]) \
+                        and (new_permutations[idx+1][1] == initial_permutations[i][1]):
+                        duplicated = True
+                if duplicated:
+                    # print("new_permutations[idx+1]", new_permutations[idx+1])
+                    new_permutations[idx+1] = initial_permutations[idx+1].clone()
+                    new_actions[idx] = 4  # Stay still action
+                else:
+                    initial_permutations[idx+1] = new_permutations[idx+1].clone()
+            # print("new permutations: ", new_permutations)
+            updated_permutations_list.append(new_permutations)
+            updated_actions_list.append(new_actions)
 
         # Convert lists of lists to numpy arrays and then to tensors
+        # print("updated_permutations_list", updated_permutations_list)
         updated_permutations_tensor = torch.tensor(np.array(updated_permutations_list), dtype=torch.int64)
+        # print("updated_actions_list", updated_actions_list)
         updated_actions_tensor = torch.tensor(np.array(updated_actions_list), dtype=torch.int64)
+        # print("type specified_translation: ", new_permutations)
 
-        return updated_permutations_tensor, updated_actions_tensor
-
-
+        return updated_permutations_tensor, updated_actions_tensor.to(device)
 
     def step_environment(self, dists, HR_batch, permutations):
-        actions = [dist.sample() for dist in dists]
-        actions, permutations = self.update_permutations_and_actions(actions, permutations)
+        actions = torch.stack([dist.sample() for dist in dists], dim=1)
+        # print("actions: ", actions)
+        permutations, actions  = self.update_permutations_and_actions(actions, permutations)
+        
         next_state = self.apply_actions_to_env(HR_batch, permutations)
         return next_state, actions, permutations
 
@@ -163,6 +178,7 @@ class AgentTrainer(BaseAgentTrainer):
         # images = images.cpu()
         batch_size = HR_batch.size(0)
         burst_size = permutations_batch.size(1)
+        # print("permutations_batch.size(1): ", permutations_batch.size())
         transformed_images = []
         for i in range(batch_size):
             HR = HR_batch[i].clone().cpu()
@@ -180,7 +196,7 @@ class AgentTrainer(BaseAgentTrainer):
                                                         interpolation_type=self.interpolation_type)
             image_burst = rgb2raw.mosaic(image_burst_rgb.clone())
             transformed_images.append(image_burst)
-            transformed_images_stacked = torch.stack(transformed_images).to(device)
+        transformed_images_stacked = torch.stack(transformed_images).to(device)
         
         return transformed_images_stacked
 
@@ -190,22 +206,21 @@ class AgentTrainer(BaseAgentTrainer):
         if self.reward_type == 'psnr':
             metric_current = reward_func[self.reward_type](pred_current, frame_gt, batch=batch)
             metric_last = reward_func[self.reward_type](pred_last, frame_gt, batch=batch)
-            reward = metric_current - metric_last
+            reward_difference = [curr - last for curr, last in zip(metric_current, metric_last)]
+            reward_tensor = torch.stack(reward_difference).unsqueeze(1).to(self.device)
         elif self.reward_type == 'ssim':
             metric_current = reward_func[self.reward_type](pred_current, frame_gt)
             metric_last = reward_func[self.reward_type](pred_last, frame_gt)
             reward = 10*(metric_current - metric_last)    
 
-        return reward # list(Tensor)
+        return reward_tensor # list(Tensor)
 
     def compute_returns(next_value, rewards, masks=None, gamma=0.99):
         R = next_value
         returns = []
         for step in reversed(range(len(rewards))):
-            if masks is None:
-                R = rewards[step] + gamma * R                       
-            else:
-                R = rewards[step] + gamma * R * masks[step]
+            R = rewards[step] + gamma * R                       
+
             returns.insert(0, R)
         return returns
     
@@ -235,7 +250,8 @@ class AgentTrainer(BaseAgentTrainer):
             masks     = []
             preds     = []
             entropy   =  0
-            pred, _   = self.sr_net(data['burst'])
+            with torch.no_grad():
+                pred, _   = self.sr_net(data['burst'])
             preds.append(pred.clone())
 
             if self.init_permutation is not None:
@@ -254,34 +270,36 @@ class AgentTrainer(BaseAgentTrainer):
                 assert 0 == 1, "wrong reward type"
 
             state = data['burst'].clone()
-
+            # print("device of state: ", state.size())
             for it in range(self.iterations):
                 dists, value = self.actor(state)
-                next_state, actions, permutations = self.step_environment(dists, data['frame_gt'], permutations)
-
+                next_state, actions, permutations = self.step_environment(dists, data['frame_gt'].clone(), permutations.clone())
                 # updates preds and calculate reward
                 with torch.no_grad():
-                    print("device of model: ", next(self.sr_net.parameters()).device)
-                    print("device of data: ", next_state.device)
+                    # print("device of model: ", next(self.sr_net.parameters()).device)
+                    # print("device of nextstate: ", next_state.size())
                     pred, _ = self.sr_net(next_state)
                 preds.append(pred.clone())
 
                 reward = self._calculate_reward(data['frame_gt'], preds[-1], preds[-2], reward_func=reward_func, batch=True)
-                log_prob = dists[0].log_prob(actions[0])
+                # print("what is actions: ", actions.device)
+                # print("what is dist: ", dists[0].device)
+
+                log_prob = dists[0].log_prob(actions[:, 0])
                 for id in range(1,len(dists)):
-                    log_prob += dists[id].log_prob(actions[id])
+                    log_prob += dists[id].log_prob(actions[:, id])
                 for dist in dists:
                     entropy += dist.entropy().mean()
                 entropy = entropy / (len(dists) - 1)    
 
-                rewards.append(torch.FloatTensor(reward).unsqueeze(1).to(self.device)) # (timestep, batch_size, 1)
+                rewards.append(reward) # (timestep, batch_size, 1)
                 log_probs.append(log_prob) # (timestep, batch, )
                 values.append(value)
                 
                 state = next_state.clone()
 
             _, next_value = self.actor(next_state)
-            returns = compute_returns(next_value, rewards, gamma=self.discount_factor) #, masks)
+            returns = self.compute_returns(next_value, rewards, gamma=discount_factor) #, masks)
             print("returns info, size %s, type %s" % (len(returns), type(returns)))
             print("log_probs info, size %s, type %s" % (len(log_probs), type(log_probs)))
             print("values info, size %s, type %s" % (len(values), type(values)))

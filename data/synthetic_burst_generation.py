@@ -543,7 +543,9 @@ def single2lrburstdatabase(image, burst_size, downsample_factor=1, transformatio
                 specified_translation = transformation_params.get('specified_translation', np.array([]))
                 assert len(specified_translation)==burst_size, "The number of specified translation modes must be equal burst size. "
 
+                
                 translation = (specified_translation[i][0], specified_translation[i][1])
+
                 theta = 0.0
                 shear_factor = (0.0, 0.0)
                 scale_factor = (1.0, 1.0)

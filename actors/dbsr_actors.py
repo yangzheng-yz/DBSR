@@ -54,6 +54,8 @@ class ActorCritic(nn.Module):
         action_logits = self.actor_linear(h_n.squeeze(0))
         action_logits = action_logits.view(batch_size, num_frames - 1, 5)  # Reshape to [batch_size, num_frames-1, 5]
         probs = F.softmax(action_logits, dim=-1)
+        # print("prob:", probs.size())
+        # print(probs.split(1, dim=1))
         dists = [Categorical(p) for p in probs.split(1, dim=1)]
         
         # Critic
