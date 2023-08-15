@@ -29,7 +29,7 @@ class AgentTrainer(BaseAgentTrainer):
     def __init__(self, actor, loaders, optimizer, settings, 
                  init_permutation=None, discount_factor=0.99, sr_net=None, 
                  lr_scheduler=None, iterations=15, 
-                 interpolation_type='bilinear', reward_type='psnr'):
+                 interpolation_type='bilinear', reward_type='psnr', save_results=False):
         """
         args:
             actor - The actor for training the network
@@ -67,6 +67,8 @@ class AgentTrainer(BaseAgentTrainer):
         self.init_permutation = init_permutation
         
         self.reward_type = reward_type
+        
+        self.save_results = save_results
         
         
     def _set_default_settings(self):
@@ -226,7 +228,10 @@ class AgentTrainer(BaseAgentTrainer):
 
             returns.insert(0, R)
         return returns
-    
+
+    def save_img_and_metrics(self, initial_pred, final_pred, initial_psnr, final_psnr, meta_info, burst_rgb):
+        
+  
     def cycle_dataset(self, loader):
         """Do a cycle of training or validation."""
 
@@ -245,6 +250,11 @@ class AgentTrainer(BaseAgentTrainer):
 
             data['epoch'] = self.epoch
             data['settings'] = self.settings
+
+
+            if self.save_results:
+                initial_pred_meta_info = data['meta_info'].clone()
+                burst_rgb = data['burst_rgb'].clone()
 
             batch_size = data['frame_gt'].size(0)
             log_probs = []
@@ -336,6 +346,12 @@ class AgentTrainer(BaseAgentTrainer):
 
             # print statistics
             self._print_stats(i, loader, batch_size)
+        
+            if not loader.training:
+                if self.save_results:
+                    self.save_img_and_metrics(initial_pred=preds[0].clone(), final_pred=preds[-1].clone(), \
+                        initial_psnr=metric_initial.item(), final_psnr=metric_final.item(), meta_info=initial_pred_meta_info, \
+                            burst_rgb=burst_rgb)
        
             
 
