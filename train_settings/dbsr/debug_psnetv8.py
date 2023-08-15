@@ -27,7 +27,7 @@ from models.loss.image_quality_v2 import PSNR, PixelWiseError
 import numpy as np
 import torch
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "4"
+os.environ["CUDA_VISIBLE_DEVICES"] = "5"
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -36,7 +36,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 def run(settings):
     settings.description = 'Default settings for training DBSR models on synthetic burst dataset(NightCity) with step(6), amplify factor(4), crop size(384,384), random translation'
-    settings.batch_size = 1
+    settings.batch_size = 16
     settings.num_workers = 16
     settings.multi_gpu = False
     settings.print_interval = 1

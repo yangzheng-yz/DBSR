@@ -518,9 +518,8 @@ class SimpleTrainer_v2(BaseTrainer):
             # print("After calculate loss Memory Allocated:", torch.cuda.memory_allocated() / (1024 ** 2), "MB")
 
             # calculate metric for the initial and final burst
-            metric_initial = reward_func[self.reward_type](pred, data['frame_gt'])
+            metric_initial = reward_func[self.reward_type](preds[0], data['frame_gt'])
             metric_final = reward_func[self.reward_type](preds[-1], data['frame_gt'])
-            metrix_init_final = reward_func[self.reward_type](preds[-1], pred)
             # print("After calculate PSNR Memory Allocated:", torch.cuda.memory_allocated() / (1024 ** 2), "MB")
 
 
@@ -532,7 +531,7 @@ class SimpleTrainer_v2(BaseTrainer):
 
             # update statistics
             batch_size = self.settings.batch_size
-            self._update_stats({'Loss/total': loss_iter.item(), ('%s/initial' % self.reward_type): metric_initial.item(), ('%s/final' % self.reward_type): metric_final.item(), "Improvement": metric_final.item()-metric_initial.item(), "Init_final": metrix_init_final}, batch_size, loader)
+            self._update_stats({'Loss/total': loss_iter.item(), ('%s/initial' % self.reward_type): metric_initial.item(), ('%s/final' % self.reward_type): metric_final.item(), "Improvement": metric_final.item()-metric_initial.item()}, batch_size, loader)
 
             # print statistics
             self._print_stats(i, loader, batch_size)
