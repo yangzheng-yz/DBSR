@@ -24,6 +24,7 @@ import numpy as np
 from models.loss.image_quality_v2 import PSNR, PixelWiseError, SSIM
 import data.camera_pipeline as rgb2raw
 import data.synthetic_burst_generation as syn_burst_generation
+from data.postprocessing_functions import SimplePostProcess
 
 class AgentTrainer(BaseAgentTrainer):
     def __init__(self, actor, loaders, optimizer, settings, 
@@ -229,8 +230,18 @@ class AgentTrainer(BaseAgentTrainer):
             returns.insert(0, R)
         return returns
 
-    def save_img_and_metrics(self, initial_pred, final_pred, initial_psnr, final_psnr, meta_info, burst_rgb):
+    def save_img_and_metrics(self, initial_pred, final_pred, initial_psnr, final_psnr, meta_info, burst_rgb, gt):
         
+        saving_dir = "/home/yutong/zheng/DBSR/results/debug_psnetv9_viz"
+        os.makedirs(saving_dir, exist_ok=True) 
+        
+        process_fn = SimplePostProcess(return_np=True)
+        HR_image = process_fn.process(gt.cpu(), meta_info.cpu())
+        LR_image = process_fn.process(burst_rgb[0].cpu(), meta_info.cpu())
+        SR_image = process_fn.process(net_pred.squeeze(0).cpu(), meta_info.cpu())
+        cv2.imwrite('{}/{}_HR.png'.format(saving_dir, burst_name.split('.')[0]), HR_image)
+        cv2.imwrite('{}/{}_LR.png'.format(saving_dir, burst_name.split('.')[0]), LR_image)
+        cv2.imwrite('{}/{}_SR.png'.format(saving_dir, burst_name.split('.')[0]), SR_image)
   
     def cycle_dataset(self, loader):
         """Do a cycle of training or validation."""
@@ -351,7 +362,7 @@ class AgentTrainer(BaseAgentTrainer):
                 if self.save_results:
                     self.save_img_and_metrics(initial_pred=preds[0].clone(), final_pred=preds[-1].clone(), \
                         initial_psnr=metric_initial.item(), final_psnr=metric_final.item(), meta_info=initial_pred_meta_info, \
-                            burst_rgb=burst_rgb)
+                            burst_rgb=burst_rgb, gt=data['frame_gt'].clone())
        
             
 
