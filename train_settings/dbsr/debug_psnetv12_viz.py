@@ -1,4 +1,4 @@
-# This version try to use loss descent and timestep 4, for debug
+# This version try to use loss descent and timestep 4, more training sample, for debug
 
 # Copyright (c) 2021 Huawei Technologies Co., Ltd.
 # Licensed under CC BY-NC-SA 4.0 (Attribution-NonCommercial-ShareAlike 4.0 International) (the "License");
@@ -98,7 +98,7 @@ def run(settings):
 
     # Train sampler and loader
     dataset_train = sampler.RandomImage([zurich_raw2rgb_train], [1],
-                                        samples_per_epoch=settings.batch_size * 100, processing=data_processing_train)
+                                        samples_per_epoch=settings.batch_size * 1300, processing=data_processing_train)
     # dataset_val = sampler.RandomImage([NightCity_val], [1],
     #                                   samples_per_epoch=settings.batch_size * 1300, processing=data_processing_val)
     dataset_val = sampler.IndexedImage(zurich_raw2rgb_val, processing=data_processing_val)
@@ -137,6 +137,7 @@ def run(settings):
     sr_merging = dbsr_net.merging
     
     actor = dbsr_actors.ActorCritic(num_frames=settings.burst_sz, num_channels=4, hidden_size=5)
+
     # optimizer = optim.Adam(actor.parameters())
 
     optimizer = optim.Adam([{'params': actor.parameters(), 'lr': 1e-4}],
@@ -145,6 +146,6 @@ def run(settings):
     lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=40, gamma=0.2)
     trainer = AgentTrainer(actor, [loader_val], optimizer, settings, lr_scheduler=lr_scheduler, 
                                sr_net=dbsr_net, iterations=4, reward_type='psnr',
-                               discount_factor=0.99, save_results=True, saving_dir="/home/yutong/zheng/DBSR/results/debug_psnetv9_viz")
+                               discount_factor=0.99, save_results=True, saving_dir="/home/yutong/zheng/DBSR/results/debug_psnetv12_viz")
 
-    trainer.train(1000, load_latest=False, fail_safe=True, checkpoint="/ccvl/net/ccvl15/zheng/training_log/checkpoints/dbsr/debug_psnetv9/ActorCritic_ep0095.pth.tar") # (epoch, )
+    trainer.train(1000, load_latest=False, fail_safe=True, checkpoint="/ccvl/net/ccvl15/zheng/training_log/checkpoints/dbsr/debug_psnetv12/ActorCritic_ep0008.pth.tar") # (epoch, )

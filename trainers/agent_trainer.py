@@ -32,7 +32,7 @@ class AgentTrainer(BaseAgentTrainer):
     def __init__(self, actor, loaders, optimizer, settings, 
                  init_permutation=None, discount_factor=0.99, sr_net=None, 
                  lr_scheduler=None, iterations=15, 
-                 interpolation_type='bilinear', reward_type='psnr', save_results=False):
+                 interpolation_type='bilinear', reward_type='psnr', save_results=False, saving_dir=None):
         """
         args:
             actor - The actor for training the network
@@ -77,6 +77,8 @@ class AgentTrainer(BaseAgentTrainer):
         
         self.initial_psnr_sum = 0
         self.final_psnr_sum = 0
+        
+        self.saving_dir = saving_dir
         
         
     def _set_default_settings(self):
@@ -237,11 +239,11 @@ class AgentTrainer(BaseAgentTrainer):
             returns.insert(0, R)
         return returns
 
-    def save_img_and_metrics(self, initial_pred, final_pred, initial_psnr, final_psnr, meta_info, burst_rgb, gt, final_shifts):
+    def save_img_and_metrics(self, initial_pred, final_pred, initial_psnr, final_psnr, meta_info, burst_rgb, gt, final_shifts, name):
         
         self.final_permutations.append(final_shifts.cpu().numpy())
         
-        saving_dir = "/home/yutong/zheng/DBSR/results/debug_psnetv9_viz"
+        saving_dir = self.saving_dir
         os.makedirs(saving_dir, exist_ok=True) 
         
         process_fn = SimplePostProcess(return_np=True)
@@ -252,7 +254,7 @@ class AgentTrainer(BaseAgentTrainer):
         LR_image = process_fn.process(burst_rgb[0][0].cpu(), meta_info)
         SR_initial_image = process_fn.process(initial_pred.squeeze(0).cpu(), meta_info)
         SR_final_image = process_fn.process(final_pred.squeeze(0).cpu(), meta_info)
-        name = int(len(os.listdir(saving_dir))/3)
+        # name = int(len(os.listdir(saving_dir))/3)
         cv2.imwrite('{}/{}_HR.png'.format(saving_dir, name), HR_image)
         cv2.imwrite('{}/{}_LR.png'.format(saving_dir, name), LR_image)
         cv2.imwrite('{}/{}_SR_initial.png'.format(saving_dir, name), SR_initial_image)
@@ -380,16 +382,18 @@ class AgentTrainer(BaseAgentTrainer):
                     # save vis results
                     self.save_img_and_metrics(initial_pred=preds[0].clone(), final_pred=preds[-1].clone(), \
                         initial_psnr=metric_initial.item(), final_psnr=metric_final.item(), meta_info=initial_pred_meta_info, \
-                            burst_rgb=burst_rgb, gt=data['frame_gt'].clone(), final_shifts=permutations.clone())
+                            burst_rgb=burst_rgb, gt=data['frame_gt'].clone(), final_shifts=permutations.clone(), name=str(i))
                     # save trajectories
-                    f=open("/home/yutong/zheng/DBSR/results/v9_viz.pkl", 'w')
+                    f=open("%s/traj.pkl" % self.saving_dir, 'wb')
                     pickle.dump(self.final_permutations, f)
                     f.close()
                     # save metrics
+                    f=open("%s/metrics.txt" % self.saving_dir, 'a')
                     print("%sth psnr intial: %s, final: %s, improvement: %s | Average psnr initial: %s, final: %s, improvement: %s" % \
                             (i, metric_initial.item(), metric_final.item(), (metric_final.item()-metric_initial.item()), \
-                                self.initial_psnr_sum/len(loader), self.final_psnr_sum/len(loader), \
-                                    self.initial_psnr_sum/len(loader) - self.final_psnr_sum/len(loader)))
+                                self.initial_psnr_sum/float(i), self.final_psnr_sum/float(i), \
+                                    self.initial_psnr_sum/float(i) - self.final_psnr_sum/float(i)), file=f)
+                    f.close()
             
 
 
@@ -399,6 +403,8 @@ class AgentTrainer(BaseAgentTrainer):
         for loader in self.loaders:
             if self.epoch % loader.epoch_interval == 0:
                 self.cycle_dataset(loader)
+                if self.save_results:
+                    assert 1==2, "This means you choose the only eval mode to provide visualization results, so we just run one loader then stop here~"
 
         self._stats_new_epoch()
         self._write_tensorboard()
