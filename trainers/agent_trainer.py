@@ -25,6 +25,8 @@ from models.loss.image_quality_v2 import PSNR, PixelWiseError, SSIM
 import data.camera_pipeline as rgb2raw
 import data.synthetic_burst_generation as syn_burst_generation
 from data.postprocessing_functions import SimplePostProcess
+import cv2
+import pickle
 
 class AgentTrainer(BaseAgentTrainer):
     def __init__(self, actor, loaders, optimizer, settings, 
@@ -70,6 +72,11 @@ class AgentTrainer(BaseAgentTrainer):
         self.reward_type = reward_type
         
         self.save_results = save_results
+        
+        self.final_permutations = []
+        
+        self.initial_psnr_sum = 0
+        self.final_psnr_sum = 0
         
         
     def _set_default_settings(self):
@@ -230,18 +237,28 @@ class AgentTrainer(BaseAgentTrainer):
             returns.insert(0, R)
         return returns
 
-    def save_img_and_metrics(self, initial_pred, final_pred, initial_psnr, final_psnr, meta_info, burst_rgb, gt):
+    def save_img_and_metrics(self, initial_pred, final_pred, initial_psnr, final_psnr, meta_info, burst_rgb, gt, final_shifts):
+        
+        self.final_permutations.append(final_shifts.cpu().numpy())
         
         saving_dir = "/home/yutong/zheng/DBSR/results/debug_psnetv9_viz"
         os.makedirs(saving_dir, exist_ok=True) 
         
         process_fn = SimplePostProcess(return_np=True)
-        HR_image = process_fn.process(gt.cpu(), meta_info.cpu())
-        LR_image = process_fn.process(burst_rgb[0].cpu(), meta_info.cpu())
-        SR_image = process_fn.process(net_pred.squeeze(0).cpu(), meta_info.cpu())
-        cv2.imwrite('{}/{}_HR.png'.format(saving_dir, burst_name.split('.')[0]), HR_image)
-        cv2.imwrite('{}/{}_LR.png'.format(saving_dir, burst_name.split('.')[0]), LR_image)
-        cv2.imwrite('{}/{}_SR.png'.format(saving_dir, burst_name.split('.')[0]), SR_image)
+        # print("gt: ", gt.size())
+        # print("burst_rgb[0]: ", burst_rgb[0].size())
+        # print("initial_pred: ", initial_pred.size())
+        HR_image = process_fn.process(gt.squeeze(0).cpu(), meta_info)
+        LR_image = process_fn.process(burst_rgb[0][0].cpu(), meta_info)
+        SR_initial_image = process_fn.process(initial_pred.squeeze(0).cpu(), meta_info)
+        SR_final_image = process_fn.process(final_pred.squeeze(0).cpu(), meta_info)
+        name = int(len(os.listdir(saving_dir))/3)
+        cv2.imwrite('{}/{}_HR.png'.format(saving_dir, name), HR_image)
+        cv2.imwrite('{}/{}_LR.png'.format(saving_dir, name), LR_image)
+        cv2.imwrite('{}/{}_SR_initial.png'.format(saving_dir, name), SR_initial_image)
+        cv2.imwrite('{}/{}_SR_final.png'.format(saving_dir, name), SR_final_image)
+        self.initial_psnr_sum += initial_psnr
+        self.final_psnr_sum += final_psnr
   
     def cycle_dataset(self, loader):
         """Do a cycle of training or validation."""
@@ -264,7 +281,7 @@ class AgentTrainer(BaseAgentTrainer):
 
 
             if self.save_results:
-                initial_pred_meta_info = data['meta_info'].clone()
+                initial_pred_meta_info = data['meta_info']
                 burst_rgb = data['burst_rgb'].clone()
 
             batch_size = data['frame_gt'].size(0)
@@ -362,8 +379,14 @@ class AgentTrainer(BaseAgentTrainer):
                 if self.save_results:
                     self.save_img_and_metrics(initial_pred=preds[0].clone(), final_pred=preds[-1].clone(), \
                         initial_psnr=metric_initial.item(), final_psnr=metric_final.item(), meta_info=initial_pred_meta_info, \
-                            burst_rgb=burst_rgb, gt=data['frame_gt'].clone())
-       
+                            burst_rgb=burst_rgb, gt=data['frame_gt'].clone(), final_shifts=permutations.clone())
+        if not loader.training:
+            if self.save_results:                    
+                f=open("/home/yutong/zheng/DBSR/results/v9_viz.pkl", 'w')
+                pickle.dump(self.final_permutations, f)
+                f.close()
+                print("average psnr initial: ", self.initial_psnr_sum/len(loader))
+                print("average psnr final: ", self.final_psnr_sum/len(loader))
             
 
 

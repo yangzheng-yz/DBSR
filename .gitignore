@@ -16,5 +16,5 @@ train_settings/__pycache__/*
 trainers/__pycache__/*
 util_scripts/__pycache__/*
 utils/__pycache__/*
-
+results/*
 synburst/

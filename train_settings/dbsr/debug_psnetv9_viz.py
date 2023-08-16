@@ -27,7 +27,7 @@ from models.loss.image_quality_v2 import PSNR, PixelWiseError
 import numpy as np
 import torch
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
@@ -37,7 +37,7 @@ os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
 def run(settings):
     settings.description = 'Default settings for training DBSR models on synthetic burst dataset(NightCity) with step(6), amplify factor(4), crop size(384,384), random translation'
-    settings.batch_size = 32
+    settings.batch_size = 1
     settings.num_workers = 16
     settings.multi_gpu = False
     settings.print_interval = 1
@@ -94,7 +94,7 @@ def run(settings):
                                                               transform=transform_val,
                                                               image_processing_params=settings.image_processing_params,
                                                               random_crop=False,
-                                                              return_rgb_burst=True)
+                                                              return_rgb_busrt=True)
 
     # Train sampler and loader
     dataset_train = sampler.RandomImage([zurich_raw2rgb_train], [1],
@@ -137,7 +137,6 @@ def run(settings):
     sr_merging = dbsr_net.merging
     
     actor = dbsr_actors.ActorCritic(num_frames=settings.burst_sz, num_channels=4, hidden_size=5)
-
     # optimizer = optim.Adam(actor.parameters())
 
     optimizer = optim.Adam([{'params': actor.parameters(), 'lr': 1e-4}],
@@ -146,6 +145,6 @@ def run(settings):
     lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=40, gamma=0.2)
     trainer = AgentTrainer(actor, [loader_val], optimizer, settings, lr_scheduler=lr_scheduler, 
                                sr_net=dbsr_net, iterations=4, reward_type='psnr',
-                               discount_factor=0.99)
+                               discount_factor=0.99, save_results=True)
 
-    trainer.train(100, load_latest=True, fail_safe=True) # (epoch, )
+    trainer.train(53, load_latest=True, fail_safe=True) # (epoch, )

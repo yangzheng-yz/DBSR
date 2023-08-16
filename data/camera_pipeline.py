@@ -103,6 +103,10 @@ def apply_ccm(image, ccm):
     # print("image shape: ", shape)
     image = image.view(3, -1)
     ccm = ccm.to(image.device).type_as(image)
+    if ccm.dim() == 3:
+        ccm = ccm.squeeze(0)
+    # print("ccm", ccm)
+    # print("image", image.size())
 
     image = torch.mm(ccm, image)
 
