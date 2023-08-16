@@ -392,7 +392,7 @@ class AgentTrainer(BaseAgentTrainer):
                     print("%sth psnr intial: %s, final: %s, improvement: %s | Average psnr initial: %s, final: %s, improvement: %s" % \
                             (i, metric_initial.item(), metric_final.item(), (metric_final.item()-metric_initial.item()), \
                                 self.initial_psnr_sum/float(i), self.final_psnr_sum/float(i), \
-                                    self.initial_psnr_sum/float(i) - self.final_psnr_sum/float(i)), file=f)
+                                    self.final_psnr_sum/float(i) - self.initial_psnr_sum/float(i)), file=f)
                     f.close()
             
 
