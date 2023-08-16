@@ -147,4 +147,4 @@ def run(settings):
                                sr_net=dbsr_net, iterations=4, reward_type='psnr',
                                discount_factor=0.99, save_results=True)
 
-    trainer.train(53, load_latest=True, fail_safe=True) # (epoch, )
+    trainer.train(53, load_latest=False, fail_safe=True, checkpoint="") # (epoch, )
