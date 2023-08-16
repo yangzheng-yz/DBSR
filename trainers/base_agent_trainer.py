@@ -50,7 +50,7 @@ class BaseAgentTrainer:
         else:
             self._checkpoint_dir = None
 
-    def train(self, max_epochs, load_latest=False, fail_safe=True):
+    def train(self, max_epochs, load_latest=False, fail_safe=True, checkpoint = None):
         """Do training for the given number of epochs.
         args:
             max_epochs - Max number of training epochs,
@@ -64,6 +64,10 @@ class BaseAgentTrainer:
             try:
                 if load_latest:
                     self.load_checkpoint()
+                else:
+                    if isinstance(checkpoint, str):
+                        self.load_checkpoint(checkpoint)
+                
 
                 for epoch in range(self.epoch+1, max_epochs+1):
                     self.epoch = epoch

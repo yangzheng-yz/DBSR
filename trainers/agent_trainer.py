@@ -377,16 +377,19 @@ class AgentTrainer(BaseAgentTrainer):
         
             if not loader.training:
                 if self.save_results:
+                    # save vis results
                     self.save_img_and_metrics(initial_pred=preds[0].clone(), final_pred=preds[-1].clone(), \
                         initial_psnr=metric_initial.item(), final_psnr=metric_final.item(), meta_info=initial_pred_meta_info, \
                             burst_rgb=burst_rgb, gt=data['frame_gt'].clone(), final_shifts=permutations.clone())
-        if not loader.training:
-            if self.save_results:                    
-                f=open("/home/yutong/zheng/DBSR/results/v9_viz.pkl", 'w')
-                pickle.dump(self.final_permutations, f)
-                f.close()
-                print("average psnr initial: ", self.initial_psnr_sum/len(loader))
-                print("average psnr final: ", self.final_psnr_sum/len(loader))
+                    # save trajectories
+                    f=open("/home/yutong/zheng/DBSR/results/v9_viz.pkl", 'w')
+                    pickle.dump(self.final_permutations, f)
+                    f.close()
+                    # save metrics
+                    print("%sth psnr intial: %s, final: %s, improvement: %s | Average psnr initial: %s, final: %s, improvement: %s" % \
+                            (i, metric_initial.item(), metric_final.item(), (metric_final.item()-metric_initial.item()), \
+                                self.initial_psnr_sum/len(loader), self.final_psnr_sum/len(loader), \
+                                    self.initial_psnr_sum/len(loader) - self.final_psnr_sum/len(loader)))
             
 
 
