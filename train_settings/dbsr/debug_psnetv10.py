@@ -27,7 +27,7 @@ from models.loss.image_quality_v2 import PSNR, PixelWiseError
 import numpy as np
 import torch
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
@@ -130,7 +130,7 @@ def run(settings):
     loss_weight = {'rgb': 1.0}
 
     # 获取encoder部分
-    dbsr_net = load_network('/home/yutong/zheng/DBSR/pretrained_networks/dbsr_synthetic_default.pth')
+    dbsr_net = load_network('/home/yutong/zheng/projects/dbsr_rl/DBSR/pretrained_networks/dbsr_synthetic_default.pth')
 
     sr_encoder = dbsr_net.encoder
     sr_merging = dbsr_net.merging

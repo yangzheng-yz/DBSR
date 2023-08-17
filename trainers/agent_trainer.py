@@ -169,9 +169,9 @@ class AgentTrainer(BaseAgentTrainer):
 
         # Convert lists of lists to numpy arrays and then to tensors
         # print("updated_permutations_list", updated_permutations_list)
-        updated_permutations_tensor = torch.tensor(np.array(updated_permutations_list), dtype=torch.int64)
+        updated_permutations_tensor = torch.stack(updated_permutations_list)
         # print("updated_actions_list", updated_actions_list)
-        updated_actions_tensor = torch.tensor(np.array(updated_actions_list), dtype=torch.int64)
+        updated_actions_tensor = torch.stack(updated_actions_list)
         # print("type specified_translation: ", new_permutations)
 
         return updated_permutations_tensor, updated_actions_tensor.to(device)
