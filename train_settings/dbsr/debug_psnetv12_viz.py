@@ -27,7 +27,7 @@ from models.loss.image_quality_v2 import PSNR, PixelWiseError
 import numpy as np
 import torch
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
@@ -131,7 +131,7 @@ def run(settings):
     loss_weight = {'rgb': 1.0}
 
     # 获取encoder部分
-    dbsr_net = load_network('/home/yutong/zheng/DBSR/pretrained_networks/dbsr_synthetic_default.pth')
+    dbsr_net = load_network('/home/yutong/zheng/projects/dbsr_rl/DBSR/pretrained_networks/dbsr_synthetic_default.pth')
 
     sr_encoder = dbsr_net.encoder
     sr_merging = dbsr_net.merging
@@ -146,6 +146,6 @@ def run(settings):
     lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=40, gamma=0.2)
     trainer = AgentTrainer(actor, [loader_val], optimizer, settings, lr_scheduler=lr_scheduler, 
                                sr_net=dbsr_net, iterations=4, reward_type='psnr',
-                               discount_factor=0.99, save_results=True, saving_dir="/home/yutong/zheng/DBSR/results/debug_psnetv12_viz")
+                               discount_factor=0.99, save_results=True, saving_dir="/mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/viz_results/debug_psnetv12_viz")
 
-    trainer.train(1000, load_latest=False, fail_safe=True, checkpoint="/ccvl/net/ccvl15/zheng/training_log/checkpoints/dbsr/debug_psnetv12/ActorCritic_ep0008.pth.tar") # (epoch, )
+    trainer.train(1000, load_latest=False, fail_safe=True, checkpoint="/mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/checkpoints/dbsr/debug_psnetv12/ActorCritic_ep0009.pth.tar") # (epoch, )
