@@ -10,14 +10,14 @@ burst_sz: 16
 downsample_factor: 4
 random_pixelshift: False
 
-ckpt_path: /mnt/data0/zheng/training_results/checkpoints/dbsr/burst16_range4_visible_pretrained2-1/DBSRNet_ep0093.pth
-dataset_path: /mnt/data0/zheng/nir_visible
-trajectory_path: /home/yutong/zheng/projects/dbsr_us/util_scripts/traj_files/nir_trajectory.pkl
-save_path: /mnt/data0/zheng/nir_visible/evaluation_results/burst16_range4_visible_pretrained2
+ckpt_path: /mnt/samsung/zheng/downloaded_datasets/zheng_ccvl2/training_results/checkpoints/dbsr/visible_train-3_test-2/DBSRNet_ep0100.pth.tar
+dataset_path: /mnt/samsung/zheng/downloaded_datasets/zheng_ccvl2/nir_visible
+trajectory_path: /home/yutong/zheng/projects/DBSR/util_scripts/traj_files/nir_trajectory.pkl
+save_path: /mnt/samsung/zheng/downloaded_datasets/zheng_ccvl2/resultsForJinwen/resultSR_on_USAF_overfitted_2
 use_saved_results: None
 specify_trajetory_num: 0
 specify_image_id: -1 # -1
 save_results: True
 save_pixelShifts: False
-split: test
-burst_need_downsample: true
+split: test-2
+burst_need_downsample: false

@@ -87,7 +87,7 @@ def main():
     cfg = parse_config()
     """The first part is to prepare the dataset and define the evaluation metrics"""
     assert cfg.dataset_path is not None, "You must specify the dataset path"
-    nir_visible_val = datasets.nir_visible(root=cfg.dataset_path, burst_sz=cfg.burst_sz, split='test')
+    nir_visible_val = datasets.nir_visible(root=cfg.dataset_path, burst_sz=cfg.burst_sz, split=cfg.split)
     
     metrics = ('psnr', 'ssim', 'lr_psnr', 'lr_ssim')
     device = 'cuda'
@@ -171,10 +171,10 @@ def main():
         # transform_val = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True), tfm.RandomHorizontalFlip())
         transform_val = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True))
 
-        if cfg.burst_need_downsample == 'true':
-            cfg.burst_need_downsample = True
-        else:
-            cfg.burst_need_downsample = False
+        # if cfg.burst_need_downsample == 'true':
+        #     cfg.burst_need_downsample = True
+        # else:
+        #     cfg.burst_need_downsample = False
 
         data_processing_val = processing.VisibleBurstProcessing((cfg.crop_sz[0], cfg.crop_sz[1]),
                                                                 cfg.downsample_factor,

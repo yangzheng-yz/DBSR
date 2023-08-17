@@ -267,18 +267,25 @@ class VisibleBurstProcessing(BaseProcessing):
 
     def __call__(self, data: TensorDict):
         # Augmentation, e.g. convert to tensor
+        # print('!!!!!!!!', len(data['burst']))
+        # print(data['burst'][0].shape)
         if self.transform is not None:
             data['gt'] = self.transform(image=data['gt'])
             data['burst'] = [self.transform(image=i) for i in data['burst']]
 
         # add extra padding to compensate for cropping of border region
         crop_sz = [c + 2 * self.burst_transformation_params.get('border_crop', 0) for c in self.crop_sz]
+        if not self.burst_need_downsample:
+            crop_sz_burst = [(c/self.downsample_factor) + 2 * self.burst_transformation_params.get('border_crop', 0) for c in self.crop_sz]
+        else:
+            crop_sz_burst = crop_sz
+        
         if getattr(self, 'random_crop', True):
             # Perform random cropping
             gt_crop = prutils.random_resized_crop(data['gt'], crop_sz,
                                                      scale_range=self.crop_scale_range,
                                                      ar_range=self.crop_ar_range)
-            burst_crop = [prutils.random_resized_crop(img, crop_sz,
+            burst_crop = [prutils.random_resized_crop(img, crop_sz_burst,
                                                      scale_range=self.crop_scale_range,
                                                      ar_range=self.crop_ar_range) for img in data['burst']]
             # burst_crop = np.array(burst_crop)
@@ -287,7 +294,9 @@ class VisibleBurstProcessing(BaseProcessing):
             # Perform center cropping
             assert self.crop_scale_range is None and self.crop_ar_range is None
             gt_crop = prutils.center_crop(data['gt'], crop_sz)
-            burst_crop = [prutils.center_crop(img, crop_sz) for img in data['burst']]
+            burst_crop = [prutils.center_crop(img, crop_sz_burst) for img in data['burst']]
+            # print('!!!!!!!!', len(data['burst']))
+            # print(data['burst'][0].size())
             # burst_crop = np.array(burst_crop)
             # burst_crop = torch.from_numpy(burst_crop) # (burst_sz, Channel, Height, Width)
             
@@ -340,7 +349,7 @@ class VisibleBurstProcessing(BaseProcessing):
 
         if self.return_rgb_busrt:
             data['burst_rgb'] = burst_rgb
-
+            print("burst_rgb", data['burst_rgb'].size())
         data['frame_gt'] = frame_gt
         data['burst'] = burst
         data['meta_info'] = meta_info

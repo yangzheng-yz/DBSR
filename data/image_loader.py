@@ -35,14 +35,14 @@ def opencv_loader(path):
     """ Read image using opencv's imread function and returns it in rgb format"""
     try:
         im = cv.imread(path, cv.IMREAD_UNCHANGED)  # Load image as is
-
+        # print(path)
         # If grayscale, convert to RGB
         if len(im.shape) == 2:
             im = cv.cvtColor(im, cv.COLOR_GRAY2RGB)
         # Else if BGR, convert to RGB
         elif im.shape[2] == 3:
             im = cv.cvtColor(im, cv.COLOR_BGR2RGB)
-
+        # print('!!!!!!!!!!!!!!', im.shape)
         return im
     except Exception as e:
         print('ERROR: Could not read image "{}"'.format(path))

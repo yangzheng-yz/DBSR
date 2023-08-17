@@ -45,7 +45,7 @@ class nir_visible(BaseImageDataset):
     def initialize(self):
         split = self.split
         root = self.root
-        if split in ['train', 'test', 'train-1', 'test-1', 'train-2', 'test-2']:
+        if split in ['train', 'test', 'train-1', 'test-1', 'train-2', 'test-2','train-3', 'test-3']:
             self.img_pth = os.path.join(root, split)
         else:
             raise Exception('Unknown split {}'.format(split))
