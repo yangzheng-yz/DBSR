@@ -16,8 +16,8 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import models.layers.warp as lispr_warp
-from models.layers.filtering import get_gaussian_kernel, apply_kernel
+import models_dbsr.layers.warp as lispr_warp
+from models_dbsr.layers.filtering import get_gaussian_kernel, apply_kernel
 
 
 def match_colors(im_ref, im_q, im_test, ksz, gauss_kernel):

@@ -15,32 +15,6 @@
 import torch
 from torch import nn
 
-class SelfAttention(nn.Module):
-    def __init__(self, in_dim):
-        super().__init__()
-
-        self.query_conv = nn.Conv2d(in_dim, in_dim//8, 1)
-        self.key_conv = nn.Conv2d(in_dim, in_dim//8, 1)
-        self.value_conv = nn.Conv2d(in_dim, in_dim, 1)
-
-        self.gamma = nn.Parameter(torch.zeros(1))
-
-        self.softmax = nn.Softmax(dim=-1)
-
-    def forward(self, x):
-        batch_size, C, width, height = x.size()
-        query = self.query_conv(x).view(batch_size, -1, width*height).permute(0, 2, 1)
-        key = self.key_conv(x).view(batch_size, -1, width*height)
-        energy = torch.bmm(query, key)
-        attention = self.softmax(energy)
-        value = self.value_conv(x).view(batch_size, -1, width*height)
-
-        out = torch.bmm(value, attention.permute(0, 2, 1))
-        out = out.view(batch_size, C, width, height)
-
-        out = self.gamma*out + x
-        return out
-
 
 def get_activation(activation, activation_params=None, num_channels=None):
     if activation_params is None:
@@ -65,8 +39,6 @@ def get_activation(activation, activation_params=None, num_channels=None):
 def get_attention(attention_type, num_channels=None):
     if attention_type == 'none':
         return None
-    elif attention_type == 'self_attention':
-        return SelfAttention(num_channels)
     else:
         raise Exception('Unknown attention {}'.format(attention_type))
 
@@ -114,11 +86,8 @@ class ResBlock(nn.Module):
         if self.downsample is not None:
             residual = self.downsample(x)
 
-        # print("out: ", out.size())
-
         if self.attention is not None:
             out = self.attention(out)
-            
 
         out += residual
 

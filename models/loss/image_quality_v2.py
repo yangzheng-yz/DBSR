@@ -19,23 +19,6 @@ import models.loss.msssim as msssim
 import models.loss.spatial_color_alignment as sca_utils
 import math
 import lpips
-from torchvision.models import vgg19
-
-class PerceptualLoss(nn.Module):
-    def __init__(self, device='cuda'):  # Add a device parameter
-        super(PerceptualLoss, self).__init__()
-        vgg = vgg19(pretrained=True)
-        self.feature_extractor = nn.Sequential(*list(vgg.features)[:18]).eval()
-        for param in self.feature_extractor.parameters():
-            param.requires_grad = False
-
-        self.feature_extractor = self.feature_extractor.to(device)  # Move the model to the specified device
-
-    def forward(self, input, target):
-        input_features = self.feature_extractor(input)
-        target_features = self.feature_extractor(target)
-        loss = nn.functional.mse_loss(input_features, target_features)
-        return loss
 
 
 class PixelWiseError(nn.Module):
@@ -58,8 +41,6 @@ class PixelWiseError(nn.Module):
                 eps = 1e-3
                 return ((pred - gt) ** 2 + eps**2).sqrt().mean()
             self.loss_fn = charbonnier
-        elif metric == 'perceptual':
-            self.loss_fn = PerceptualLoss()
         else:
             raise Exception
 
@@ -74,8 +55,6 @@ class PixelWiseError(nn.Module):
 
         # Valid indicates image regions which should be used for loss calculation
         if valid is None:
-            # print("pred: ", pred.size())
-            # print("gt: ", gt.size())
             err = self.loss_fn(pred, gt)
         else:
             err = self.loss_fn(pred, gt, reduction='none')
@@ -84,6 +63,23 @@ class PixelWiseError(nn.Module):
             elem_ratio = err.numel() / valid.numel()
             err = (err * valid.float()).sum() / (valid.float().sum() * elem_ratio + eps)
 
+        return err
+
+
+class MappedLoss(nn.Module):
+    def __init__(self, base_loss, mapping_fn=None):
+        super().__init__()
+        self.base_loss = base_loss
+        self.mapping_fn = mapping_fn
+
+    def forward(self, pred, gt, meta_info=None, valid=None):
+        if self.mapping_fn is not None:
+            pred_l = [self.mapping_fn(p, m) for p, m in zip(pred, meta_info)]
+            gt_l = [self.mapping_fn(p, m) for p, m in zip(gt, meta_info)]
+            pred = torch.stack(pred_l)
+            gt = torch.stack(gt_l)
+
+        err = self.base_loss(pred, gt, valid)
         return err
 
 
@@ -106,7 +102,7 @@ class PSNR(nn.Module):
 
         return psnr
 
-    def forward(self, pred, gt, valid=None, batch=False):
+    def forward(self, pred, gt, valid=None):
         if valid is None:
             psnr_all = [self.psnr(p.unsqueeze(0), g.unsqueeze(0)) for p, g in
                         zip(pred, gt)]
@@ -119,11 +115,7 @@ class PSNR(nn.Module):
             psnr = 0
         else:
             psnr = sum(psnr_all) / len(psnr_all)
-        
-        if batch:
-            return psnr_all
-        else:
-            return psnr
+        return psnr
 
 
 class SSIM(nn.Module):

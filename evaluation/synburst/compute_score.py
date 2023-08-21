@@ -22,7 +22,7 @@ if env_path not in sys.path:
 from dataset.synthetic_burst_val_set import SyntheticBurstVal
 import torch
 
-from models.loss.image_quality_v2 import PSNR, SSIM, LPIPS
+from models_dbsr.loss.image_quality_v2 import PSNR, SSIM, LPIPS
 from evaluation.common_utils.display_utils import generate_formatted_report
 import time
 import argparse

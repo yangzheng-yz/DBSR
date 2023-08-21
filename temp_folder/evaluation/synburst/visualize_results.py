@@ -21,7 +21,7 @@ if env_path not in sys.path:
 
 from utils.opencv_plotting import BurstSRVis
 import torch
-from models.loss.image_quality_v2 import PSNR
+from models_dbsr.loss.image_quality_v2 import PSNR
 import cv2
 import numpy as np
 import argparse

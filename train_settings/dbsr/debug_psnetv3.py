@@ -18,12 +18,12 @@ import torch.optim as optim
 import dataset as datasets
 from utils.loading import load_network
 from data import processing, sampler, DataLoader
-import models.dbsr.dbsrnet as dbsr_nets
+import models_dbsr.dbsr.dbsrnet as dbsr_nets
 import actors.dbsr_actors as dbsr_actors
 from trainers import SimpleTrainer, SimpleTrainer_v2
 import data.transforms as tfm
 from admin.multigpu import MultiGPU
-from models.loss.image_quality_v2 import PSNR, PixelWiseError
+from models_dbsr.loss.image_quality_v2 import PSNR, PixelWiseError
 import numpy as np
 import torch
 import os

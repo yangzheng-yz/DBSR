@@ -13,11 +13,11 @@
 # limitations under the License.
 
 import torch.nn as nn
-import models.dbsr.encoders as dbsr_encoders
-import models.dbsr.decoders as dbsr_decoders
-import models.dbsr.merging as dbsr_merging
+import models_dbsr.dbsr.encoders as dbsr_encoders
+import models_dbsr.dbsr.decoders as dbsr_decoders
+import models_dbsr.dbsr.merging as dbsr_merging
 from admin.model_constructor import model_constructor
-from models.alignment.pwcnet import PWCNet
+from models_dbsr.alignment.pwcnet import PWCNet
 from admin.environment import env_settings
 
 

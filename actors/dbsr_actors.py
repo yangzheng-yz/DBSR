@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from actors.base_actor import BaseActor
-from models.loss.spatial_color_alignment import SpatialColorAlignment
+from models_dbsr.loss.spatial_color_alignment import SpatialColorAlignment
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

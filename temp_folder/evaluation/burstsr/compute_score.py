@@ -22,16 +22,16 @@ if env_path not in sys.path:
 from dataset.burstsr_dataset import get_burstsr_val_set
 import torch
 
-from models.loss.image_quality_v2 import PSNR, SSIM, LPIPS
+from models_dbsr.loss.image_quality_v2 import PSNR, SSIM, LPIPS
 from evaluation.common_utils.display_utils import generate_formatted_report
-from models.loss.spatial_color_alignment import SpatialColorAlignment
+from models_dbsr.loss.spatial_color_alignment import SpatialColorAlignment
 import time
 import argparse
 import importlib
 import cv2
 import numpy as np
 import tqdm
-from models.alignment.pwcnet import PWCNet
+from models_dbsr.alignment.pwcnet import PWCNet
 from admin.environment import env_settings
 
 

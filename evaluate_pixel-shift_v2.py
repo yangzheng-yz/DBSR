@@ -15,7 +15,7 @@ from skimage.metrics import structural_similarity as ssim
 from skimage import io, img_as_float
 
 from evaluation.common_utils.network_param import NetworkParam
-from models.loss.image_quality_v2 import PSNR, SSIM, LPIPS
+from models_dbsr.loss.image_quality_v2 import PSNR, SSIM, LPIPS
 from data.postprocessing_functions import SimplePostProcess
 
 cfg = EasyDict()

@@ -15,8 +15,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import models.loss.msssim as msssim
-import models.loss.spatial_color_alignment as sca_utils
+import models_dbsr.loss.msssim as msssim
+import models_dbsr.loss.spatial_color_alignment as sca_utils
 import math
 import lpips
 

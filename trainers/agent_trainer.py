@@ -21,7 +21,7 @@ import torch
 import torch.nn as nn
 import time
 import numpy as np
-from models.loss.image_quality_v2 import PSNR, PixelWiseError, SSIM
+from models_dbsr.loss.image_quality_v2 import PSNR, PixelWiseError, SSIM
 import data.camera_pipeline as rgb2raw
 import data.synthetic_burst_generation as syn_burst_generation
 from data.postprocessing_functions import SimplePostProcess

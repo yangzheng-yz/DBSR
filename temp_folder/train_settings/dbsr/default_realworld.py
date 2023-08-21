@@ -19,8 +19,8 @@ import actors.dbsr_actors as dbsr_actors
 from trainers import SimpleTrainer
 from utils.loading import load_network
 from admin.multigpu import MultiGPU
-from models.loss.image_quality_v2 import PixelWiseError, PSNR
-from models.alignment.pwcnet import PWCNet
+from models_dbsr.loss.image_quality_v2 import PixelWiseError, PSNR
+from models_dbsr.alignment.pwcnet import PWCNet
 from admin.environment import env_settings
 
 

@@ -13,8 +13,8 @@
 # limitations under the License.
 
 import torch.nn as nn
-import models.layers.blocks as blocks
-from models.layers.upsampling import PixShuffleUpsampler
+import models_dbsr.layers.blocks as blocks
+from models_dbsr.layers.upsampling import PixShuffleUpsampler
 
 
 class ResPixShuffleConv(nn.Module):

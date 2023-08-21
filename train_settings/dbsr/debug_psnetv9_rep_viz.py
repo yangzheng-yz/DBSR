@@ -18,12 +18,12 @@ import torch.optim as optim
 import dataset as datasets
 from utils.loading import load_network
 from data import processing, sampler, DataLoader
-import models.dbsr.dbsrnet as dbsr_nets
+# import models_dbsr.dbsr.dbsrnet as dbsr_nets
 import actors.dbsr_actors as dbsr_actors
 from trainers import SimpleTrainer, SimpleTrainer_v2, AgentTrainer
 import data.transforms as tfm
 from admin.multigpu import MultiGPU
-from models.loss.image_quality_v2 import PSNR, PixelWiseError
+# from models_dbsr.loss.image_quality_v2 import PSNR, PixelWiseError
 import numpy as np
 import torch
 import os
@@ -126,10 +126,6 @@ def run(settings):
     if settings.multi_gpu:
         net = MultiGPU(net, dim=0)
 
-    objective = {'rgb': PixelWiseError(metric='l1', boundary_ignore=40), 'psnr': PSNR(boundary_ignore=40)}
-
-    loss_weight = {'rgb': 1.0}
-
     # 获取encoder部分
     dbsr_net = load_network('/mnt/samsung/zheng/downloaded_datasets/zheng_ccvl2/training_results_rep/checkpoints/deeprep/sr_synthetic_default/DeepRepNet_ep0141.pth.tar')
 
@@ -145,6 +141,6 @@ def run(settings):
     lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=40, gamma=0.2)
     trainer = AgentTrainer(actor, [loader_val], optimizer, settings, lr_scheduler=lr_scheduler, 
                                sr_net=dbsr_net, iterations=4, reward_type='psnr',
-                               discount_factor=0.99, save_results=True, saving_dir="/mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/viz_results/debug_psnetv9_viz")
+                               discount_factor=0.99, save_results=True, saving_dir="/mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/viz_results/debug_psnetv9_rep_viz")
 
     trainer.train(1000, load_latest=False, fail_safe=True, checkpoint="/mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/checkpoints/dbsr/debug_psnetv9/ActorCritic_ep0100.pth.tar") # (epoch, )

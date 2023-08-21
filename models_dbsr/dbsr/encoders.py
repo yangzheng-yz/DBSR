@@ -14,8 +14,8 @@
 
 import torch
 import torch.nn as nn
-import models.layers.warp as lispr_warp
-import models.layers.blocks as blocks
+import models_dbsr.layers.warp as lispr_warp
+import models_dbsr.layers.blocks as blocks
 import time
 
 class ResBlockWithSelfAttention(nn.Module):
