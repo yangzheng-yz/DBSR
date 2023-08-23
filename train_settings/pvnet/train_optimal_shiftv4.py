@@ -1,4 +1,4 @@
-# this version use the "optimal" shift presented by psnet to train a SR net. (0,0) (0,1) (2,3) (3,0)
+# this version use the "optimal" shift presented by psnet to train a SR net. (0,0) (0,1) (2,3) (3,0), deep_rep
 # Copyright (c) 2021 Huawei Technologies Co., Ltd.
 # Licensed under CC BY-NC-SA 4.0 (Attribution-NonCommercial-ShareAlike 4.0 International) (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 import torch.optim as optim
 import dataset as datasets
 from data import processing, sampler, DataLoader
-import models_dbsr.dbsr.dbsrnet as dbsr_nets
+import models.deeprep.deeprepnet as deeprep_nets
 import actors.dbsr_actors as dbsr_actors
 from trainers import SimpleTrainer
 import data.transforms as tfm
@@ -26,7 +26,7 @@ from models_dbsr.loss.image_quality_v2 import PSNR, PixelWiseError
 import numpy as np
 import pickle as pkl
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 def run(settings):
     settings.description = 'fixed pixel shift (0,0) (0,1) (2,3) (3,0)'
@@ -95,16 +95,12 @@ def run(settings):
     loader_val = DataLoader('val', dataset_val, training=False, num_workers=settings.num_workers,
                             stack_dim=0, batch_size=settings.batch_size, epoch_interval=1)
 
-    net = dbsr_nets.dbsrnet_cvpr2021(enc_init_dim=64, enc_num_res_blocks=9, enc_out_dim=512,
-                                     dec_init_conv_dim=64, dec_num_pre_res_blocks=5,
-                                     dec_post_conv_dim=32, dec_num_post_res_blocks=4,
-                                     upsample_factor=settings.downsample_factor * 2,
-                                     offset_feat_dim=64,
-                                     weight_pred_proj_dim=64,
-                                     num_weight_predictor_res=3,
-                                     gauss_blur_sd=1.0,
-                                     icnrinit=True
-                                     )
+    net = deeprep_nets.deeprep_sr_iccv21(num_iter=3, enc_dim=64, enc_num_res_blocks=5, enc_out_dim=256,
+                                         dec_dim_pre=64, dec_dim_post=32, dec_num_pre_res_blocks=5,
+                                         dec_num_post_res_blocks=5,
+                                         dec_in_dim=64, dec_upsample_factor=4, gauss_blur_sd=1,
+                                         feature_degradation_upsample_factor=2, use_feature_regularization=False,
+                                         wp_ref_offset_noise=0.00)
 
     # Wrap the network for multi GPU training
     if settings.multi_gpu:

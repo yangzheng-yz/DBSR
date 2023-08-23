@@ -49,6 +49,8 @@ class SimpleTrainer(BaseTrainer):
         self.tensorboard_writer = TensorboardWriter(tensorboard_writer_dir, [l.name for l in loaders])
 
         self.move_data_to_gpu = getattr(settings, 'move_data_to_gpu', True)
+        
+        self.current_test_psnr = 0
 
     def _set_default_settings(self):
         # Dict of all default values
@@ -60,11 +62,46 @@ class SimpleTrainer(BaseTrainer):
             if getattr(self.settings, param, None) is None:
                 setattr(self.settings, param, default_value)
 
+    # def save_checkpoint(self):
+    #     """Saves a checkpoint of the network and other variables."""
+
+    #     net = self.actor.net.module if multigpu.is_multi_gpu(self.actor.net) else self.actor.net
+
+    #     actor_type = type(self.actor).__name__
+    #     net_type = type(net).__name__
+    #     state = {
+    #         'epoch': self.epoch,
+    #         'actor_type': actor_type,
+    #         'net_type': net_type,
+    #         'net': net.state_dict(),
+    #         'net_info': getattr(net, 'info', None),
+    #         'constructor': getattr(net, 'constructor', None),
+    #         'optimizer': self.optimizer.state_dict(),
+    #         'stats': self.stats,
+    #         'settings': self.settings
+    #     }
+
+    #     directory = '{}/{}'.format(self._checkpoint_dir, self.settings.project_path)
+    #     if not os.path.exists(directory):
+    #         os.makedirs(directory)
+
+    #     # First save as a tmp file
+    #     tmp_file_path = '{}/{}_ep{:04d}.tmp'.format(directory, net_type, self.epoch)
+    #     torch.save(state, tmp_file_path)
+
+    #     file_path = '{}/{}_ep{:04d}.pth.tar'.format(directory, net_type, self.epoch)
+
+    #     # Now rename to actual checkpoint. os.rename seems to be atomic if files are on same filesystem. Not 100% sure
+    #     os.rename(tmp_file_path, file_path)
+
     def cycle_dataset(self, loader):
         """Do a cycle of training or validation."""
 
         self.actor.train(loader.training)
         torch.set_grad_enabled(loader.training)
+
+        # if not loader.training:
+        #     average_psnr = 0
 
         self._init_timing()
 
@@ -81,7 +118,10 @@ class SimpleTrainer(BaseTrainer):
 
             # forward pass
             loss, stats = self.actor(data)
-            print("!!!!!!!!!!!loss: ", loss)
+            
+            # if not loader.training:
+            #     average_psnr += stats['Stat/psnr']
+            # print("!!!!!!!!!!!loss: ", loss)
             # backward pass and update weights
             if loader.training:
                 self.optimizer.zero_grad()
@@ -95,6 +135,14 @@ class SimpleTrainer(BaseTrainer):
 
             # print statistics
             self._print_stats(i, loader, batch_size)
+            
+        # if not loader.training:
+        #     average_psnr = average_psnr / len(loader)
+        #     if average_psnr > self.current_test_psnr:
+        #         self.current_test_psnt = average_psnr
+        #         net = 
+        #         self.save_checkpoint(net)
+                
 
     def train_epoch(self):
         """Do one epoch for each loader."""

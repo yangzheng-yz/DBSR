@@ -1,4 +1,4 @@
-# this version use the "optimal" shift presented by psnet to train a SR net. (0,0) (0,1) (2,3) (3,0)
+# this version use the "optimal" shift presented by psnet to train a SR net. (0,0) (0,1) (2,3) (1,0)
 # Copyright (c) 2021 Huawei Technologies Co., Ltd.
 # Licensed under CC BY-NC-SA 4.0 (Attribution-NonCommercial-ShareAlike 4.0 International) (the "License");
 # you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 def run(settings):
-    settings.description = 'fixed pixel shift (0,0) (0,1) (2,3) (3,0)'
+    settings.description = 'fixed pixel shift (0,0) (0,1) (2,3) (1,0)'
     settings.batch_size = 4
     settings.num_workers = 8
     settings.multi_gpu = False
@@ -43,7 +43,7 @@ def run(settings):
         [0,0],
         [0,1],
         [2,3],
-        [3,0]
+        [1,0]
     ])
 
     settings.burst_transformation_params = {'max_translation': 3.0,
