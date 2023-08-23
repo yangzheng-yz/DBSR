@@ -6,15 +6,15 @@ add_noise: True
 return_rgb_burst: True
 
 crop_sz: 384
-burst_sz: 4
-downsample_factor: 2
-random_pixelshift: False
-calculate_loss: False
+burst_sz: 8
+downsample_factor: 4
+random_pixelshift: True
+calculate_loss: True
 
-ckpt_path: /mnt/data0/zheng/training_results/checkpoints/dbsr/burst4_range4_traj166_synthetic/DBSRNet_ep0100.pth.tar
-dataset_path: /mnt/data0/zheng/SyntheticDataset
-trajectory_path: /home/yutong/zheng/projects/dbsr_us/util_scripts/traj_files/zurich_trajectory_step-4_range-4.pkl
-save_path: /mnt/data0/zheng/SyntheticDataset/evaluation_results/burst4_range4_traj166_synthetic_HR
+ckpt_path: /mnt/samsung/zheng/downloaded_datasets/zheng_ccvl2/training_results_rep/checkpoints/deeprep/sr_synthetic_default/DeepRepNet_ep0141.pth.tar
+dataset_path: /mnt/samsung/zheng/downloaded_datasets/zheng_ccvl2/SyntheticDataset
+trajectory_path: /home/yutong/zheng/projects/dbsr_rl/DBSR/util_scripts/trajectory_step-8_range-4.pkl
+save_path: /mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/viz_results/default_deep_rep
 use_saved_results: None
 specify_trajetory_num: 166
 specify_image_id: -1 # -1

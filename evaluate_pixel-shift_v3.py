@@ -139,7 +139,7 @@ def main():
         permutations = pkl.load(f)
     
     scores_all_mean = {}
-    selected_images_id = np.arange(0,1204,4) 
+    selected_images_id = np.arange(0,1204,1) 
     
     for idx_traj, permutation in enumerate(permutations):
         if cfg.specify_trajetory_num != -1:
@@ -153,7 +153,7 @@ def main():
         
         dir_path = '/'.join(cfg.trajectory_path.split('/')[:-1])
         meta_infos_found = False
-        if os.path.exists(os.path.join(dir_path, 'zurich_%s_meta_infos.pkl' % cfg.split)):
+        if os.path.exists(os.path.join(dir_path, 'zurch_%s_meta_infos.pkl' % cfg.split)):
             with open(os.path.join(dir_path, 'zurich_%s_meta_infos.pkl' % cfg.split), 'rb') as f:
                 meta_infos_val = pkl.load(f)
             print(" *Using the predefined ISP parameters in %s" % os.path.join(dir_path, 'zurich_%s_meta_infos.pkl' % cfg.split))
@@ -174,7 +174,7 @@ def main():
                                             'max_rotation': 1.0,
                                             'max_shear': 0.0,
                                             'max_scale': 0.0,
-                                            # 'border_crop': 24, #24,
+                                            'border_crop': 24, #24,
                                             'random_pixelshift': cfg.random_pixelshift,
                                             'specified_translation': permutation}
         

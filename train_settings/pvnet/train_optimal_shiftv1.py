@@ -1,3 +1,4 @@
+# this version use the "optimal" shift presented by psnet to train a SR net. (0,0) (0,1) (2,3) (3,0)
 # Copyright (c) 2021 Huawei Technologies Co., Ltd.
 # Licensed under CC BY-NC-SA 4.0 (Attribution-NonCommercial-ShareAlike 4.0 International) (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,55 +22,78 @@ from trainers import SimpleTrainer
 import data.transforms as tfm
 from admin.multigpu import MultiGPU
 from models_dbsr.loss.image_quality_v2 import PSNR, PixelWiseError
+
+import numpy as np
+import pickle as pkl
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 def run(settings):
-    settings.description = 'Default settings for training DBSR models on synthetic burst dataset, with random pixel shift, trans(24), rot(1.0), burst size(8), use ori function'
-    settings.batch_size = 3
+    settings.description = 'fixed pixel shift (0,0) (0,1) (2,3) (3,0)'
+    settings.batch_size = 4
     settings.num_workers = 8
     settings.multi_gpu = False
     settings.print_interval = 1
 
     settings.crop_sz = (384, 384)
-    settings.burst_sz = 8
+    settings.burst_sz = 4
     settings.downsample_factor = 4
 
-    settings.burst_transformation_params = {'max_translation': 24.0,
-                                            'max_rotation': 1.0,
-                                            'max_shear': 0.0,
-                                            'max_scale': 0.0,
-                                            'border_crop': 24}
+    permutation = np.array([
+        [0,0],
+        [0,1],
+        [2,3],
+        [3,0]
+    ])
+
+    settings.burst_transformation_params = {'max_translation': 3.0,
+                                        'max_rotation': 0.0,
+                                        'max_shear': 0.0,
+                                        'max_scale': 0.0,
+                                        'border_crop': 24,
+                                        'random_pixelshift': False,
+                                        'specified_translation': permutation}
+    burst_transformation_params_val = {'max_translation': 3.0,
+                                        'max_rotation': 0.0,
+                                        'max_shear': 0.0,
+                                        'max_scale': 0.0,
+                                        'border_crop': 24,
+                                        'random_pixelshift': False,
+                                        'specified_translation': permutation}
     settings.burst_reference_aligned = True
     settings.image_processing_params = {'random_ccm': True, 'random_gains': True, 'smoothstep': True, 'gamma': True, 'add_noise': True}
+    f = open("/home/yutong/zheng/projects/dbsr_rl/DBSR/util_scripts/zurich_test_meta_infos.pkl", 'rb')
+    meta_infos_val = pkl.load(f)
+    f.close()
+    image_processing_params_val = {'random_ccm': True, 'random_gains': True, 'smoothstep': True, 'gamma': True, 'add_noise': True, 'predefined_params': meta_infos_val}
 
     zurich_raw2rgb_train = datasets.ZurichRAW2RGB(split='train')
     zurich_raw2rgb_val = datasets.ZurichRAW2RGB(split='test')
 
     transform_train = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True), tfm.RandomHorizontalFlip())
-    transform_val = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True), tfm.RandomHorizontalFlip())
+    transform_val = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True))
 
-    data_processing_train = processing.SyntheticBurstProcessing(settings.crop_sz, settings.burst_sz,
+    data_processing_train = processing.SyntheticBurstDatabaseProcessing(settings.crop_sz, settings.burst_sz,
                                                                 settings.downsample_factor,
                                                                 burst_transformation_params=settings.burst_transformation_params,
                                                                 transform=transform_train,
-                                                                image_processing_params=settings.image_processing_params)
-    data_processing_val = processing.SyntheticBurstProcessing(settings.crop_sz, settings.burst_sz,
+                                                                image_processing_params=settings.image_processing_params,
+                                                                random_crop=True)
+    data_processing_val = processing.SyntheticBurstDatabaseProcessing(settings.crop_sz, settings.burst_sz,
                                                               settings.downsample_factor,
-                                                              burst_transformation_params=settings.burst_transformation_params,
+                                                              burst_transformation_params=burst_transformation_params_val,
                                                               transform=transform_val,
-                                                              image_processing_params=settings.image_processing_params)
-
+                                                              image_processing_params=image_processing_params_val,
+                                                              random_crop=False)
     # Train sampler and loader
     dataset_train = sampler.RandomImage([zurich_raw2rgb_train], [1],
-                                        samples_per_epoch=settings.batch_size * 1000, processing=data_processing_train)
-    dataset_val = sampler.RandomImage([zurich_raw2rgb_val], [1],
-                                      samples_per_epoch=settings.batch_size * 200, processing=data_processing_val)
+                                        samples_per_epoch=settings.batch_size * 4000, processing=data_processing_train)
+    dataset_val = sampler.IndexedImage(zurich_raw2rgb_val, processing=data_processing_val)
 
     loader_train = DataLoader('train', dataset_train, training=True, num_workers=settings.num_workers,
                               stack_dim=0, batch_size=settings.batch_size)
     loader_val = DataLoader('val', dataset_val, training=False, num_workers=settings.num_workers,
-                            stack_dim=0, batch_size=settings.batch_size, epoch_interval=5)
+                            stack_dim=0, batch_size=settings.batch_size, epoch_interval=1)
 
     net = dbsr_nets.dbsrnet_cvpr2021(enc_init_dim=64, enc_num_res_blocks=9, enc_out_dim=512,
                                      dec_init_conv_dim=64, dec_num_pre_res_blocks=5,
@@ -98,4 +122,4 @@ def run(settings):
     lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=40, gamma=0.2)
     trainer = SimpleTrainer(actor, [loader_train, loader_val], optimizer, settings, lr_scheduler)
 
-    trainer.train(1000, load_latest=True, fail_safe=True)
+    trainer.train(100, load_latest=True, fail_safe=True)
