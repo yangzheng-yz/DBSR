@@ -26,7 +26,7 @@ from models_dbsr.loss.image_quality_v2 import PSNR, PixelWiseError
 import numpy as np
 import pickle as pkl
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 def run(settings):
     settings.description = 'fixed pixel shift (0,0) (0,2) (2,2) (2,0)'
