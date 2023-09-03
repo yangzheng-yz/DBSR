@@ -372,7 +372,8 @@ class AgentTrainer(BaseAgentTrainer):
 
             # update statistics
             batch_size = self.settings.batch_size
-            self._update_stats({'Loss/total': loss.item(), ('%s/initial' % self.reward_type): metric_initial.item(), ('%s/final' % self.reward_type): metric_final.item(), "Improvement": ((metric_final.item()-metric_initial.item()))}, batch_size, loader)
+            self._update_stats({'Loss/total': loss.item(), 'Loss/actor': actor_loss.item(), 'Loss/critic': critic_loss.item(), 'Loss/entropy': entropy.item(), ('%s/initial' % self.reward_type): metric_initial.item(), 
+                                ('%s/final' % self.reward_type): metric_final.item(), "Improvement": ((metric_final.item()-metric_initial.item()))}, batch_size, loader)
 
             # print statistics
             self._print_stats(i, loader, batch_size)
