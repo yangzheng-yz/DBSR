@@ -16,7 +16,7 @@
 
 import os
 from collections import OrderedDict
-from trainers.base_agent_trainer import BaseAgentTrainer
+from trainers.base_agent_trainer_v2 import BaseAgentTrainer
 from admin.stats import AverageMeter, StatValue
 from admin.tensorboard import TensorboardWriter
 import torch
@@ -49,7 +49,7 @@ All_possible_shift = np.array([
 ])
 
 class AgentTrainer(BaseAgentTrainer):
-    def __init__(self, actor, loaders, optimizer, settings, 
+    def __init__(self, actors, loaders, optimizer, settings, 
                  init_permutation=None, discount_factor=0.99, sr_net=None, 
                  lr_scheduler=None, iterations=15, 
                  interpolation_type='bilinear', reward_type='psnr', save_results=False, saving_dir=None):
@@ -62,7 +62,7 @@ class AgentTrainer(BaseAgentTrainer):
             settings - Training settings
             lr_scheduler - Learning rate scheduler
         """
-        super().__init__(actor, loaders, optimizer, settings, lr_scheduler)
+        super().__init__(actors, loaders, optimizer, settings, lr_scheduler)
 
         self._set_default_settings()
 
@@ -111,91 +111,6 @@ class AgentTrainer(BaseAgentTrainer):
             if getattr(self.settings, param, None) is None:
                 setattr(self.settings, param, default_value)
 
-    def _sample_actions(self, action_pdf):
-        """Sample actions from the action probability distribution."""
-        batch_size, num_images, num_actions = action_pdf.shape
-        actions = torch.multinomial(action_pdf.view(-1, num_actions), 1)
-        actions = actions.view(batch_size, num_images)
-        return actions
-
-    def _sample_actions_v2(self, action_pdf):
-        """Sample actions from the action probability distribution."""
-        batch_size, burst_size_1, num_actions = action_pdf.shape
-        actions = torch.multinomial(action_pdf.view(-1, num_actions), 1)
-        actions = actions.view(batch_size, burst_size_1)
-        return actions
-    
-    def _update_permutations(self, permutations, actions):
-        """Update permutations based on the actions."""
-        batch_size, num_images, _ = permutations.shape
-        action_offsets = torch.tensor([[0, 0], [0, -1], [0, 1], [-1, 0], [1, 0]])
-        for i in range(1, num_images):  # start from 1 because the base frame does not move
-            permutations[:, i] = permutations[:, i] + action_offsets[actions[:, i-1]]
-        
-        # Clip the values between 0 and 3 using modulo and loop
-        while torch.any(permutations < 0):
-            permutations[permutations < 0] += 4
-        while torch.any(permutations > 3):
-            permutations[permutations > 3] -= 4
-                
-        return permutations
-    
-    def update_permutations_and_actions(self, actions_batch, initial_permutations_batch):
-        device = actions_batch.device
-        movements = {
-            0: (-1, 0),  # Left
-            1: (1, 0),   # Right
-            2: (0, -1),  # Up
-            3: (0, 1),    # Down
-            4: (0, 0)     # Stay still
-        }
-
-        updated_permutations_list = []
-        updated_actions_list = []
-        for actions, initial_permutations in zip(actions_batch, initial_permutations_batch):
-            actions = actions.cpu()
-            initial_permutations = initial_permutations.cpu()
-            new_actions = actions.clone()
-            new_permutations = initial_permutations.clone()
-            # updated_permutations = list(initial_permutations)
-            # updated_actions = list(actions)
-            # print("initial permutations: ", new_permutations)
-            for idx, action in enumerate(actions):
-                movement = movements[action.item()]
-                # print("%sth burst frame movement: " % idx, movement)
-                new_permutations[idx+1][0] = initial_permutations[idx+1][0].item() + movement[0]
-                new_permutations[idx+1][1] = initial_permutations[idx+1][1].item() + movement[1] 
-                # print("new_permutations[idx+1]", new_permutations[idx+1])
-
-                # Clip to boundaries
-                new_permutations[idx+1][0] = min(max(new_permutations[idx+1][0].item(), 0), 3)
-                new_permutations[idx+1][1] = min(max(new_permutations[idx+1][1].item(), 0), 3)
-
-                # Check for duplicates, if there's a duplicate, select "stay still" action
-                duplicated = False
-                for i in range(idx+1):
-                    if (new_permutations[idx+1][0] == initial_permutations[i][0]) \
-                        and (new_permutations[idx+1][1] == initial_permutations[i][1]):
-                        duplicated = True
-                if duplicated:
-                    # print("new_permutations[idx+1]", new_permutations[idx+1])
-                    new_permutations[idx+1] = initial_permutations[idx+1].clone()
-                    new_actions[idx] = 4  # Stay still action
-                else:
-                    initial_permutations[idx+1] = new_permutations[idx+1].clone()
-            # print("new permutations: ", new_permutations)
-            updated_permutations_list.append(new_permutations)
-            updated_actions_list.append(new_actions)
-
-        # Convert lists of lists to numpy arrays and then to tensors
-        # print("updated_permutations_list", updated_permutations_list)
-        updated_permutations_tensor = torch.stack(updated_permutations_list)
-        # print("updated_actions_list", updated_actions_list)
-        updated_actions_tensor = torch.stack(updated_actions_list)
-        # print("type specified_translation: ", new_permutations)
-
-        return updated_permutations_tensor, updated_actions_tensor.to(device)
-
     def step_environment(self, dists2, HR_batch, actions1):
         """
         Update the environment state based on actions from option2, and return the new state, actions2, and permutations.
@@ -220,8 +135,8 @@ class AgentTrainer(BaseAgentTrainer):
         # Iterate through the batch
         for i in range(batch_size):
             # Get the number of bursts for this sample
-            num_bursts = actions1[i].item()
-            
+            num_bursts = actions1[i].item() + 1
+            print("num_bursts: ", num_bursts)
             # Get the probabilities for this sample from dists2
             probs = dists2[i]
             
@@ -242,14 +157,6 @@ class AgentTrainer(BaseAgentTrainer):
         # Here, you would typically update 'next_state' based on 'frame_gt', 'actions1', and 'actions2'.
         next_state = self.apply_actions_to_env(HR_batch, permutations)
         return next_state, actions2, permutations
-
-    def step_environment(self, dists, HR_batch, permutations):
-        actions = torch.stack([dist.sample() for dist in dists], dim=1)
-        # print("actions: ", actions)
-        permutations, actions  = self.update_permutations_and_actions(actions, permutations)
-        
-        next_state = self.apply_actions_to_env(HR_batch, permutations)
-        return next_state, actions, permutations
 
     def apply_actions_to_env(self, HR_batch, permutations_batch):
         """Apply actions to a batch of images."""
@@ -274,7 +181,7 @@ class AgentTrainer(BaseAgentTrainer):
                                                         interpolation_type=self.interpolation_type)
             image_burst = rgb2raw.mosaic(image_burst_rgb.clone())
             transformed_images.append(image_burst)
-        transformed_images_stacked = torch.stack(transformed_images).to(device)
+        # transformed_images_stacked = torch.stack(transformed_images).to(device)
         
         return transformed_images
 
@@ -331,8 +238,9 @@ class AgentTrainer(BaseAgentTrainer):
     def cycle_dataset(self, loader):
         """Do a cycle of training or validation."""
 
-        self.actor_option1.train(loader.training)
-        self.actor_option2.train(loader.training)
+        for idx, _ in enumerate(self.actors):
+            self.actors[idx].train(loader.training)
+        
         torch.set_grad_enabled(loader.training)
         # torch.autograd.set_detect_anomaly(True)
 
@@ -359,19 +267,11 @@ class AgentTrainer(BaseAgentTrainer):
             values1, values2       = [], []
             rewards                = []
             preds                  = []
-            entropy1, entropy2     = 0 ,  0
+            entropy1, entropy2     = 0 , 0
             penalties              = []
             with torch.no_grad():
                 pred, _   = self.sr_net(data['burst'])
             preds.append(pred.clone())
-
-            if self.init_permutation is not None:
-                permutations = torch.tensor(self.init_permutation).repeat(batch_size, 1, 1)
-            else:
-                permutations = torch.tensor(np.array([[0,0],
-                                            [0,2],
-                                            [2,2],
-                                            [2,0]])).repeat(batch_size, 1, 1)
             
             if self.reward_type == 'psnr':
                 reward_func = {'psnr': PSNR(boundary_ignore=40)}
@@ -383,25 +283,34 @@ class AgentTrainer(BaseAgentTrainer):
             # print("device of state: ", state.size())
             for it in range(self.iterations):
                 # option 1: determine how many extra burst needed
-                dists1, value1 = self.actor_option1(state)
+                dists1, value1 = self.actors[0](state)
                 actions1 = torch.stack([dist.sample() for dist in dists1], dim=1)
-
                 # 计算当前时间步的期望 burst 数量
-                expected_burst = (torch.arange(0, 15).float().to(dists1.device) * dists1).sum(dim=1)
-                
+                expected_burst_list = [(torch.arange(1, 16).float().to(self.device) * dist.probs).sum(dim=1) for dist in dists1]
+                expected_burst = sum(expected_burst_list) / len(expected_burst_list)
+                    
                 # 计算当前时间步的惩罚项
-                penalty = 0.5 * expected_burst.mean()
+                penalty = expected_burst.mean()
                 
                 penalties.append(penalty)
 
                 # option 2: determine the pixel shift
-                dists2, value2 = self.actor_option2(state, actions1)
+                print("state size: ", type(state))
+                print("action1 size: ", type(actions1))
+                dists2, value2 = self.actors[1](state, actions1)
                 next_state, actions2, permutations = self.step_environment(dists2, data['frame_gt'].clone(), actions1)
                 # updates preds and calculate reward
+                pred_list = []
                 with torch.no_grad():
                     # print("device of model: ", next(self.sr_net.parameters()).device)
                     # print("device of nextstate: ", next_state.size())
-                    pred, _ = self.sr_net(next_state.clone())
+                    if isinstance(next_state, list):
+                        for single_next_state in next_state.clone():
+                            single_pred, _ = self.sr_net(single_next_state.unsqueeze(0))
+                            pred_list.append(single_pred)
+                        pred = torch.stack(pred_list).to(self.device)
+                    else:
+                        pred = self.sr_net(next_state.clone())
                 preds.append(pred.clone())
 
                 reward = self._calculate_reward(data['frame_gt'], preds[-1], preds[-2], reward_func=reward_func, batch=True)
@@ -431,9 +340,9 @@ class AgentTrainer(BaseAgentTrainer):
                 
                 state = next_state.clone()
             
-            next_dists1, next_value1 = self.actor_option1(state)
+            next_dists1, next_value1 = self.actors[0](state)
             next_actions1 = torch.stack([dist.sample() for dist in next_dists1], dim=1)
-            next_dists2, next_value2 = self.actor_option2(state, next_actions1)
+            next_dists2, next_value2 = self.actors[1](state, next_actions1)
 
             # print("what is the output: ", type(next_value))
             returns1 = self.compute_returns(next_value1, rewards, gamma=discount_factor)
@@ -461,7 +370,7 @@ class AgentTrainer(BaseAgentTrainer):
             # 计算总惩罚
             total_penalty = torch.stack(penalties).mean()
 
-            loss = actor_loss1 + actor_loss2 + 0.5 * critic_loss1 + 0.5 * critic_loss2 - 0.001 * entropy1 - 0.001 * entropy2 + total_penalty
+            loss = actor_loss1 + actor_loss2 + 0.5 * critic_loss1 + 0.5 * critic_loss2 - 0.001 * entropy1 - 0.001 * entropy2 + self.alpha * total_penalty
 
             # calculate metric for the initial and final burst
             metric_initial = reward_func[self.reward_type](preds[0].clone(), data['frame_gt'].clone())

@@ -19,7 +19,17 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Categorical
 
+class MultiHeadAttention(nn.Module):
+    def __init__(self, input_dim, output_dim, num_heads):
+        super(MultiHeadAttention, self).__init__()
+        self.num_heads = num_heads
+        self.attention = nn.MultiheadAttention(input_dim, num_heads)
+        self.fc_out = nn.Linear(input_dim, output_dim)
 
+    def forward(self, value, key, query):
+        attention_output, _ = self.attention(query, key, value)
+        output = self.fc_out(attention_output)
+        return output
 class ActorCritic(nn.Module):
     def __init__(self, num_frames, num_channels, hidden_size):
         super(ActorCritic, self).__init__()
@@ -41,7 +51,7 @@ class ActorCritic(nn.Module):
             nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
             nn.ReLU()
         )
-        self.critic_linear = nn.Linear(147456, 1)
+        self.critic_linear = nn.Linear(147456, 1) # [4,4,96,96]
 
     def forward(self, x):
         batch_size, num_frames, channels, height, width = x.size()
@@ -65,6 +75,205 @@ class ActorCritic(nn.Module):
         
         return dists, value
 
+from torchvision.models import resnet18
+
+class DynamicActorCritic(nn.Module):
+    def __init__(self, hidden_size):
+        super(DynamicActorCritic, self).__init__()
+        
+        # Shared ResNet Feature Extractor
+        self.shared_resnet = torch.nn.Sequential(
+            torch.nn.Conv2d(4, 64, kernel_size=3, stride=1, padding=1),
+            torch.nn.BatchNorm2d(64),
+            torch.nn.ReLU(),
+            torch.nn.MaxPool2d(kernel_size=2, stride=2)
+        )
+        
+        # Actor Network
+        self.actor_lstm = torch.nn.LSTM(64, hidden_size, batch_first=True)
+        self.actor_linear = torch.nn.Linear(hidden_size, 15)
+        
+        # Critic Network
+        self.critic_linear = torch.nn.Linear(64, 1)
+
+    def forward(self, x):
+        if isinstance(x, list):  # If x is a list, handle each element separately
+            actor_dists = []
+            critic_values = []
+            for idx, single_x in enumerate(x):
+                single_x = single_x.unsqueeze(0)  # Add a batch dimension
+                actor_state, critic_state = self._forward_single(single_x)
+                
+                # Actor
+                _, (h_n, _) = self.actor_lstm(actor_state)
+                action_logits = self.actor_linear(h_n.squeeze(0))
+                probs = F.softmax(action_logits, dim=-1)
+                dists = Categorical(probs)
+                actor_dists.append(dists)
+                
+                # Critic
+                value = self.critic_linear(critic_state.mean(dim=1))  # Average over frames
+                critic_values.append(value)
+            
+            return actor_dists, critic_values
+        else:  # x is a tensor
+            actor_states, critic_states = self._forward_single(x)
+            
+            # Actor
+            _, (h_n, _) = self.actor_lstm(actor_states)
+            action_logits = self.actor_linear(h_n.squeeze(0))
+            probs = F.softmax(action_logits, dim=-1)
+            dists = [Categorical(p) for p in probs.split(1, dim=1)]
+            
+            # Critic
+            value = self.critic_linear(critic_states.mean(dim=1))  # Average over frames
+            
+            return dists, value
+
+    def _forward_single(self, x):
+        batch_size, num_frames, channels, height, width = x.size()
+        x = x.view(-1, channels, height, width)  # Flatten frames and batch
+        
+        # Shared feature extraction
+        x_shared = self.shared_resnet(x)
+        x_shared = F.adaptive_avg_pool2d(x_shared, (1, 1)).view(batch_size, num_frames, -1)  # Apply GAP and reshape
+
+        return x_shared, x_shared
+class DynamicActorCriticWithSize(nn.Module):
+    def __init__(self, hidden_size):
+        super(DynamicActorCriticWithSize, self).__init__()
+        
+        # Shared ResNet Feature Extractor
+        self.shared_resnet = nn.Sequential(
+            nn.Conv2d(4, 64, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2)
+        )
+        
+        # Actor Network
+        self.actor_lstm = nn.LSTM(65, hidden_size, batch_first=True)  # 65 due to concatenation with sizes
+        self.actor_linear = nn.Linear(hidden_size, 15)
+        
+        # Critic Network
+        self.critic_linear = nn.Linear(65, 1)  # 65 due to concatenation with sizes
+
+    def forward(self, x, sizes):
+        if isinstance(x, list):  # If x is a list, handle each element separately
+            actor_dists = []
+            critic_values = []
+            for idx, single_x in enumerate(x):
+                single_size = sizes[idx].unsqueeze(0).repeat(1, single_x.size(0), 1)  # Expand size for concatenation
+                actor_state, critic_state = self._forward_single(single_x.unsqueeze(0), single_size)
+                
+                # Actor
+                _, (h_n, _) = self.actor_lstm(actor_state)
+                action_logits = self.actor_linear(h_n.squeeze(0))
+                probs = F.softmax(action_logits, dim=-1)
+                dists = Categorical(probs)
+                actor_dists.append(dists)
+                
+                # Critic
+                value = self.critic_linear(critic_state.mean(dim=1))  # Average over frames
+                critic_values.append(value)
+            
+            return actor_dists, critic_values
+        else:  # x is a tensor
+            sizes = sizes.unsqueeze(2).repeat(1, x.size(1), 1)  # Expand size for concatenation
+            actor_states, critic_states = self._forward_single(x, sizes)
+            
+            # Actor
+            _, (h_n, _) = self.actor_lstm(actor_states)
+            action_logits = self.actor_linear(h_n.squeeze(0))
+            probs = F.softmax(action_logits, dim=-1)
+            dists = [Categorical(p) for p in probs.split(1, dim=1)]
+            
+            # Critic
+            value = self.critic_linear(critic_states.mean(dim=1))  # Average over frames
+            
+            return dists, value
+
+    def _forward_single(self, x, sizes):
+        batch_size, num_frames, channels, height, width = x.size()
+        x = x.view(-1, channels, height, width)  # Flatten frames and batch
+        
+        # Shared feature extraction
+        x_shared = self.shared_resnet(x)
+        x_shared = F.adaptive_avg_pool2d(x_shared, (1, 1)).view(batch_size, num_frames, -1)  # Apply GAP and reshape
+        
+        # Concatenate sizes
+        x_shared = torch.cat([x_shared, sizes], dim=2)
+        
+        return x_shared, x_shared
+class DynamicActorCriticWithSizeAttention(nn.Module):
+    def __init__(self, hidden_size):
+        super(DynamicActorCriticWithSize, self).__init__()
+        
+        # Shared ResNet-like Feature Extractor
+        self.shared_resnet = nn.Sequential(
+            nn.Conv2d(4, 64, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2)
+        )
+        
+        self.attention = MultiHeadAttention(64, 64, num_heads=4)
+        
+        # Actor Network
+        self.actor_lstm = nn.LSTM(64, hidden_size, batch_first=True)
+        self.actor_linear = nn.Linear(hidden_size, 15)
+        
+        # Critic Network
+        self.critic_linear = nn.Linear(64, 1)
+
+    def forward(self, x, sizes):
+        if isinstance(x, list):  # If x is a list, handle each element separately
+            actor_dists = []
+            critic_values = []
+            for idx, single_x in enumerate(x):
+                single_size = sizes[idx].unsqueeze(0).unsqueeze(1).repeat(1, single_x.size(1), 1)
+                single_x = single_x.unsqueeze(0)  # Add a batch dimension
+                actor_state, critic_state = self._forward_single(single_x, single_size)
+                
+                # Actor
+                _, (h_n, _) = self.actor_lstm(actor_state)
+                action_logits = self.actor_linear(h_n.squeeze(0))
+                probs = F.softmax(action_logits, dim=-1)
+                dists = Categorical(probs)
+                actor_dists.append(dists)
+                
+                # Critic
+                value = self.critic_linear(critic_state.mean(dim=1))  # Average over frames
+                critic_values.append(value)
+            
+            return actor_dists, critic_values
+        else:  # x is a tensor
+            actor_states, critic_states = self._forward_single(x, sizes)
+            
+            # Actor
+            _, (h_n, _) = self.actor_lstm(actor_states)
+            action_logits = self.actor_linear(h_n.squeeze(0))
+            probs = F.softmax(action_logits, dim=-1)
+            dists = Categorical(probs)
+            
+            # Critic
+            value = self.critic_linear(critic_states.mean(dim=1))  # Average over frames
+            
+            return dists, value
+
+    def _forward_single(self, x, sizes):
+        batch_size, num_frames, channels, height, width = x.size()
+        x = x.view(-1, channels, height, width)  # Flatten frames and batch
+        
+        # Shared feature extraction
+        x_shared = self.shared_resnet(x)
+        x_shared = F.adaptive_avg_pool2d(x_shared, (1, 1)).view(batch_size, num_frames, -1)  # Apply GAP and reshape
+        
+        # Attention mechanism to combine size information
+        sizes = sizes.unsqueeze(0)  # Add sequence length dimension
+        x_shared = self.attention(x_shared, x_shared, sizes)
+        
+        return x_shared, x_shared
 class DBSR_PSNetActor(BaseActor):
     """Actor for training Pixel Shift reinforcement learning model on synthetic bursts """
     def __init__(self, sr_encoder, sr_merging, net, objective, loss_weight=None):
@@ -95,9 +304,6 @@ class DBSR_PSNetActor(BaseActor):
         actions_pdf = torch.nn.functional.softmax(actions_logits, dim=-1) # []
 
         return actions_pdf
-
-
-
 class DBSRSyntheticActor(BaseActor):
     """Actor for training DBSR model on synthetic bursts """
     def __init__(self, net, objective, loss_weight=None):
@@ -140,8 +346,6 @@ class DBSRSyntheticActor(BaseActor):
             stats['Stat/psnr'] = psnr.item()
 
         return loss, stats
-
-
 class DBSRRealWorldActor(BaseActor):
     """Actor for training DBSR model on real-world bursts from BurstSR dataset"""
     def __init__(self, net, objective, alignment_net, loss_weight=None, sr_factor=4):
@@ -189,3 +393,29 @@ class DBSRRealWorldActor(BaseActor):
             stats['Stat/psnr'] = psnr.item()
 
         return loss, stats
+
+# Define a simple test case function
+def test_DynamicActorCritic(model):
+    # Test case 1: Tensor input
+    x_tensor = torch.randn(2, 3, 4, 96, 96)
+    sizes_tensor = torch.randn(2, 1)
+    dists1, value1 = model(x_tensor, sizes_tensor)
+    print("Test case 1 (tensor input) - Distributions shape:", dists1.probs.size())
+    print("Test case 1 (tensor input) - Value shape:", value1.size())
+
+    # Test case 2: List input with varying burst sizes
+    x_list = [torch.randn(3, 4, 96, 96), torch.randn(4, 4, 96, 96)]
+    sizes_list = torch.randn(2, 1)
+    dists2, value2 = model(x_list, sizes_list)
+    print("Test case 2 (list input) - Distributions shape:", [dist.probs.size() for dist in dists2])
+    print("Test case 2 (list input) - Value shape:", [value.size() for value in value2])
+
+
+
+if __name__ == '__main__':
+    # Initialize the model
+    hidden_size = 128
+    model = DynamicActorCriticWithSize(hidden_size)
+    # Run the test cases
+    test_DynamicActorCritic(model)
+    
