@@ -126,8 +126,10 @@ class AgentTrainer(BaseAgentTrainer):
         - permutations: Final permutations or shifts, shape [batch_size, n, 2]
         """
         self.All_possible_shift = self.All_possible_shift.to(self.device)
-        batch_size = len(dists2.probs)
-        
+        try:
+            batch_size = len(dists2.probs)
+        except:
+            batch_size = len(dists2)
         assert batch_size == self.batch_size, "The output dists2[%s] has different batch size compared with input data[%s]." % (batch_size, self.batch_size)
         
         # Initialize lists to hold results
@@ -140,8 +142,10 @@ class AgentTrainer(BaseAgentTrainer):
             num_bursts = actions1[i].item() + 1 + 1
             # print("num_bursts: ", num_bursts)
             # Get the probabilities for this sample from dists2
-            probs = dists2.probs[i]
-            
+            try:
+                probs = dists2.probs[i]
+            except:
+                probs = dists2[i].probs
             # Get the top-n action indices based on the probabilities
             top_n_indices = torch.argsort(probs, descending=True)[:num_bursts]
             
@@ -290,12 +294,8 @@ class AgentTrainer(BaseAgentTrainer):
                 dists1, value1 = self.actors[0](state)
                 if isinstance(dists1, list):
                     actions1_list = []
-                    for batch_idx, _ in enumerate(dists1.probs):
-                        # 从整体分布中取出这个批次对应的分布
-                        dist_for_this_batch = Categorical(probs=dists1.probs[batch_idx])
-                        
-                        # 计算这个批次中每个动作的对数概率
-                        actions1_list.append(dist_for_this_batch.sample())                        
+                    for batch_idx, dist1 in enumerate(dists1):                        
+                        actions1_list.append(dist1.sample())                        
 
                     actions1_list = [action1.to(self.device) for action1 in actions1_list]
                     actions1 = torch.tensor(actions1_list).to(self.device)
@@ -308,7 +308,10 @@ class AgentTrainer(BaseAgentTrainer):
                 # 计算当前时间步的期望 burst 数量
                 # print("what is dists1[0].probs", dists1.probs)
                 # time.sleep(1000)
-                expected_burst_list = [(torch.arange(1, 16).float().to(self.device) * prob) for prob in dists1.probs]
+                if isinstance(dists1, list):
+                    expected_burst_list = [(torch.arange(1, 16).float().to(self.device) * dist1.probs) for dist1 in dists1]
+                else:
+                    expected_burst_list = [(torch.arange(1, 16).float().to(self.device) * prob) for prob in dists1.probs]
                 expected_burst = sum(expected_burst_list) / len(expected_burst_list)
                     
                 # 计算当前时间步的惩罚项
@@ -395,6 +398,15 @@ class AgentTrainer(BaseAgentTrainer):
             
             next_dists1, next_value1 = self.actors[0](state)
             next_actions1 = next_dists1.sample()
+            if isinstance(next_dists1, list):
+                next_actions1_list = []
+                for batch_idx, dist1 in enumerate(next_dists1):                        
+                    next_actions1_list.append(dist1.sample())                        
+
+                next_actions1_list = [action1.to(self.device) for action1 in next_actions1_list]
+                next_actions1 = torch.tensor(next_actions1_list).to(self.device)
+            else:
+                next_actions1 = next_dists1.sample()
             next_dists2, next_value2 = self.actors[1](state, next_actions1)
 
             # print("what is the output: ", type(next_value))
