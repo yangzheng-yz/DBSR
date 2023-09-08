@@ -289,8 +289,6 @@ class AgentTrainer(BaseAgentTrainer):
                 # option 1: determine how many extra burst needed
                 dists1, value1 = self.actors[0](state)
                 if isinstance(dists1, list):
-                    actions1 = dists1.sample()
-                else:
                     actions1_list = []
                     for batch_idx, _ in enumerate(dists1.probs):
                         # 从整体分布中取出这个批次对应的分布
@@ -299,8 +297,12 @@ class AgentTrainer(BaseAgentTrainer):
                         # 计算这个批次中每个动作的对数概率
                         actions1_list.append(dist_for_this_batch.sample())                        
 
-                actions1_list = [action1.to(self.device) for action1 in actions1_list]
-                actions1 = torch.tensor(actions1_list).to(self.device)
+                    actions1_list = [action1.to(self.device) for action1 in actions1_list]
+                    actions1 = torch.tensor(actions1_list).to(self.device)
+                else:
+                    actions1 = dists1.sample()
+
+
                 # print("what is action1: ", actions1) # is [batch_size, 1]
                 
                 # 计算当前时间步的期望 burst 数量
