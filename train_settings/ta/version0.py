@@ -41,8 +41,8 @@ os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
 def run(settings):
     settings.description = 'Default settings for training DBSR models on synthetic burst dataset'
-    settings.batch_size = 32
-    settings.num_workers = 16
+    settings.batch_size = 2
+    settings.num_workers = 32
     settings.multi_gpu = False
     settings.print_interval = 1
 

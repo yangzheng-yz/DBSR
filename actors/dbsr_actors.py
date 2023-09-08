@@ -102,13 +102,17 @@ class DynamicActorCritic(nn.Module):
             critic_values = []
             for idx, single_x in enumerate(x):
                 single_x = single_x.unsqueeze(0)  # Add a batch dimension
+                print("in DynamicActorCritic[list] [single_x]: \n", single_x.size())
                 actor_state, critic_state = self._forward_single(single_x)
-                
+                print("in DynamicActorCritic[list] [actor_state]: \n", actor_state.size())
+                print("in DynamicActorCritic[list] [critic_state]: \n", critic_state.size())
                 # Actor
                 _, (h_n, _) = self.actor_lstm(actor_state)
                 action_logits = self.actor_linear(h_n.squeeze(0))
                 probs = F.softmax(action_logits, dim=-1)
+                print("in DynamicActorCritic[list] [probs]: \n", probs.size())
                 dists = Categorical(probs)
+                
                 actor_dists.append(dists)
                 
                 # Critic
@@ -123,8 +127,8 @@ class DynamicActorCritic(nn.Module):
             _, (h_n, _) = self.actor_lstm(actor_states)
             action_logits = self.actor_linear(h_n.squeeze(0))
             probs = F.softmax(action_logits, dim=-1)
-            dists = [Categorical(p) for p in probs.split(1, dim=1)]
-            
+            dists = Categorical(probs)
+            # print("in DynamicActorCritic[tensor] [probs]: \n", probs.size())
             # Critic
             value = self.critic_linear(critic_states.mean(dim=1))  # Average over frames
             
@@ -179,6 +183,7 @@ class DynamicActorCriticWithSize(nn.Module):
             
             return actor_dists, critic_values
         else:  # x is a tensor
+            print("sizes size: ", sizes.size())
             sizes = sizes.unsqueeze(2).repeat(1, x.size(1), 1)  # Expand size for concatenation
             actor_states, critic_states = self._forward_single(x, sizes)
             
@@ -186,7 +191,7 @@ class DynamicActorCriticWithSize(nn.Module):
             _, (h_n, _) = self.actor_lstm(actor_states)
             action_logits = self.actor_linear(h_n.squeeze(0))
             probs = F.softmax(action_logits, dim=-1)
-            dists = [Categorical(p) for p in probs.split(1, dim=1)]
+            dists = Categorical(probs)
             
             # Critic
             value = self.critic_linear(critic_states.mean(dim=1))  # Average over frames
@@ -201,13 +206,14 @@ class DynamicActorCriticWithSize(nn.Module):
         x_shared = self.shared_resnet(x)
         x_shared = F.adaptive_avg_pool2d(x_shared, (1, 1)).view(batch_size, num_frames, -1)  # Apply GAP and reshape
         
-        # Concatenate sizes
+        # Concatenate size
+
         x_shared = torch.cat([x_shared, sizes], dim=2)
         
         return x_shared, x_shared
 class DynamicActorCriticWithSizeAttention(nn.Module):
     def __init__(self, hidden_size):
-        super(DynamicActorCriticWithSize, self).__init__()
+        super(DynamicActorCriticWithSizeAttention, self).__init__()
         
         # Shared ResNet-like Feature Extractor
         self.shared_resnet = nn.Sequential(

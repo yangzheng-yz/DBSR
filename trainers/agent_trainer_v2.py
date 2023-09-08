@@ -21,6 +21,7 @@ from admin.stats import AverageMeter, StatValue
 from admin.tensorboard import TensorboardWriter
 import torch
 import torch.nn as nn
+from torch.distributions import Categorical
 import time
 import numpy as np
 from models_dbsr.loss.image_quality_v2 import PSNR, PixelWiseError, SSIM
@@ -29,24 +30,6 @@ import data.synthetic_burst_generation as syn_burst_generation
 from data.postprocessing_functions import SimplePostProcess
 import cv2
 import pickle
-
-All_possible_shift = np.array([
-    [1,0],
-    [2,0],
-    [3,0],
-    [0,1],
-    [1,1],
-    [2,1],
-    [3,1],
-    [0,2],
-    [1,2],
-    [2,2],
-    [3,2],
-    [0,3],
-    [1,3],
-    [2,3],
-    [3,3],
-])
 
 class AgentTrainer(BaseAgentTrainer):
     def __init__(self, actors, loaders, optimizer, settings, 
@@ -100,6 +83,23 @@ class AgentTrainer(BaseAgentTrainer):
         
         self.saving_dir = saving_dir
         
+        self.All_possible_shift = torch.tensor([
+                                [1,0],
+                                [2,0],
+                                [3,0],
+                                [0,1],
+                                [1,1],
+                                [2,1],
+                                [3,1],
+                                [0,2],
+                                [1,2],
+                                [2,2],
+                                [3,2],
+                                [0,3],
+                                [1,3],
+                                [2,3],
+                                [3,3],
+                            ])
         
     def _set_default_settings(self):
         # Dict of all default values
@@ -125,8 +125,10 @@ class AgentTrainer(BaseAgentTrainer):
         - actions2: Actions taken based on option2, shape [batch_size, n] where n is determined by actions1
         - permutations: Final permutations or shifts, shape [batch_size, n, 2]
         """
+        self.All_possible_shift = self.All_possible_shift.to(self.device)
+        batch_size = len(dists2.probs)
         
-        batch_size = dists2.shape[0]
+        assert batch_size == self.batch_size, "The output dists2[%s] has different batch size compared with input data[%s]." % (batch_size, self.batch_size)
         
         # Initialize lists to hold results
         actions2_list = []
@@ -135,19 +137,21 @@ class AgentTrainer(BaseAgentTrainer):
         # Iterate through the batch
         for i in range(batch_size):
             # Get the number of bursts for this sample
-            num_bursts = actions1[i].item() + 1
-            print("num_bursts: ", num_bursts)
+            num_bursts = actions1[i].item() + 1 + 1
+            # print("num_bursts: ", num_bursts)
             # Get the probabilities for this sample from dists2
-            probs = dists2[i]
+            probs = dists2.probs[i]
             
             # Get the top-n action indices based on the probabilities
             top_n_indices = torch.argsort(probs, descending=True)[:num_bursts]
             
             # Get the corresponding actions and permutations
             selected_actions = top_n_indices
-            selected_permutations = All_possible_shift[top_n_indices]
+            # print("what is All_possible_shift: ", type(self.All_possible_shift))
+            # print("what is top_n_indices: ", type(top_n_indices))
+            selected_permutations = self.All_possible_shift[top_n_indices]
             
-            actions2_list.append(selected_actions.numpy())
+            actions2_list.append(selected_actions)
             permutations_list.append(selected_permutations)
             
         # Keep the results as lists; each element can have a different length corresponding to each batch sample's actions1
@@ -262,12 +266,12 @@ class AgentTrainer(BaseAgentTrainer):
                 burst_rgb = data['burst_rgb'].clone()
 
             batch_size             = data['frame_gt'].size(0)
+            self.batch_size        = batch_size
             state                  = data['burst'].clone() 
             log_probs1, log_probs2 = [], []
             values1, values2       = [], []
             rewards                = []
             preds                  = []
-            entropy1, entropy2     = 0 , 0
             penalties              = []
             with torch.no_grad():
                 pred, _   = self.sr_net(data['burst'])
@@ -284,9 +288,14 @@ class AgentTrainer(BaseAgentTrainer):
             for it in range(self.iterations):
                 # option 1: determine how many extra burst needed
                 dists1, value1 = self.actors[0](state)
-                actions1 = torch.stack([dist.sample() for dist in dists1], dim=1)
+                actions1 = dists1.sample()
+                
+                # print("what is action1: ", actions1) # is [batch_size, 1]
+                
                 # 计算当前时间步的期望 burst 数量
-                expected_burst_list = [(torch.arange(1, 16).float().to(self.device) * dist.probs).sum(dim=1) for dist in dists1]
+                # print("what is dists1[0].probs", dists1.probs)
+                # time.sleep(1000)
+                expected_burst_list = [(torch.arange(1, 16).float().to(self.device) * prob) for prob in dists1.probs]
                 expected_burst = sum(expected_burst_list) / len(expected_burst_list)
                     
                 # 计算当前时间步的惩罚项
@@ -295,42 +304,73 @@ class AgentTrainer(BaseAgentTrainer):
                 penalties.append(penalty)
 
                 # option 2: determine the pixel shift
-                print("state size: ", type(state))
-                print("action1 size: ", type(actions1))
+
+                # print("state size: ", state.size())
+                # print("action1 size: ", actions1.size()) # should be [batch_size, 1]
+                actions1 = actions1.unsqueeze(1)
+                # print("what is dists1[0].probs", actions1.size())
                 dists2, value2 = self.actors[1](state, actions1)
                 next_state, actions2, permutations = self.step_environment(dists2, data['frame_gt'].clone(), actions1)
                 # updates preds and calculate reward
                 pred_list = []
                 with torch.no_grad():
-                    # print("device of model: ", next(self.sr_net.parameters()).device)
-                    # print("device of nextstate: ", next_state.size())
+                    print("device of model: ", next(self.sr_net.parameters()).device)
                     if isinstance(next_state, list):
-                        for single_next_state in next_state.clone():
+                        for single_next_state in next_state:
+                            single_next_state = single_next_state.to(self.device)
+                            print("device of single_next_state: ", single_next_state.size())
                             single_pred, _ = self.sr_net(single_next_state.unsqueeze(0))
                             pred_list.append(single_pred)
                         pred = torch.stack(pred_list).to(self.device)
                     else:
+                        next_state = next_state.to(self.device)
                         pred = self.sr_net(next_state.clone())
                 preds.append(pred.clone())
 
                 reward = self._calculate_reward(data['frame_gt'], preds[-1], preds[-2], reward_func=reward_func, batch=True)
                 # print("what is actions: ", actions.device)
                 # print("what is dist: ", dists[0].device)
+                log_prob1 = torch.zeros(batch_size).to(self.device)
+                entropy1 = torch.zeros(batch_size).to(self.device)
 
-                log_prob1 = dists1[0].log_prob(actions1[:, 0])
-                for id in range(1,len(dists1)):
-                    log_prob1 += dists1[id].log_prob(actions1[:, id])
-                for dist in dists1:
-                    entropy1 += dist.entropy().mean()
-                entropy1 = entropy1 / (len(dists1) - 1)   
+                if isinstance(dists1, list):
+                    print("dists1: ", dists1)
+                    # 如果 dists1 是一个列表，我们需要手动遍历每一个批次和对应的动作
+                    for idx, dist in enumerate(dists1):
+                        log_prob1[idx] = dist.log_prob(actions1[idx, 0])
+                        entropy1[idx] = dist.entropy()
+                    print("log_prob1: ", log_prob1)
+                    print("entropy1: ", entropy1)
+                else:
+                    print("actions1: ", actions1)
+                    print("dists1: ", dists1.probs.size())
+                    # 如果 dists1 是一个 Categorical 实例，我们可以直接使用其方法
+                    log_prob1 = dists1.log_prob(actions1[:,0])
+                    entropy1 = dists1.entropy()
+                    print("log_prob1: ", log_prob1)
+                    print("entropy1: ", entropy1)
 
+                print("what is actions2: ", actions2)
+                print("what is dists2: ", dists2.probs.size())
+                
+                log_prob_sums = []
 
-                log_prob2 = dists2[0].log_prob(actions2[:, 0])
-                for id in range(1,len(dists2)):
-                    log_prob2 += dists2[id].log_prob(actions2[:, id])
-                for dist in dists2:
-                    entropy2 += dist.entropy().mean()
-                entropy2 = entropy2 / (len(dists2) - 1)    
+                # 遍历每个批次
+                for batch_idx, action_tensor in enumerate(actions2):
+                    # 从整体分布中取出这个批次对应的分布
+                    dist_for_this_batch = Categorical(probs=dists2.probs[batch_idx])
+                    
+                    # 计算这个批次中每个动作的对数概率
+                    log_probs = dist_for_this_batch.log_prob(action_tensor)
+                    
+                    # 计算对数概率的和
+                    log_prob_sum = log_probs.sum().item()
+                    
+                    log_prob_sums.append(log_prob_sum)
+
+                log_prob2 = torch.tensor(log_prob_sums).to(self.device)  # 转换为 PyTorch 张量
+                print("what is log_prob2: ", log_prob2)
+                entropy2 = dists2.entropy()    
 
                 rewards.append(reward) # (timestep, batch_size, 1)
                 log_probs1.append(log_prob1) # (timestep, batch, )
@@ -338,10 +378,10 @@ class AgentTrainer(BaseAgentTrainer):
                 values1.append(value1)
                 values2.append(value2)
                 
-                state = next_state.clone()
+                state = [tensor.clone() for tensor in next_state]
             
             next_dists1, next_value1 = self.actors[0](state)
-            next_actions1 = torch.stack([dist.sample() for dist in next_dists1], dim=1)
+            next_actions1 = next_dists1.sample()
             next_dists2, next_value2 = self.actors[1](state, next_actions1)
 
             # print("what is the output: ", type(next_value))
