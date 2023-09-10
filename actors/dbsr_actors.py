@@ -102,21 +102,22 @@ class DynamicActorCritic(nn.Module):
             critic_values = []
             for idx, single_x in enumerate(x):
                 single_x = single_x.unsqueeze(0)  # Add a batch dimension
-                print("in DynamicActorCritic[list] [single_x]: \n", single_x.size())
+                # print("in DynamicActorCritic[list] [single_x]: \n", single_x.size())
                 actor_state, critic_state = self._forward_single(single_x)
-                print("in DynamicActorCritic[list] [actor_state]: \n", actor_state.size())
-                print("in DynamicActorCritic[list] [critic_state]: \n", critic_state.size())
+                # print("in DynamicActorCritic[list] [actor_state]: \n", actor_state.size())
+                # print("in DynamicActorCritic[list] [critic_state]: \n", critic_state.size())
                 # Actor
                 _, (h_n, _) = self.actor_lstm(actor_state)
                 action_logits = self.actor_linear(h_n.squeeze(0))
                 probs = F.softmax(action_logits, dim=-1)
-                print("in DynamicActorCritic[list] [probs]: \n", probs.size())
+                # print("in DynamicActorCritic[list] [probs]: \n", probs.size())
                 dists = Categorical(probs)
                 
                 actor_dists.append(dists)
                 
                 # Critic
-                value = self.critic_linear(critic_state.mean(dim=1))  # Average over frames
+                value = self.critic_linear(critic_state.mean(dim=1))
+                value = value.squeeze(0) # Average over frames
                 critic_values.append(value)
             
             return actor_dists, critic_values
@@ -179,11 +180,12 @@ class DynamicActorCriticWithSize(nn.Module):
                 
                 # Critic
                 value = self.critic_linear(critic_state.mean(dim=1))  # Average over frames
+                value = value.squeeze(0)
                 critic_values.append(value)
             
             return actor_dists, critic_values
         else:  # x is a tensor
-            print("sizes size: ", sizes.size())
+            # print("sizes size: ", sizes.size())
             sizes = sizes.unsqueeze(2).repeat(1, x.size(1), 1)  # Expand size for concatenation
             actor_states, critic_states = self._forward_single(x, sizes)
             
@@ -292,7 +294,7 @@ class DBSR_PSNetActor(BaseActor):
         args:
             device - device to use. 'cpu' or 'cuda'
         """
-        print("!!!!!!!!!!!!!!!!policynet and sr_net's device: ", device)
+        # print("!!!!!!!!!!!!!!!!policynet and sr_net's device: ", device)
         self.net.to(device)
         self.sr_encoder.to(device)
         self.sr_merging.to(device)
@@ -367,7 +369,7 @@ class DBSRRealWorldActor(BaseActor):
         args:
             device - device to use. 'cpu' or 'cuda'
         """
-        print("!!!!!!!!!!!!!!!!net and sca's device: ", device)
+        # print("!!!!!!!!!!!!!!!!net and sca's device: ", device)
         self.net.to(device)
         self.sca.to(device)
 

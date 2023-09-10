@@ -2,8 +2,9 @@
 # small training set,
 # two agent trained together, agent1 and agent2 perform once together,
 # initial state is 00 02 22 20,
-# loss = actor_loss1 + actor_loss2 + 0.5 * critic_loss1 + 0.5 * critic_loss2 - 0.001 * entropy1_final.mean() - 0.001 * entropy2_final.mean() + self.alpha * total_penalty
-
+# then use loss = actor_loss1 + 0.2 * actor_loss2 + 0.1 * critic_loss1 + 0.1 * critic_loss2 - 0.001 * entropy1_final.mean() - 0.001 * entropy2_final.mean() + self.alpha * total_penalty
+# lr step size 20
+# penalty 0.5
 
 # Copyright (c) 2021 Huawei Technologies Co., Ltd.
 # Licensed under CC BY-NC-SA 4.0 (Attribution-NonCommercial-ShareAlike 4.0 International) (the "License");
@@ -33,7 +34,7 @@ import numpy as np
 import torch
 import pickle as pkl
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
@@ -62,7 +63,7 @@ def run(settings):
 
     settings.description = 'Default settings for training DBSR models on synthetic burst dataset'
     settings.batch_size = 16
-    settings.num_workers = 32
+    settings.num_workers = 16
     settings.multi_gpu = False
     settings.print_interval = 1
 
@@ -147,9 +148,9 @@ def run(settings):
 
     optimizer = optim.Adam([{'params': list(actors[0].parameters()) + list(actors[1].parameters()), 'lr': 1e-4}],
                            lr=2e-4)
-    lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=40, gamma=0.2)
+    lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.2)
     trainer = AgentTrainer_v2(actors, [loader_train, loader_val], optimizer, settings, lr_scheduler=lr_scheduler, 
                                sr_net=dbsr_net, iterations=8, reward_type='psnr',
-                               discount_factor=0.99, penalty_alpha=0.7)
+                               discount_factor=0.99, penalty_alpha=0.5)
 
     trainer.train(100, load_latest=True, fail_safe=True) # (epoch, )

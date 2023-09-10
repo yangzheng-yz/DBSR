@@ -1,0 +1,16 @@
+Training:  ta  version0
+train dataset length:  2
+val dataset length:  602
+WARNING: Keyword argument "backbone_pretrained" not found when loading network. It was ignored.
+Temporarily we do not support multigpu. 
+Training crashed at epoch -1
+Traceback for the error!
+Traceback (most recent call last):
+  File "/home/yutong/zheng/projects/dbsr_rl/DBSR/trainers/base_agent_trainer_v2.py", line 67, in train
+    self.load_checkpoint()
+  File "/home/yutong/zheng/projects/dbsr_rl/DBSR/trainers/base_agent_trainer_v2.py", line 212, in load_checkpoint
+    setattr(self, key, checkpoints_dict[0][key])
+TypeError: unhashable type: 'dict_keys'
+
+Restarting training from last epoch ...
+Finished training!

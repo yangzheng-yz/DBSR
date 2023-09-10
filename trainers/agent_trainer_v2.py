@@ -35,7 +35,7 @@ class AgentTrainer(BaseAgentTrainer):
     def __init__(self, actors, loaders, optimizer, settings, 
                  init_permutation=None, discount_factor=0.99, sr_net=None, 
                  lr_scheduler=None, iterations=15, 
-                 interpolation_type='bilinear', reward_type='psnr', save_results=False, saving_dir=None):
+                 interpolation_type='bilinear', reward_type='psnr', save_results=False, saving_dir=None, penalty_alpha=0.5):
         """
         args:
             actor - The actor for training the network
@@ -100,6 +100,8 @@ class AgentTrainer(BaseAgentTrainer):
                                 [2,3],
                                 [3,3],
                             ])
+    
+        self.alpha = penalty_alpha
         
     def _set_default_settings(self):
         # Dict of all default values
@@ -126,6 +128,7 @@ class AgentTrainer(BaseAgentTrainer):
         - permutations: Final permutations or shifts, shape [batch_size, n, 2]
         """
         self.All_possible_shift = self.All_possible_shift.to(self.device)
+        zero_row = torch.tensor([[0, 0]], device=self.device)
         try:
             batch_size = len(dists2.probs)
         except:
@@ -139,14 +142,16 @@ class AgentTrainer(BaseAgentTrainer):
         # Iterate through the batch
         for i in range(batch_size):
             # Get the number of bursts for this sample
-            num_bursts = actions1[i].item() + 1 + 1
+            num_bursts = actions1[i].item() + 1 # here +1 is for cancel 0
             # print("num_bursts: ", num_bursts)
             # Get the probabilities for this sample from dists2
             try:
                 probs = dists2.probs[i]
             except:
                 probs = dists2[i].probs
+                probs = probs.squeeze(0)
             # Get the top-n action indices based on the probabilities
+            # print("probs: ", probs)
             top_n_indices = torch.argsort(probs, descending=True)[:num_bursts]
             
             # Get the corresponding actions and permutations
@@ -154,7 +159,9 @@ class AgentTrainer(BaseAgentTrainer):
             # print("what is All_possible_shift: ", type(self.All_possible_shift))
             # print("what is top_n_indices: ", type(top_n_indices))
             selected_permutations = self.All_possible_shift[top_n_indices]
-            
+            # print("zero_row: %s, selected_permutations: %s" % (zero_row.size(), selected_permutations.size()))
+            selected_permutations = torch.cat((zero_row, selected_permutations), dim=0) # here another +1 is for [0,0]
+            # print("what is selected_permutations: ", selected_permutations)
             actions2_list.append(selected_actions)
             permutations_list.append(selected_permutations)
             
@@ -277,6 +284,7 @@ class AgentTrainer(BaseAgentTrainer):
             rewards                = []
             preds                  = []
             penalties              = []
+            entropy1_final, entropy2_final = [], []
             with torch.no_grad():
                 pred, _   = self.sr_net(data['burst'])
             preds.append(pred.clone())
@@ -292,6 +300,8 @@ class AgentTrainer(BaseAgentTrainer):
             for it in range(self.iterations):
                 # option 1: determine how many extra burst needed
                 dists1, value1 = self.actors[0](state)
+                if isinstance(value1, list):
+                    value1 = torch.stack(value1)
                 if isinstance(dists1, list):
                     actions1_list = []
                     for batch_idx, dist1 in enumerate(dists1):                        
@@ -326,15 +336,17 @@ class AgentTrainer(BaseAgentTrainer):
                 actions1 = actions1.unsqueeze(1)
                 # print("what is dists1[0].probs", actions1.size())
                 dists2, value2 = self.actors[1](state, actions1)
+                if isinstance(value2, list):
+                    value2 = torch.stack(value2)
                 next_state, actions2, permutations = self.step_environment(dists2, data['frame_gt'].clone(), actions1)
                 # updates preds and calculate reward
                 pred_list = []
                 with torch.no_grad():
-                    print("device of model: ", next(self.sr_net.parameters()).device)
+                    # print("device of model: ", next(self.sr_net.parameters()).device)
                     if isinstance(next_state, list):
                         for single_next_state in next_state:
                             single_next_state = single_next_state.to(self.device)
-                            print("device of single_next_state: ", single_next_state.size())
+                            # print("device of single_next_state: ", single_next_state.size())
                             single_pred, _ = self.sr_net(single_next_state.unsqueeze(0))
                             pred_list.append(single_pred)
                         pred = torch.stack(pred_list).to(self.device)
@@ -350,43 +362,59 @@ class AgentTrainer(BaseAgentTrainer):
                 entropy1 = torch.zeros(batch_size).to(self.device)
 
                 if isinstance(dists1, list):
-                    print("dists1: ", dists1)
+                    # print("dists1[list]: ", dists1)
                     # 如果 dists1 是一个列表，我们需要手动遍历每一个批次和对应的动作
                     for idx, dist in enumerate(dists1):
                         log_prob1[idx] = dist.log_prob(actions1[idx, 0])
                         entropy1[idx] = dist.entropy()
-                    print("log_prob1: ", log_prob1)
-                    print("entropy1: ", entropy1)
+                    
+                    # print("log_prob1[list]: ", log_prob1)
+                    # print("entropy1[list]: ", entropy1)
+                    # entropy1 = torch.stack(entropy1)
                 else:
-                    print("actions1: ", actions1)
-                    print("dists1: ", dists1.probs.size())
+                    # print("actions1[tensor]: ", actions1)
+                    # print("dists1[tensor]: ", dists1.probs.size())
                     # 如果 dists1 是一个 Categorical 实例，我们可以直接使用其方法
                     log_prob1 = dists1.log_prob(actions1[:,0])
                     entropy1 = dists1.entropy()
-                    print("log_prob1: ", log_prob1)
-                    print("entropy1: ", entropy1)
-
-                print("what is actions2: ", actions2)
-                print("what is dists2: ", dists2.probs.size())
+                    # print("log_prob1[tensor]: ", log_prob1)
+                    # print("entropy1[tensor]: ", entropy1)
+                entropy1_final.append(entropy1.mean())
+                # print("what is actions2: ", actions2)
+                # print("what is dists2: ", dists2)
                 
                 log_prob_sums = []
 
                 # 遍历每个批次
                 for batch_idx, action_tensor in enumerate(actions2):
-                    # 从整体分布中取出这个批次对应的分布
-                    dist_for_this_batch = Categorical(probs=dists2.probs[batch_idx])
+                    if isinstance(dists2, list):
+                        dist_for_this_batch = dists2[batch_idx]
+                    else:
+                        # 从整体分布中取出这个批次对应的分布
+                        dist_for_this_batch = Categorical(probs=dists2.probs[batch_idx])
                     
                     # 计算这个批次中每个动作的对数概率
                     log_probs = dist_for_this_batch.log_prob(action_tensor)
-                    
+                    # print("what is log_probs: ", log_probs)
                     # 计算对数概率的和
                     log_prob_sum = log_probs.sum().item()
                     
                     log_prob_sums.append(log_prob_sum)
 
                 log_prob2 = torch.tensor(log_prob_sums).to(self.device)  # 转换为 PyTorch 张量
-                print("what is log_prob2: ", log_prob2)
-                entropy2 = dists2.entropy()    
+                # print("what is log_prob2: ", log_prob2)
+                
+                if isinstance(dists2, list):
+                    entropy2_list = []
+                    for batch_idx, _ in enumerate(dists2):
+                        entropy2_list.append(dists2[batch_idx].entropy())
+                    # print("what is entropy2_list: ", entropy2_list)
+                    entropy2 = torch.stack(entropy2_list) 
+                else:
+                    entropy2 = dists2.entropy()  
+                entropy2_final.append(entropy2.mean())
+
+                # print("what is entropy2: ", entropy2)  
 
                 rewards.append(reward) # (timestep, batch_size, 1)
                 log_probs1.append(log_prob1) # (timestep, batch, )
@@ -397,7 +425,6 @@ class AgentTrainer(BaseAgentTrainer):
                 state = [tensor.clone().to(self.device) for tensor in next_state]
             
             next_dists1, next_value1 = self.actors[0](state)
-            next_actions1 = next_dists1.sample()
             if isinstance(next_dists1, list):
                 next_actions1_list = []
                 for batch_idx, dist1 in enumerate(next_dists1):                        
@@ -408,22 +435,42 @@ class AgentTrainer(BaseAgentTrainer):
             else:
                 next_actions1 = next_dists1.sample()
             next_dists2, next_value2 = self.actors[1](state, next_actions1)
-
-            # print("what is the output: ", type(next_value))
+            # print("what is the next_value1 before squeeze: ", next_value1)
+            if isinstance(next_value1, list):
+                next_value1 = torch.stack(next_value1)
+                # next_value1 = next_value1.squeeze(0)
+            if isinstance(next_value2, list):
+                next_value2 = torch.stack(next_value2)
+                # next_value2 = next_value2.squeeze(0)
+            # print("what is the next_value1: ", next_value1)
+            # print("what is the rewards: ", type(rewards))
+            # print("what is the discount_factor: ", type(discount_factor))
             returns1 = self.compute_returns(next_value1, rewards, gamma=discount_factor)
             returns2 = self.compute_returns(next_value2, rewards, gamma=discount_factor)
+
             # print("returns info, size %s, type %s" % (len(returns), type(returns)))
             # print("log_probs info, size %s, type %s" % (len(log_probs), type(log_probs)))
             # print("values info, size %s, type %s" % (len(values), type(values)))
 
-
+            # print("what is log_probs1 before cat: ", log_probs1)
+            # print("what is log_probs2 before cat: ", log_probs2)
+            # print("what is returns1 before cat: ", returns1)
+            # print("what is returns2 before cat: ", returns2)
+            # print("what is values1 before cat: ", values1)
+            # print("what is values2 before cat: ", values2)
             log_probs1 = torch.cat(log_probs1)
             log_probs2 = torch.cat(log_probs2)
             returns1   = torch.cat(returns1).detach()
             returns2   = torch.cat(returns2).detach()
             values1    = torch.cat(values1)
             values2    = torch.cat(values2)
-
+            # print("what is log_probs1 before cat: ", log_probs1)
+            # print("what is log_probs2 before cat: ", log_probs2)
+            # print("what is returns1 before cat: ", returns1)
+            # print("what is returns2 before cat: ", returns2)
+            # print("what is values1 before cat: ", values1)
+            # print("what is values2 before cat: ", values2)
+            
             advantage1 = returns1 - values1
             advantage2 = returns2 - values2
 
@@ -435,8 +482,18 @@ class AgentTrainer(BaseAgentTrainer):
             # 计算总惩罚
             total_penalty = torch.stack(penalties).mean()
 
-            loss = actor_loss1 + actor_loss2 + 0.5 * critic_loss1 + 0.5 * critic_loss2 - 0.001 * entropy1 - 0.001 * entropy2 + self.alpha * total_penalty
+            entropy1_final = torch.stack(entropy1_final)
+            entropy2_final = torch.stack(entropy2_final)
 
+            loss = actor_loss1 + 0.2 * actor_loss2 + 0.1 * critic_loss1 + 0.1 * critic_loss2 - 0.001 * entropy1_final.mean() - 0.001 * entropy2_final.mean() + self.alpha * total_penalty
+            # print("what is actor_loss1: ", actor_loss1)
+            # print("what is actor_loss2: ", actor_loss2)
+            # print("what is critic_loss1: ", critic_loss1)
+            # print("what is critic_loss2: ", critic_loss2)
+            # print("what is entropy1: ", entropy1)
+            # print("what is entropy2: ", entropy2)
+            # print("what is entropy2: ", entropy2)
+            # print("what is loss: ", loss)
             # calculate metric for the initial and final burst
             metric_initial = reward_func[self.reward_type](preds[0].clone(), data['frame_gt'].clone())
             metric_final = reward_func[self.reward_type](preds[-1].clone(), data['frame_gt'].clone())
@@ -449,8 +506,8 @@ class AgentTrainer(BaseAgentTrainer):
 
             # update statistics
             batch_size = self.settings.batch_size
-            self._update_stats({'Loss/total': loss.item(), 'Loss/actor1': actor_loss1.item(), 'Loss/critic1': critic_loss1.item(), 'Loss/entropy1': entropy1.item(),
-                                'Loss/actor2': actor_loss2.item(), 'Loss/critic2': critic_loss2.item(), 'Loss/entropy2': entropy2.item(), ('%s/initial' % self.reward_type): metric_initial.item(), 
+            self._update_stats({'Loss/total': loss.item(), 'Loss/actor1': actor_loss1.item(), 'Loss/critic1': critic_loss1.item(), 'Loss/entropy1': entropy1_final.mean().item(),
+                                'Loss/actor2': actor_loss2.item(), 'Loss/critic2': critic_loss2.item(), 'Loss/entropy2': entropy2_final.mean().item(), ('%s/initial' % self.reward_type): metric_initial.item(), 
                                 ('%s/final' % self.reward_type): metric_final.item(), "Improvement": ((metric_final.item()-metric_initial.item()))}, batch_size, loader)
 
             # print statistics

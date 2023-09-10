@@ -342,18 +342,26 @@ class AgentTrainer(BaseAgentTrainer):
                 values.append(value)
                 
                 state = next_state.clone()
-            
+            entropy = entropy / self.iterations
             _, next_value = self.actor(state)
             # print("what is the output: ", type(next_value))
+            # print("what is the next_value1: ", type(next_value))
+            # print("what is the rewards: ", type(rewards))
+            # print("what is the discount_factor: ", type(discount_factor))
             returns = self.compute_returns(next_value, rewards, gamma=discount_factor)
             # print("returns info, size %s, type %s" % (len(returns), type(returns)))
             # print("log_probs info, size %s, type %s" % (len(log_probs), type(log_probs)))
             # print("values info, size %s, type %s" % (len(values), type(values)))
 
-
+            print("what is log_probs before cat: ", log_probs)
+            print("what is returns before cat: ", returns)
+            print("what is values before cat: ", values)
             log_probs = torch.cat(log_probs)
             returns   = torch.cat(returns).detach()
             values    = torch.cat(values)
+            print("what is log_probs after cat: ", log_probs)
+            print("what is returns after cat: ", returns)
+            print("what is values after cat: ", values)
 
             advantage = returns - values
 
@@ -361,7 +369,9 @@ class AgentTrainer(BaseAgentTrainer):
             critic_loss = advantage.pow(2).mean()
 
             loss = actor_loss + 0.5 * critic_loss - 0.001 * entropy
-
+            print("what is actor_loss: ", actor_loss)
+            print("what is critic_loss: ", critic_loss)
+            print("what is entropy: ", entropy)
             # calculate metric for the initial and final burst
             metric_initial = reward_func[self.reward_type](preds[0].clone(), data['frame_gt'].clone())
             metric_final = reward_func[self.reward_type](preds[-1].clone(), data['frame_gt'].clone())

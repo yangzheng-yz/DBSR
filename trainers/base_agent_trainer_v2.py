@@ -192,7 +192,7 @@ class BaseAgentTrainer:
             assert net_type == checkpoints_dict[idx]['net_type'], 'Network [%s] is not of correct type.' % net_type
 
         if fields is None:
-            fields = [checkpoint_dict.keys() for checkpoint_dict in checkpoints_dict]
+            fields = checkpoints_dict[0].keys()
         if ignore_fields is None:
             ignore_fields = ['settings']
 
@@ -209,6 +209,8 @@ class BaseAgentTrainer:
             elif key == 'optimizer':
                 self.optimizer.load_state_dict(checkpoints_dict[0][key])
             else:
+                # print("what are the keys: ", checkpoints_dict[0].keys())
+                # print("what is current key: ", key)
                 setattr(self, key, checkpoints_dict[0][key])
 
         # Set the net info
