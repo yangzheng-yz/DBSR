@@ -92,20 +92,6 @@ class AgentTrainer(BaseAgentTrainer):
         for param, default_value in default.items():
             if getattr(self.settings, param, None) is None:
                 setattr(self.settings, param, default_value)
-
-    def _sample_actions(self, action_pdf):
-        """Sample actions from the action probability distribution."""
-        batch_size, num_images, num_actions = action_pdf.shape
-        actions = torch.multinomial(action_pdf.view(-1, num_actions), 1)
-        actions = actions.view(batch_size, num_images)
-        return actions
-
-    def _sample_actions_v2(self, action_pdf):
-        """Sample actions from the action probability distribution."""
-        batch_size, burst_size_1, num_actions = action_pdf.shape
-        actions = torch.multinomial(action_pdf.view(-1, num_actions), 1)
-        actions = actions.view(batch_size, burst_size_1)
-        return actions
     
     def _update_permutations(self, permutations, actions):
         """Update permutations based on the actions."""

@@ -1,5 +1,5 @@
 # This version try to use loss descent and timestep 8, 
-# small training set,
+# large training set,
 # two agent trained together, agent1 and agent2 perform once together,
 # initial state is 00 02 22 20,
 # then use loss = actor_loss1 + 0.2 * actor_loss2 + 0.1 * critic_loss1 + 0.1 * critic_loss2 - 0.001 * entropy1_final.mean() - 0.001 * entropy2_final.mean() + self.alpha * total_penalty
@@ -34,7 +34,7 @@ import numpy as np
 import torch
 import pickle as pkl
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
@@ -126,7 +126,7 @@ def run(settings):
 
     # Train sampler and loader
     dataset_train = sampler.RandomImage([zurich_raw2rgb_train], [1],
-                                        samples_per_epoch=settings.batch_size * 1000, processing=data_processing_train)
+                                        samples_per_epoch=settings.batch_size * 100, processing=data_processing_train)
     # dataset_val = sampler.RandomImage([NightCity_val], [1],
     #                                   samples_per_epoch=settings.batch_size * 1300, processing=data_processing_val)
     dataset_val = sampler.IndexedImage(zurich_raw2rgb_val, processing=data_processing_val)
@@ -151,6 +151,6 @@ def run(settings):
     lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.2)
     trainer = AgentTrainer_v2(actors, [loader_train, loader_val], optimizer, settings, lr_scheduler=lr_scheduler, 
                                sr_net=dbsr_net, iterations=8, reward_type='psnr',
-                               discount_factor=0.99, penalty_alpha=0.5)
+                               discount_factor=0.99, penalty_alpha=0.05)
 
     trainer.train(100, load_latest=True, fail_safe=True) # (epoch, )

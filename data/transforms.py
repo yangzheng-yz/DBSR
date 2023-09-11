@@ -124,15 +124,19 @@ class TransformBase:
 
 class ToTensor(TransformBase):
     """ Convert to a Tensor"""
-    def __init__(self, normalize=True):
+    def __init__(self, normalize=True, val=False):
         super().__init__()
         self.normalize = normalize
+        self.val = val
 
     def transform_image(self, image):
         # handle numpy array
         if image.ndim == 2:
             image = image[:, :, None]
 
+        if self.val:
+            image = (torch.from_numpy(image.astype(np.float32)) / 2 ** 14).permute(2, 0, 1).float()
+            return image
         image = torch.from_numpy(image.transpose((2, 0, 1)))
         # backward compatibility
         if self.normalize:

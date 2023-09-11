@@ -17,7 +17,7 @@ import numpy as np
 from dataset.base_image_dataset import BaseImageDataset
 from data.image_loader import opencv_loader
 from admin.environment import env_settings
-
+import pickle as pkl
 
 class ZurichRAW2RGB(BaseImageDataset):
     """
@@ -46,6 +46,8 @@ class ZurichRAW2RGB(BaseImageDataset):
         root = self.root
         if split in ['train', 'test']:
             self.img_pth = os.path.join(root, split, 'canon')
+        elif split in ['val']:
+            self.img_pth = os.path.join(root, split, 'gt')
         else:
             raise Exception('Unknown split {}'.format(split))
 
@@ -56,6 +58,8 @@ class ZurichRAW2RGB(BaseImageDataset):
             image_list = ['{:d}.jpg'.format(i) for i in range(46839)]
         elif split == 'test':
             image_list = ['{:d}.jpg'.format(i) for i in range(1204)]
+        elif split == 'val':
+            image_list = ['%.4d' % i for i in range(300)] 
         else:
             raise Exception
 
@@ -68,11 +72,25 @@ class ZurichRAW2RGB(BaseImageDataset):
         path = os.path.join(self.img_pth, self.image_list[im_id])
         img = self.image_loader(path)
         return img
+    
+    def _get_val_image(self, im_id):
+        img_path = os.path.join(self.img_pth, self.image_list[im_id], 'im_rgb.png')
+        info_path = os.path.join(self.img_pth, self.image_list[im_id], 'meta_info.pkl')
+        f=open(info_path, 'rb')
+        img = self.image_loader(img_path)
+        meta_info = pkl.load(f)
+        f.close()
+        return img, meta_info
 
     def get_image(self, im_id, info=None):
-        frame = self._get_image(im_id)
+        if self.split in ['train', 'test']:
+            frame = self._get_image(im_id)
 
-        if info is None:
-            info = self.get_image_info(im_id)
+            if info is None:
+                info = self.get_image_info(im_id)
+        elif self.split in ['val']:
+            frame, info = self._get_val_image(im_id)
+        else:
+            Exception
 
         return frame, info

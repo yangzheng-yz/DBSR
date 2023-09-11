@@ -1,7 +1,7 @@
 # This version try to use loss descent and timestep 8, 
-# large training set,
-# two agent trained together, agent1 and agent2 perform once together,
-# initial state is 00 02 22 20,
+# small training set,
+# try option-critic architecture 15 subactors
+# each actor has random intial pixel shift,
 # loss = actor_loss1 + actor_loss2 + 0.5 * critic_loss1 + 0.5 * critic_loss2 - 0.001 * entropy1_final.mean() - 0.001 * entropy2_final.mean() + self.alpha * total_penalty
 
 
@@ -25,7 +25,7 @@ from utils.loading import load_network
 from data import processing, sampler, DataLoader
 import models_dbsr.dbsr.dbsrnet as dbsr_nets
 import actors.dbsr_actors as dbsr_actors
-from trainers import SimpleTrainer, SimpleTrainer_v2, AgentTrainer_v2
+from trainers import AgentTrainer_v3
 import data.transforms as tfm
 from admin.multigpu import MultiGPU
 from models_dbsr.loss.image_quality_v2 import PSNR, PixelWiseError
@@ -61,7 +61,7 @@ def run(settings):
     set_seed(42)
 
     settings.description = 'Default settings for training DBSR models on synthetic burst dataset'
-    settings.batch_size = 16
+    settings.batch_size = 1
     settings.num_workers = 32
     settings.multi_gpu = False
     settings.print_interval = 1
@@ -117,11 +117,11 @@ def run(settings):
                                                                 image_processing_params=settings.image_processing_params,
                                                                 random_crop=True)
     data_processing_val = processing.SyntheticBurstDatabaseProcessing(settings.crop_sz, settings.burst_sz,
-                                                              settings.downsample_factor,
-                                                              burst_transformation_params=burst_transformation_params_val,
-                                                              transform=transform_val,
-                                                              image_processing_params=image_processing_params_val,
-                                                              random_crop=False)
+                                                                        settings.downsample_factor,
+                                                                        burst_transformation_params=burst_transformation_params_val,
+                                                                        transform=transform_val,
+                                                                        image_processing_params=image_processing_params_val,
+                                                                        random_crop=False)
 
     # Train sampler and loader
     dataset_train = sampler.RandomImage([zurich_raw2rgb_train], [1],
@@ -131,7 +131,7 @@ def run(settings):
     dataset_val = sampler.IndexedImage(zurich_raw2rgb_val, processing=data_processing_val)
 
     loader_train = DataLoader('train', dataset_train, training=True, num_workers=settings.num_workers,
-                              stack_dim=0, batch_size=settings.batch_size)
+                                stack_dim=0, batch_size=settings.batch_size)
     loader_val = DataLoader('val', dataset_val, training=False, num_workers=settings.num_workers,
                             stack_dim=0, batch_size=settings.batch_size, epoch_interval=1) # default is also 1
     
@@ -141,15 +141,22 @@ def run(settings):
     # 获取encoder部分
     dbsr_net = load_network('/home/yutong/zheng/projects/dbsr_rl/DBSR/pretrained_networks/dbsr_synthetic_default.pth')
     
-    actors = [dbsr_actors.DynamicActorCritic(hidden_size=5), dbsr_actors.DynamicActorCriticWithSize(hidden_size=5)]
+    actors = [dbsr_actors.DynamicActorCritic(hidden_size=5)]
+    
+    for num_burst in range(2, 17):
+        actors.append(dbsr_actors.ActorCritic(num_frames=num_burst, num_channels=4, hidden_size=5, 
+                                                height=int(settings.crop_sz[0]/(2*settings.downsample_factor)), width=int(settings.crop_sz[1]/(2*settings.downsample_factor))))
 
     # optimizer = optim.Adam(actor.parameters())
 
-    optimizer = optim.Adam([{'params': list(actors[0].parameters()) + list(actors[1].parameters()), 'lr': 1e-4}],
-                           lr=2e-4)
-    lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=40, gamma=0.2)
-    trainer = AgentTrainer_v2(actors, [loader_train, loader_val], optimizer, settings, lr_scheduler=lr_scheduler, 
-                               sr_net=dbsr_net, iterations=8, reward_type='psnr',
-                               discount_factor=0.99, penalty_alpha=0.7)
+    high_level_optimizer = optim.Adam([{'params': list(actors[0].parameters()), 'lr': 1e-4}],
+                            lr=2e-4)
+    option_optimizer = optim.Adam([{'params': list(actor.parameters()), 'lr': 1e-4} for actor in actors[len(actors)//2:]], lr=2e-4)
+
+    high_level_lr_scheduler = optim.lr_scheduler.StepLR(high_level_optimizer, step_size=40, gamma=0.2)
+    option_lr_scheduler = optim.lr_scheduler.StepLR(option_optimizer, step_size=40, gamma=0.2)
+    trainer = AgentTrainer_v3(actors, [loader_train, loader_val], high_level_optimizer, option_optimizer, settings, high_level_lr_scheduler=high_level_lr_scheduler, option_lr_scheduler=option_lr_scheduler, 
+                                sr_net=dbsr_net, iterations=4, reward_type='psnr',
+                                discount_factor=0.99, penalty_alpha=0.7, high_only=True)
 
     trainer.train(100, load_latest=True, fail_safe=True) # (epoch, )

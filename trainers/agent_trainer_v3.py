@@ -16,7 +16,7 @@
 
 import os
 from collections import OrderedDict
-from trainers.base_agent_trainer_v2 import BaseAgentTrainer
+from trainers.base_agent_trainer_v3 import BaseAgentTrainer
 from admin.stats import AverageMeter, StatValue
 from admin.tensorboard import TensorboardWriter
 import torch
@@ -32,10 +32,10 @@ import cv2
 import pickle
 
 class AgentTrainer(BaseAgentTrainer):
-    def __init__(self, actors, loaders, optimizer, settings, 
+    def __init__(self, actors, loaders, high_level_optimizer, option_optimizer, settings, 
                  init_permutation=None, discount_factor=0.99, sr_net=None, 
-                 lr_scheduler=None, iterations=15, 
-                 interpolation_type='bilinear', reward_type='psnr', save_results=False, saving_dir=None, penalty_alpha=0.5):
+                 high_level_lr_scheduler=None, option_lr_scheduler=None, iterations=15, 
+                 interpolation_type='bilinear', reward_type='psnr', save_results=False, saving_dir=None, penalty_alpha=0.5, high_only=False, low_only=False):
         """
         args:
             actor - The actor for training the network
@@ -45,7 +45,7 @@ class AgentTrainer(BaseAgentTrainer):
             settings - Training settings
             lr_scheduler - Learning rate scheduler
         """
-        super().__init__(actors, loaders, optimizer, settings, lr_scheduler)
+        super().__init__(actors, loaders, high_level_optimizer, option_optimizer, settings, high_level_lr_scheduler, option_lr_scheduler)
 
         self._set_default_settings()
 
@@ -83,25 +83,26 @@ class AgentTrainer(BaseAgentTrainer):
         
         self.saving_dir = saving_dir
         
-        self.All_possible_shift = torch.tensor([
-                                [1,0],
-                                [2,0],
-                                [3,0],
-                                [0,1],
-                                [1,1],
-                                [2,1],
-                                [3,1],
-                                [0,2],
-                                [1,2],
-                                [2,2],
-                                [3,2],
-                                [0,3],
-                                [1,3],
-                                [2,3],
-                                [3,3],
-                            ])
-    
-        self.alpha = penalty_alpha
+        self.initial_permutations = [torch.tensor(np.array([[0,0],[0,2]])).repeat(settings.batch_size, 1, 1),
+                                     torch.tensor(np.array([[0,0],[0,2],[2,2]])).repeat(settings.batch_size, 1, 1),
+                                     torch.tensor(np.array([[0,0],[0,2],[2,2],[2,0]])).repeat(settings.batch_size, 1, 1),
+                                     torch.tensor(np.array([[0,0],[0,2],[2,2],[2,0],[1,1]])).repeat(settings.batch_size, 1, 1),
+                                     torch.tensor(np.array([[0,0],[0,2],[2,2],[2,0],[1,1],[0,1]])).repeat(settings.batch_size, 1, 1),
+                                     torch.tensor(np.array([[0,0],[0,2],[2,2],[2,0],[1,1],[0,1],[1,0]])).repeat(settings.batch_size, 1, 1),
+                                     torch.tensor(np.array([[0,0],[0,2],[2,2],[2,0],[1,1],[0,1],[1,0],[1,2]])).repeat(settings.batch_size, 1, 1),
+                                     torch.tensor(np.array([[0,0],[0,2],[2,2],[2,0],[1,1],[0,1],[1,0],[1,2],[2,1]])).repeat(settings.batch_size, 1, 1),
+                                     torch.tensor(np.array([[0,0],[0,2],[2,2],[2,0],[1,1],[0,1],[1,0],[1,2],[2,1],[0,3]])).repeat(settings.batch_size, 1, 1),
+                                     torch.tensor(np.array([[0,0],[0,2],[2,2],[2,0],[1,1],[0,1],[1,0],[1,2],[2,1],[0,3],[3,0]])).repeat(settings.batch_size, 1, 1),
+                                     torch.tensor(np.array([[0,0],[0,2],[2,2],[2,0],[1,1],[0,1],[1,0],[1,2],[2,1],[0,3],[3,0],[1,3]])).repeat(settings.batch_size, 1, 1),
+                                     torch.tensor(np.array([[0,0],[0,2],[2,2],[2,0],[1,1],[0,1],[1,0],[1,2],[2,1],[0,3],[3,0],[1,3],[3,1]])).repeat(settings.batch_size, 1, 1),
+                                     torch.tensor(np.array([[0,0],[0,2],[2,2],[2,0],[1,1],[0,1],[1,0],[1,2],[2,1],[0,3],[3,0],[1,3],[3,1],[2,3]])).repeat(settings.batch_size, 1, 1),
+                                     torch.tensor(np.array([[0,0],[0,2],[2,2],[2,0],[1,1],[0,1],[1,0],[1,2],[2,1],[0,3],[3,0],[1,3],[3,1],[2,3],[3,2]])).repeat(settings.batch_size, 1, 1),
+                                     torch.tensor(np.array([[0,0],[0,2],[2,2],[2,0],[1,1],[0,1],[1,0],[1,2],[2,1],[0,3],[3,0],[1,3],[3,1],[2,3],[3,2],[3,3]])).repeat(settings.batch_size, 1, 1),]
+        
+        self.high_only = high_only
+        self.low_only = low_only
+        
+        self.penalty_alpha = penalty_alpha
         
     def _set_default_settings(self):
         # Dict of all default values
@@ -112,72 +113,92 @@ class AgentTrainer(BaseAgentTrainer):
         for param, default_value in default.items():
             if getattr(self.settings, param, None) is None:
                 setattr(self.settings, param, default_value)
+    
+    def _update_permutations(self, permutations, actions):
+        """Update permutations based on the actions."""
+        batch_size, num_images, _ = permutations.shape
+        action_offsets = torch.tensor([[0, 0], [0, -1], [0, 1], [-1, 0], [1, 0]])
+        for i in range(1, num_images):  # start from 1 because the base frame does not move
+            permutations[:, i] = permutations[:, i] + action_offsets[actions[:, i-1]]
+        
+        # Clip the values between 0 and 3 using modulo and loop
+        while torch.any(permutations < 0):
+            permutations[permutations < 0] += 4
+        while torch.any(permutations > 3):
+            permutations[permutations > 3] -= 4
+                
+        return permutations   
+    
+    def update_permutations_and_actions(self, actions_batch, initial_permutations_batch):
+        device = actions_batch.device
+        movements = {
+            0: (-1, 0),  # Left
+            1: (1, 0),   # Right
+            2: (0, -1),  # Up
+            3: (0, 1),    # Down
+            4: (0, 0)     # Stay still
+        }
 
-    def step_environment(self, dists2, HR_batch, actions1):
-        """
-        Update the environment state based on actions from option2, and return the new state, actions2, and permutations.
+        updated_permutations_list = []
+        updated_actions_list = []
+        for actions, initial_permutations in zip(actions_batch, initial_permutations_batch):
+            actions = actions.cpu()
+            initial_permutations = initial_permutations.cpu()
+            new_actions = actions.clone()
+            new_permutations = initial_permutations.clone()
+            # updated_permutations = list(initial_permutations)
+            # updated_actions = list(actions)
+            # print("initial permutations: ", new_permutations)
+            for idx, action in enumerate(actions):
+                movement = movements[action.item()]
+                # print("%sth burst frame movement: " % idx, movement)
+                new_permutations[idx+1][0] = initial_permutations[idx+1][0].item() + movement[0]
+                new_permutations[idx+1][1] = initial_permutations[idx+1][1].item() + movement[1] 
+                # print("new_permutations[idx+1]", new_permutations[idx+1])
+
+                # Clip to boundaries
+                new_permutations[idx+1][0] = min(max(new_permutations[idx+1][0].item(), 0), 3)
+                new_permutations[idx+1][1] = min(max(new_permutations[idx+1][1].item(), 0), 3)
+
+                # Check for duplicates, if there's a duplicate, select "stay still" action
+                duplicated = False
+                for i in range(idx+1):
+                    if (new_permutations[idx+1][0] == initial_permutations[i][0]) \
+                        and (new_permutations[idx+1][1] == initial_permutations[i][1]):
+                        duplicated = True
+                if duplicated:
+                    # print("new_permutations[idx+1]", new_permutations[idx+1])
+                    new_permutations[idx+1] = initial_permutations[idx+1].clone()
+                    new_actions[idx] = 4  # Stay still action
+                else:
+                    initial_permutations[idx+1] = new_permutations[idx+1].clone()
+            # print("new permutations: ", new_permutations)
+            updated_permutations_list.append(new_permutations)
+            updated_actions_list.append(new_actions)
+
+        # Convert lists of lists to numpy arrays and then to tensors
+        # print("updated_permutations_list", updated_permutations_list)
+        updated_permutations_tensor = torch.stack(updated_permutations_list)
+        # print("updated_actions_list", updated_actions_list)
+        updated_actions_tensor = torch.stack(updated_actions_list)
+        # print("type specified_translation: ", new_permutations)
+
+        return updated_permutations_tensor, updated_actions_tensor.to(device)
+
+    def step_environment(self, dists, HR_batch, permutations):
+        actions = torch.stack([dist.sample() for dist in dists], dim=1)
+        # print("actions: ", actions)
+        permutations, actions  = self.update_permutations_and_actions(actions, permutations)
         
-        Parameters:
-        - dists2: Probability distribution of actions for option2, shape [batch_size, 15]
-        - frame_gt: Ground truth frames, shape could vary based on your specific implementation
-        - actions1: Actions taken based on option1, shape [batch_size, 1]
-        
-        Returns:
-        - next_state: Updated state
-        - actions2: Actions taken based on option2, shape [batch_size, n] where n is determined by actions1
-        - permutations: Final permutations or shifts, shape [batch_size, n, 2]
-        """
-        self.All_possible_shift = self.All_possible_shift.to(self.device)
-        zero_row = torch.tensor([[0, 0]], device=self.device)
-        try:
-            batch_size = len(dists2.probs)
-        except:
-            batch_size = len(dists2)
-        assert batch_size == self.batch_size, "The output dists2[%s] has different batch size compared with input data[%s]." % (batch_size, self.batch_size)
-        
-        # Initialize lists to hold results
-        actions2_list = []
-        permutations_list = []
-        
-        # Iterate through the batch
-        for i in range(batch_size):
-            # Get the number of bursts for this sample
-            num_bursts = actions1[i].item() + 1 # here +1 is for cancel 0
-            # print("num_bursts: ", num_bursts)
-            # Get the probabilities for this sample from dists2
-            try:
-                probs = dists2.probs[i]
-            except:
-                probs = dists2[i].probs
-                probs = probs.squeeze(0)
-            # Get the top-n action indices based on the probabilities
-            # print("probs: ", probs)
-            top_n_indices = torch.argsort(probs, descending=True)[:num_bursts]
-            
-            # Get the corresponding actions and permutations
-            selected_actions = top_n_indices
-            # print("what is All_possible_shift: ", type(self.All_possible_shift))
-            # print("what is top_n_indices: ", type(top_n_indices))
-            selected_permutations = self.All_possible_shift[top_n_indices]
-            # print("zero_row: %s, selected_permutations: %s" % (zero_row.size(), selected_permutations.size()))
-            selected_permutations = torch.cat((zero_row, selected_permutations), dim=0) # here another +1 is for [0,0]
-            # print("what is selected_permutations: ", selected_permutations)
-            actions2_list.append(selected_actions)
-            permutations_list.append(selected_permutations)
-            
-        # Keep the results as lists; each element can have a different length corresponding to each batch sample's actions1
-        actions2 = actions2_list
-        permutations = permutations_list
-        
-        # Here, you would typically update 'next_state' based on 'frame_gt', 'actions1', and 'actions2'.
         next_state = self.apply_actions_to_env(HR_batch, permutations)
-        return next_state, actions2, permutations
-
+        return next_state, actions, permutations
+    
     def apply_actions_to_env(self, HR_batch, permutations_batch):
         """Apply actions to a batch of images."""
         device = HR_batch.device
         # images = images.cpu()
         batch_size = HR_batch.size(0)
+        burst_size = permutations_batch.size(1)
         # print("permutations_batch.size(1): ", permutations_batch.size())
         transformed_images = []
         for i in range(batch_size):
@@ -190,15 +211,15 @@ class AgentTrainer(BaseAgentTrainer):
                                         'max_scale': 0.0,
                                         'random_pixelshift': False,
                                         'specified_translation': permutations_batch[i]}
-            image_burst_rgb, _ = syn_burst_generation.single2lrburstdatabase(HR, burst_size=len(permutations_batch[i]),
+            image_burst_rgb, _ = syn_burst_generation.single2lrburstdatabase(HR, burst_size=burst_size,
                                                         downsample_factor=self.downsample_factor,
                                                         transformation_params=burst_transformation_params,
                                                         interpolation_type=self.interpolation_type)
             image_burst = rgb2raw.mosaic(image_burst_rgb.clone())
             transformed_images.append(image_burst)
-        # transformed_images_stacked = torch.stack(transformed_images).to(device)
+        transformed_images_stacked = torch.stack(transformed_images).to(device)
         
-        return transformed_images
+        return transformed_images_stacked
 
     def _calculate_reward(self, frame_gt, pred_current, pred_last, reward_func=None, batch=True):
         """Calculate the reward as the difference of PSNR between current and last prediction."""
@@ -261,7 +282,7 @@ class AgentTrainer(BaseAgentTrainer):
 
         self._init_timing()
 
-        discount_factor = self.discount_factor # set your discount factor
+        # discount_factor = self.discount_factor # set your discount factor
 
         for i, data in enumerate(loader, 1):
 
@@ -280,14 +301,12 @@ class AgentTrainer(BaseAgentTrainer):
             self.batch_size        = batch_size
             state                  = data['burst'].clone() 
             log_probs1, log_probs2 = [], []
-            values1, values2       = [], []
+            values1, values        = [], []
+            log_probs              = []
             rewards                = []
             preds                  = []
             penalties              = []
             entropy1_final, entropy2_final = [], []
-            with torch.no_grad():
-                pred, _   = self.sr_net(data['burst'])
-            preds.append(pred.clone())
             
             if self.reward_type == 'psnr':
                 reward_func = {'psnr': PSNR(boundary_ignore=40)}
@@ -295,9 +314,8 @@ class AgentTrainer(BaseAgentTrainer):
                 reward_func = {'ssim': SSIM(boundary_ignore=40)}
             else:
                 assert 0 == 1, "wrong reward type"
-
-            # print("device of state: ", state.size())
             for it in range(self.iterations):
+                option_done = False
                 # option 1: determine how many extra burst needed
                 dists1, value1 = self.actors[0](state)
                 if isinstance(value1, list):
@@ -311,53 +329,6 @@ class AgentTrainer(BaseAgentTrainer):
                     actions1 = torch.tensor(actions1_list).to(self.device)
                 else:
                     actions1 = dists1.sample()
-
-
-                # print("what is action1: ", actions1) # is [batch_size, 1]
-                
-                # 计算当前时间步的期望 burst 数量
-                # print("what is dists1[0].probs", dists1.probs)
-                # time.sleep(1000)
-                if isinstance(dists1, list):
-                    expected_burst_list = [(torch.arange(1, 16).float().to(self.device) * dist1.probs) for dist1 in dists1]
-                else:
-                    expected_burst_list = [(torch.arange(1, 16).float().to(self.device) * prob) for prob in dists1.probs]
-                expected_burst = sum(expected_burst_list) / len(expected_burst_list)
-                    
-                # 计算当前时间步的惩罚项
-                penalty = expected_burst.mean()
-                
-                penalties.append(penalty)
-
-                # option 2: determine the pixel shift
-
-                # print("state size: ", state.size())
-                # print("action1 size: ", actions1.size()) # should be [batch_size, 1]
-                actions1 = actions1.unsqueeze(1)
-                # print("what is dists1[0].probs", actions1.size())
-                dists2, value2 = self.actors[1](state, actions1)
-                if isinstance(value2, list):
-                    value2 = torch.stack(value2)
-                next_state, actions2, permutations = self.step_environment(dists2, data['frame_gt'].clone(), actions1)
-                # updates preds and calculate reward
-                pred_list = []
-                with torch.no_grad():
-                    # print("device of model: ", next(self.sr_net.parameters()).device)
-                    if isinstance(next_state, list):
-                        for single_next_state in next_state:
-                            single_next_state = single_next_state.to(self.device)
-                            # print("device of single_next_state: ", single_next_state.size())
-                            single_pred, _ = self.sr_net(single_next_state.unsqueeze(0))
-                            pred_list.append(single_pred)
-                        pred = torch.stack(pred_list).to(self.device)
-                    else:
-                        next_state = next_state.to(self.device)
-                        pred = self.sr_net(next_state.clone())
-                preds.append(pred.clone())
-
-                reward = self._calculate_reward(data['frame_gt'], preds[-1], preds[-2], reward_func=reward_func, batch=True)
-                # print("what is actions: ", actions.device)
-                # print("what is dist: ", dists[0].device)
                 log_prob1 = torch.zeros(batch_size).to(self.device)
                 entropy1 = torch.zeros(batch_size).to(self.device)
 
@@ -375,143 +346,124 @@ class AgentTrainer(BaseAgentTrainer):
                     # print("actions1[tensor]: ", actions1)
                     # print("dists1[tensor]: ", dists1.probs.size())
                     # 如果 dists1 是一个 Categorical 实例，我们可以直接使用其方法
-                    log_prob1 = dists1.log_prob(actions1[:,0])
-                    entropy1 = dists1.entropy()
-                    # print("log_prob1[tensor]: ", log_prob1)
-                    # print("entropy1[tensor]: ", entropy1)
-                entropy1_final.append(entropy1.mean())
-                # print("what is actions2: ", actions2)
-                # print("what is dists2: ", dists2)
+                    log_prob1 = dists1.log_prob(actions1[0])
+                    entropy1 = dists1.entropy().mean()
+                permutations = self.initial_permutations[actions1.item()]
+                if self.high_only:
+                    with torch.no_grad():
+                        pred, _ = self.sr_net(state.clone())
+                    preds.append(pred.clone()) 
+                state = self.apply_actions_to_env(data['frame_gt'], permutations.clone())
+                if self.high_only:
+                    with torch.no_grad():
+                        pred, _ = self.sr_net(state.clone())
+                    preds.append(pred.clone()) 
+                    
+                in_option_pred_init = None
                 
-                log_prob_sums = []
+                steps_in_option = 0
 
-                # 遍历每个批次
-                for batch_idx, action_tensor in enumerate(actions2):
-                    if isinstance(dists2, list):
-                        dist_for_this_batch = dists2[batch_idx]
+                while not option_done and not self.high_only:
+                    # print("what is actions1: ", actions1.item())
+                    # print("what is state: ", state.size())
+                    
+                    dists, value = self.actors[actions1.item()+1](state)
+                    next_state, actions, permutations = self.step_environment(dists, data['frame_gt'].clone(), permutations.clone())
+                    
+                    with torch.no_grad():
+                        pred, _ = self.sr_net(next_state.clone())
+                    preds.append(pred.clone())
+                    if steps_in_option == 0:
+                        steps_in_option += 1
+                        state = next_state.clone()
+                        in_option_pred_init = pred.clone()
+                        continue
+                    reward = self._calculate_reward(data['frame_gt'], preds[-1], preds[-2], reward_func=reward_func, batch=True)
+                    log_prob = dists[0].log_prob(actions[:, 0])
+                    for id in range(1,len(dists)):
+                        log_prob += dists[id].log_prob(actions[:, id])
+                    entropy = dists[0].entropy().mean()
+                    for idx, dist in enumerate(dists):
+                        if idx == 0:
+                            continue
+                        entropy += dist.entropy().mean()
+                    entropy = entropy / (len(dists) - 1)
+                    
+                    state = next_state.clone()
+                    steps_in_option += 1
+                    PSNR_current = reward_func[self.reward_type](preds[-1].clone(), data['frame_gt'].clone())
+                    PSNR_initial = reward_func[self.reward_type](in_option_pred_init.clone(), data['frame_gt'].clone())
+                    if steps_in_option >= 5 or PSNR_current >= 1.1 * PSNR_initial:
+                        option_done = True
+
+                    _, next_value = self.actors[actions1.item()+1](state)
+                    advantage = reward + self.discount_factor * next_value - value
+                    
+                    policy_loss = -log_prob * advantage.detach()
+                    value_loss = advantage.pow(2)
+                    loss = policy_loss + 0.2 * value_loss # - 0.001 * entropy
+                    if loader.training:
+                        self.option_optimizer.zero_grad()
+                        (loss).backward()
+                        self.option_optimizer.step()
+                    # update statistics
+                    batch_size = self.settings.batch_size
+                    self._update_stats({'Loss/low_level_loss': loss.item(), 'Loss/policy_loss': policy_loss.item(), 'Loss/value_loss': value_loss.item(),
+                                        'Loss/entropy': entropy.item()}, batch_size, loader)
+
+                    # print statistics
+                    self._print_stats(i, loader, batch_size)
+                
+                if self.high_only:
+                    if len(preds) == 1:
+                        continue
                     else:
-                        # 从整体分布中取出这个批次对应的分布
-                        dist_for_this_batch = Categorical(probs=dists2.probs[batch_idx])
-                    
-                    # 计算这个批次中每个动作的对数概率
-                    log_probs = dist_for_this_batch.log_prob(action_tensor)
-                    # print("what is log_probs: ", log_probs)
-                    # 计算对数概率的和
-                    log_prob_sum = log_probs.sum().item()
-                    
-                    log_prob_sums.append(log_prob_sum)
-
-                log_prob2 = torch.tensor(log_prob_sums).to(self.device)  # 转换为 PyTorch 张量
-                # print("what is log_prob2: ", log_prob2)
-                
-                if isinstance(dists2, list):
-                    entropy2_list = []
-                    for batch_idx, _ in enumerate(dists2):
-                        entropy2_list.append(dists2[batch_idx].entropy())
-                    # print("what is entropy2_list: ", entropy2_list)
-                    entropy2 = torch.stack(entropy2_list) 
+                        metric_initial = reward_func[self.reward_type](preds[-2].clone(), data['frame_gt'].clone())
+                        metric_final = reward_func[self.reward_type](preds[-1].clone(), data['frame_gt'].clone())
                 else:
-                    entropy2 = dists2.entropy()  
-                entropy2_final.append(entropy2.mean())
-
-                # print("what is entropy2: ", entropy2)  
-
-                rewards.append(reward) # (timestep, batch_size, 1)
-                log_probs1.append(log_prob1) # (timestep, batch, )
-                log_probs2.append(log_prob2) # (timestep, batch, )
-                values1.append(value1)
-                values2.append(value2)
+                    # calculate metric for the initial and final burst
+                    metric_initial = reward_func[self.reward_type](in_option_pred_init.clone(), data['frame_gt'].clone())
+                    metric_final = reward_func[self.reward_type](preds[-1].clone(), data['frame_gt'].clone())
                 
-                state = [tensor.clone().to(self.device) for tensor in next_state]
-            
-            next_dists1, next_value1 = self.actors[0](state)
-            if isinstance(next_dists1, list):
-                next_actions1_list = []
-                for batch_idx, dist1 in enumerate(next_dists1):                        
-                    next_actions1_list.append(dist1.sample())                        
+                # 计算每个option的累积奖励（或其他性能指标）
+                cumulative_reward_for_option = metric_final - metric_initial  # 这是一个简化的例子
 
-                next_actions1_list = [action1.to(self.device) for action1 in next_actions1_list]
-                next_actions1 = torch.tensor(next_actions1_list).to(self.device)
-            else:
-                next_actions1 = next_dists1.sample()
-            next_dists2, next_value2 = self.actors[1](state, next_actions1)
-            # print("what is the next_value1 before squeeze: ", next_value1)
-            if isinstance(next_value1, list):
-                next_value1 = torch.stack(next_value1)
-                # next_value1 = next_value1.squeeze(0)
-            if isinstance(next_value2, list):
-                next_value2 = torch.stack(next_value2)
-                # next_value2 = next_value2.squeeze(0)
-            # print("what is the next_value1: ", next_value1)
-            # print("what is the rewards: ", type(rewards))
-            # print("what is the discount_factor: ", type(discount_factor))
-            returns1 = self.compute_returns(next_value1, rewards, gamma=discount_factor)
-            returns2 = self.compute_returns(next_value2, rewards, gamma=discount_factor)
+                # 计算高层actor的优势函数
+                _, next_value1 = self.actors[0](state)
+                if isinstance(next_value1, list):
+                    next_value1 = torch.stack(next_value1)
+                advantage1 = cumulative_reward_for_option + self.discount_factor * next_value1 - value1.detach()
 
-            # print("returns info, size %s, type %s" % (len(returns), type(returns)))
-            # print("log_probs info, size %s, type %s" % (len(log_probs), type(log_probs)))
-            # print("values info, size %s, type %s" % (len(values), type(values)))
+                # 计算高层actor的损失函数
+                if isinstance(dists1, list):
+                    expected_burst_list = [(torch.arange(1, 16).float().to(self.device) * dist1.probs) for dist1 in dists1]
+                else:
+                    expected_burst_list = [(torch.arange(1, 16).float().to(self.device) * prob) for prob in dists1.probs]
+                expected_burst = sum(expected_burst_list) / len(expected_burst_list)
+                    
+                # 计算当前时间步的惩罚项
+                penalty = expected_burst.mean()
+                high_level_policy_loss = -log_prob1 * advantage1
+                high_level_value_loss = advantage1.pow(2)
+                high_level_loss = high_level_policy_loss + 0.2 * high_level_value_loss + self.penalty_alpha * penalty# - 0.001 * entropy1 
 
-            # print("what is log_probs1 before cat: ", log_probs1)
-            # print("what is log_probs2 before cat: ", log_probs2)
-            # print("what is returns1 before cat: ", returns1)
-            # print("what is returns2 before cat: ", returns2)
-            # print("what is values1 before cat: ", values1)
-            # print("what is values2 before cat: ", values2)
-            log_probs1 = torch.cat(log_probs1)
-            log_probs2 = torch.cat(log_probs2)
-            returns1   = torch.cat(returns1).detach()
-            returns2   = torch.cat(returns2).detach()
-            values1    = torch.cat(values1)
-            values2    = torch.cat(values2)
-            # print("what is log_probs1 before cat: ", log_probs1)
-            # print("what is log_probs2 before cat: ", log_probs2)
-            # print("what is returns1 before cat: ", returns1)
-            # print("what is returns2 before cat: ", returns2)
-            # print("what is values1 before cat: ", values1)
-            # print("what is values2 before cat: ", values2)
-            
-            advantage1 = returns1 - values1
-            advantage2 = returns2 - values2
+                # 更新高层actor
+                if loader.training:
+                    self.high_level_optimizer.zero_grad()
+                    high_level_loss.backward()
+                    self.high_level_optimizer.step()
 
-            actor_loss1  = -(log_probs1 * advantage1.detach()).mean()
-            critic_loss1 = advantage1.pow(2).mean()
-            actor_loss2  = -(log_probs2 * advantage2.detach()).mean()
-            critic_loss2 = advantage2.pow(2).mean()
 
-            # 计算总惩罚
-            total_penalty = torch.stack(penalties).mean()
 
-            entropy1_final = torch.stack(entropy1_final)
-            entropy2_final = torch.stack(entropy2_final)
 
-            loss = actor_loss1 + 0.2 * actor_loss2 + 0.1 * critic_loss1 + 0.1 * critic_loss2 - 0.001 * entropy1_final.mean() - 0.001 * entropy2_final.mean() + self.alpha * total_penalty
-            # print("what is actor_loss1: ", actor_loss1)
-            # print("what is actor_loss2: ", actor_loss2)
-            # print("what is critic_loss1: ", critic_loss1)
-            # print("what is critic_loss2: ", critic_loss2)
-            # print("what is entropy1: ", entropy1)
-            # print("what is entropy2: ", entropy2)
-            # print("what is entropy2: ", entropy2)
-            # print("what is loss: ", loss)
-            # calculate metric for the initial and final burst
-            metric_initial = reward_func[self.reward_type](preds[0].clone(), data['frame_gt'].clone())
-            metric_final = reward_func[self.reward_type](preds[-1].clone(), data['frame_gt'].clone())
+                # update statistics
+                batch_size = self.settings.batch_size
+                self._update_stats({'Loss/high_level_loss': high_level_loss.item(), 'Loss/high_level_policy_loss': high_level_policy_loss.item(), 'Loss/entropy1': entropy1.item(), 'Loss/penalty': penalty.item(), 
+                                    ('%s/initial' % self.reward_type): metric_initial.item(), 
+                                    ('%s/final' % self.reward_type): metric_final.item(), "Improvement": ((metric_final.item()-metric_initial.item()))}, batch_size, loader)
 
-            # backward pass and update weights
-            if loader.training:
-                self.optimizer.zero_grad()
-                (loss).backward()
-                self.optimizer.step()
-
-            # update statistics
-            batch_size = self.settings.batch_size
-            self._update_stats({'Loss/total': loss.item(), 'Loss/actor1': actor_loss1.item(), 'Loss/critic1': critic_loss1.item(), 'Loss/entropy1': entropy1_final.mean().item(),
-                                'Loss/actor2': actor_loss2.item(), 'Loss/critic2': critic_loss2.item(), 'Loss/entropy2': entropy2_final.mean().item(), 'Loss/penalty': total_penalty.item(), ('%s/initial' % self.reward_type): metric_initial.item(), 
-                                ('%s/final' % self.reward_type): metric_final.item(), "Improvement": ((metric_final.item()-metric_initial.item()))}, batch_size, loader)
-
-            # print statistics
-            self._print_stats(i, loader, batch_size)
+                # print statistics
+                self._print_stats(i, loader, batch_size, high_level=True)
         
             if not loader.training:
                 if self.save_results:
@@ -560,14 +512,15 @@ class AgentTrainer(BaseAgentTrainer):
                 self.stats[loader.name][name] = AverageMeter()
             self.stats[loader.name][name].update(val, batch_size)
 
-    def _print_stats(self, i, loader, batch_size):
+    def _print_stats(self, i, loader, batch_size, high_level=False):
         self.num_frames += batch_size
         current_time = time.time()
         batch_fps = batch_size / (current_time - self.prev_time)
         average_fps = self.num_frames / (current_time - self.start_time)
         self.prev_time = current_time
+        tag = 'high_level' if high_level else 'low_level'
         if i % self.settings.print_interval == 0 or i == loader.__len__():
-            print_str = '[%s: %d, %d / %d] ' % (loader.name, self.epoch, i, loader.__len__())
+            print_str = '[%s(%s): %d, %d / %d] ' % (loader.name, tag, self.epoch, i, loader.__len__())
             print_str += 'FPS: %.1f (%.1f)  ,  ' % (average_fps, batch_fps)
             for name, val in self.stats[loader.name].items():
                 if (self.settings.print_stats is None or name in self.settings.print_stats) and hasattr(val, 'avg'):

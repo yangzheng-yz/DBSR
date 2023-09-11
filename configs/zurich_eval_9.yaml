@@ -1,0 +1,19 @@
+random_ccm: False
+random_gains: False
+smoothstep: False
+gamma: False
+add_noise: False
+return_rgb_burst: True
+permu_nb: 2
+crop_sz: 384
+burst_sz: 4
+downsample_factor: 4
+random_pixelshift: False
+calculate_loss: True
+
+ckpt_path: /mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/checkpoints/pvnet/train_optimal_shiftv7/best.pth.tar
+dataset_path: /mnt/samsung/zheng/downloaded_datasets/zheng_ccvl2/SyntheticDataset
+save_path: /mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/viz_results/dbsr_optimal_shift2
+specify_image_id: -1 # -1
+save_results: True
+split: val

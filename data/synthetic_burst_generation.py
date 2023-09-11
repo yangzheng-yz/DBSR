@@ -124,10 +124,16 @@ def rgb2rawburstdatabase(image, burst_size, downsample_factor=1, burst_transform
         image_processing_params = {}
 
     _defaults = {'random_ccm': True, 'random_gains': True, 'smoothstep': True, 'gamma': True, 'add_noise': True}
+
+        
     for k, v in _defaults.items():
         if k not in image_processing_params:
             image_processing_params[k] = v
-
+    if isinstance(image_name, dict):
+        # print("image_name is not None!!!!!!!!!!!!")
+        for k, _ in image_processing_params.items():
+            if k in image_name.keys():
+                image_processing_params[k] = False
     # Sample camera pipeline params
     if image_processing_params['random_ccm']:
         if image_processing_params.get('predefined_params', None) is not None:
@@ -200,10 +206,12 @@ def rgb2rawburstdatabase(image, burst_size, downsample_factor=1, burst_transform
 
     # Clip saturated pixels.
     image_burst = image_burst.clamp(0.0, 1.0)
-
-    meta_info = {'rgb2cam': rgb2cam, 'cam2rgb': cam2rgb, 'rgb_gain': rgb_gain, 'red_gain': red_gain,
-                 'blue_gain': blue_gain, 'smoothstep': use_smoothstep, 'gamma': use_gamma,
-                 'shot_noise_level': shot_noise_level, 'read_noise_level': read_noise_level}
+    if isinstance(image_name, dict):
+        meta_info = image_name
+    else:
+        meta_info = {'rgb2cam': rgb2cam, 'cam2rgb': cam2rgb, 'rgb_gain': rgb_gain, 'red_gain': red_gain,
+                    'blue_gain': blue_gain, 'smoothstep': use_smoothstep, 'gamma': use_gamma,
+                    'shot_noise_level': shot_noise_level, 'read_noise_level': read_noise_level}
     return image_burst, image, image_burst_rgb, flow_vectors, meta_info
 
 def burstrgb2raw(image_burst_rgb, image_gt=None, downsample_factor=1,
