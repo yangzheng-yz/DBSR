@@ -31,7 +31,7 @@ class MultiHeadAttention(nn.Module):
         output = self.fc_out(attention_output)
         return output
 class ActorCritic(nn.Module):
-    def __init__(self, num_frames, num_channels, hidden_size, height, width):
+    def __init__(self, num_frames, num_channels, hidden_size, height=0, width=0):
         super(ActorCritic, self).__init__()
         
         # Actor Network
@@ -41,7 +41,6 @@ class ActorCritic(nn.Module):
             nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
             nn.ReLU()
         )
-        self.LSTM_channels = num_channels * height * width
         self.actor_lstm = nn.LSTM(147456, hidden_size, batch_first=True)
         self.actor_linear = nn.Linear(hidden_size, 5 * (num_frames - 1))
         

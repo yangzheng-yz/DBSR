@@ -1,5 +1,5 @@
 # This version try to use loss descent and timestep 8, 
-# large training set,
+# small training set,
 # two agent trained together, agent1 and agent2 perform once together,
 # initial state is 00 02 22 20,
 # then use loss = actor_loss1 + 0.2 * actor_loss2 + 0.1 * critic_loss1 + 0.1 * critic_loss2 - 0.001 * entropy1_final.mean() - 0.001 * entropy2_final.mean() + self.alpha * total_penalty

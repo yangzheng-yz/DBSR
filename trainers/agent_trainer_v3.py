@@ -440,7 +440,7 @@ class AgentTrainer(BaseAgentTrainer):
                 else:
                     expected_burst_list = [(torch.arange(1, 16).float().to(self.device) * prob) for prob in dists1.probs]
                 expected_burst = sum(expected_burst_list) / len(expected_burst_list)
-                    
+                
                 # 计算当前时间步的惩罚项
                 penalty = expected_burst.mean()
                 high_level_policy_loss = -log_prob1 * advantage1
@@ -458,7 +458,7 @@ class AgentTrainer(BaseAgentTrainer):
 
                 # update statistics
                 batch_size = self.settings.batch_size
-                self._update_stats({'Loss/high_level_loss': high_level_loss.item(), 'Loss/high_level_policy_loss': high_level_policy_loss.item(), 'Loss/entropy1': entropy1.item(), 'Loss/penalty': penalty.item(), 
+                self._update_stats({'Loss/high_level_loss': high_level_loss.item(), 'Loss/high_level_policy_loss': high_level_policy_loss.item(),'Loss/high_level_value_loss': high_level_value_loss.item(), 'Loss/entropy1': entropy1.item(), 'Loss/penalty': penalty.item(), 
                                     ('%s/initial' % self.reward_type): metric_initial.item(), 
                                     ('%s/final' % self.reward_type): metric_final.item(), "Improvement": ((metric_final.item()-metric_initial.item()))}, batch_size, loader)
 
@@ -531,7 +531,7 @@ class AgentTrainer(BaseAgentTrainer):
         # Record learning rate
         for loader in self.loaders:
             if loader.training:
-                lr_list = self.lr_scheduler.get_lr()
+                lr_list = self.high_level_lr_scheduler.get_lr()
                 for i, lr in enumerate(lr_list):
                     var_name = 'LearningRate/group{}'.format(i)
                     if var_name not in self.stats[loader.name].keys():
