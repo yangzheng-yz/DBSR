@@ -147,31 +147,8 @@ def run(settings):
     sr_encoder = dbsr_net.encoder
     sr_merging = dbsr_net.merging
     
-    actor = dbsr_actors.ActorCritic_v2(num_frames=3, hidden_size=5)
-    
-    # load pre_actor
-    pre_actor = dbsr_actors.ActorCritic(num_frames=settings.burst_sz, num_channels=4, hidden_size=5)
-    checkpoint_dict = torch.load('/mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/checkpoints/dbsr/debug_psnetv12_old/ActorCritic_ep0052.pth.tar')
-    net_type = type(pre_actor).__name__
-    assert net_type == checkpoint_dict['net_type'], 'Network is not of correct type.'
-    fields = checkpoint_dict.keys()
-    ignore_fields = ['settings']
-    ignore_fields.extend(['lr_scheduler', 'constructor', 'net_type', 'actor_type', 'net_info'])
-        # Load all fields
-    for key in fields:
-        if key in ignore_fields:
-            continue
-        if key == 'net':
-            pre_actor.load_state_dict(checkpoint_dict[key])
-        # elif key == 'optimizer':
-        #     self.optimizer.load_state_dict(checkpoint_dict[key])
-        # else:
-        #     setattr(self, key, checkpoint_dict[key])
+    actor = dbsr_actors.ActorCritic_v2(num_frames=2, hidden_size=5)
 
-    if 'net_info' in checkpoint_dict and checkpoint_dict['net_info'] is not None:
-        net.info = checkpoint_dict['net_info']
-    
-    
     # optimizer = optim.Adam(actor.parameters())
 
     optimizer = optim.Adam([{'params': actor.parameters(), 'lr': 1e-4}],
@@ -180,7 +157,7 @@ def run(settings):
     lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.2)
     trainer = AgentTrainer(actor, [loader_train, loader_val], optimizer, settings, lr_scheduler=lr_scheduler, 
                                sr_net=dbsr_net, iterations=4, reward_type='psnr',
-                               discount_factor=0.99, init_permutation=None, objective_burst_num=4, pre_init_permutation=init_permutation,
-                               tolerance=0.5, pre_actor=pre_actor)
+                               discount_factor=0.99, init_permutation=init_permutation, objective_burst_num=4, pre_init_permutation=None,
+                               tolerance=0.2)
 
     trainer.train(100, load_latest=True, fail_safe=True) # (epoch, )

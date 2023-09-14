@@ -55,7 +55,7 @@ def run(settings):
     set_seed(42)
 
     settings.description = 'Default settings for training DBSR models on synthetic burst dataset(NightCity) with step(6), amplify factor(4), crop size(384,384), random translation'
-    settings.batch_size = 32
+    settings.batch_size = 16
     settings.num_workers = 16
     settings.multi_gpu = False
     settings.print_interval = 1
@@ -158,6 +158,6 @@ def run(settings):
     trainer = AgentTrainer(actor, [loader_train, loader_val], optimizer, settings, lr_scheduler=lr_scheduler, 
                                sr_net=dbsr_net, iterations=4, reward_type='psnr',
                                discount_factor=0.99, init_permutation=init_permutation, objective_burst_num=4, pre_init_permutation=None,
-                               tolerance=0.5)
+                               tolerance=0)
 
     trainer.train(100, load_latest=True, fail_safe=True) # (epoch, )

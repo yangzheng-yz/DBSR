@@ -259,10 +259,10 @@ class AgentTrainer(BaseAgentTrainer):
         self.initial_psnr_sum += initial_psnr
         self.final_psnr_sum += final_psnr
 
-    def generate_objective(self, pre_actor, frame_gt, objective_burst_num=4, pre_actor_step=4, pre_init_permutation=None):
+    def generate_objective(self, pre_actor, frame_gt, pre_actor_step=4, pre_init_permutation=None):
         print("You can see this message cause you used the pre_actor function!")
         
-        state = self.apply_actions_to_env(frame_gt, pre_init_permutation)
+        state = self.apply_actions_to_env(frame_gt, pre_init_permutation.clone())
         permutations = pre_init_permutation.clone()
         
         for it in range(pre_actor_step):
@@ -304,13 +304,11 @@ class AgentTrainer(BaseAgentTrainer):
             masks     = []
             preds     = []
             entropy   = 0
-            with torch.no_grad():
-                pred, _   = self.sr_net(data['burst'])
-            preds.append(pred.clone())
+
 
             if self.init_permutation is not None:
                 permutations = torch.tensor(self.init_permutation).repeat(batch_size, 1, 1)
-                state = data['burst'].clone()
+                state = self.apply_actions_to_env(data['frame_gt'].clone(), permutations.clone())
             else:
                 assert self.pre_actor is not None, "Need a pre actor to produce objective permutation."
                 self.pre_actor.to(self.device)
@@ -322,11 +320,15 @@ class AgentTrainer(BaseAgentTrainer):
                                                                 [2,0]
                                                             ])).repeat(batch_size, 1, 1)
                 else:
-                    self.pre_init_permutation = torch.tensor(self.pre_init_permutation).repeat(batch_size, 1, 1)
+                    pre_init_permutation = torch.tensor(self.pre_init_permutation).repeat(batch_size, 1, 1)
                 permutations, state = self.generate_objective(self.pre_actor, data['frame_gt'].clone(), 
-                                                             objective_burst_num=self.objective_burst_num,
-                                                             pre_actor_step=self.pre_actor_step, pre_init_permutation=self.pre_init_permutation)
+                                                                pre_actor_step=self.pre_actor_step, pre_init_permutation=pre_init_permutation)
+            with torch.no_grad():
+                pred, _   = self.sr_net(state)
+            print("check 1 ok!")
+            preds.append(pred.clone())
             permutations = permutations[:, 0:self.actor.num_frames].clone()
+            print("check 2 ok!")
             # print("what is permutations: ", permutations.size())
             if self.reward_type == 'psnr':
                 reward_func = {'psnr': PSNR(boundary_ignore=40)}
@@ -339,24 +341,32 @@ class AgentTrainer(BaseAgentTrainer):
             # print("device of state: ", state.size())
             for it in range(self.iterations):
                 dists, value = self.actor(state)
+                print("check 3_%s ok!" % it)
                 next_state, actions, permutations = self.step_environment(dists, data['frame_gt'].clone(), permutations.clone())
+                print("check 4_%s ok!" % it)
+                print("next_state: ", next_state.size())
                 # updates preds and calculate reward
                 with torch.no_grad():
                     # print("device of model: ", next(self.sr_net.parameters()).device)
                     # print("device of nextstate: ", next_state.size())
                     pred, _ = self.sr_net(next_state.clone())
+                print("check 5_%s ok!" % it)
                 preds.append(pred.clone())
 
                 reward = self._calculate_reward(data['frame_gt'], preds[-1], preds[-2], reward_func=reward_func, batch=True, tolerance=self.tolerance)
+                print("check 6_%s ok!" % it)
                 # print("what is actions: ", actions.device)
                 # print("what is dist: ", dists[0].device)
 
                 log_prob = dists[0].log_prob(actions[:, 0])
                 for id in range(1,len(dists)):
                     log_prob += dists[id].log_prob(actions[:, id])
+                print("check 7_%s ok!" % it)
+                # print("dists: ", dists[0].probs)
                 for dist in dists:
                     entropy += dist.entropy().mean()
                 entropy = entropy / (len(dists) - 1)    
+                print("check 8_%s ok!" % it)
 
                 rewards.append(reward) # (timestep, batch_size, 1)
                 log_probs.append(log_prob) # (timestep, batch, )
@@ -364,12 +374,15 @@ class AgentTrainer(BaseAgentTrainer):
                 
                 state = next_state.clone()
             entropy = entropy / self.iterations
+            print("check 9 ok!")
             _, next_value = self.actor(state)
+            print("check 10 ok!")
             # print("what is the output: ", type(next_value))
             # print("what is the next_value1: ", type(next_value))
             # print("what is the rewards: ", type(rewards))
             # print("what is the discount_factor: ", type(discount_factor))
             returns = self.compute_returns(next_value, rewards, gamma=discount_factor)
+            print("check 11 ok!")
             # print("returns info, size %s, type %s" % (len(returns), type(returns)))
             # print("log_probs info, size %s, type %s" % (len(log_probs), type(log_probs)))
             # print("values info, size %s, type %s" % (len(values), type(values)))
@@ -389,7 +402,8 @@ class AgentTrainer(BaseAgentTrainer):
             actor_loss  = -(log_probs * advantage.detach()).mean()
             critic_loss = advantage.pow(2).mean()
 
-            loss = actor_loss + 0.5 * critic_loss - 0.001 * entropy
+            loss = actor_loss + 0.5 * critic_loss - 0.01 * entropy # 0.001
+            print("check 12 ok!")
             # print("what is actor_loss: ", actor_loss)
             # print("what is critic_loss: ", critic_loss)
             # print("what is entropy: ", entropy)
@@ -402,6 +416,7 @@ class AgentTrainer(BaseAgentTrainer):
                 self.optimizer.zero_grad()
                 (loss).backward()
                 self.optimizer.step()
+            print("check 13 ok!")
 
             # update statistics
             batch_size = self.settings.batch_size

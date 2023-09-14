@@ -28,7 +28,7 @@ import numpy as np
 import torch
 import pickle as pkl
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
@@ -147,7 +147,7 @@ def run(settings):
     sr_encoder = dbsr_net.encoder
     sr_merging = dbsr_net.merging
     
-    actor = dbsr_actors.ActorCritic_v2(num_frames=3, hidden_size=5)
+    actor = dbsr_actors.ActorCritic_v2(num_frames=2, hidden_size=5)
     
     # load pre_actor
     pre_actor = dbsr_actors.ActorCritic(num_frames=settings.burst_sz, num_channels=4, hidden_size=5)

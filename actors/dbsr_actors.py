@@ -19,6 +19,66 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Categorical
 
+class ResNet18(nn.Module):
+    def __init__(self, in_channels):
+        super(ResNet18, self).__init__()
+        self.resnet = torch.hub.load('pytorch/vision', 'resnet18', pretrained=False)
+        self.resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
+
+    def forward(self, x):
+        x = self.resnet.conv1(x)
+        x = self.resnet.bn1(x)
+        x = self.resnet.relu(x)
+        x = self.resnet.maxpool(x)
+        x = self.resnet.layer1(x)
+        x = self.resnet.layer2(x)
+        x = self.resnet.layer3(x)
+        x = self.resnet.layer4(x)
+        return x
+
+class ActorCritic_v3(nn.Module):
+    def __init__(self, num_frames, hidden_size):
+        super(ActorCritic_v3, self).__init__()
+        
+        # Shared ResNet Feature Extractor
+        self.shared_resnet = ResNet18(in_channels=4)
+        
+        # Actor Network
+        self.actor_lstm = nn.LSTM(512, hidden_size, batch_first=True)
+        self.actor_linear = nn.Linear(hidden_size, 5 * (num_frames-1))
+        self.num_frames = num_frames
+        
+        # Critic Network
+        self.critic_linear = nn.Linear(512, 1)
+
+    def forward(self, x):
+        batch_size, num_frames, channels, height, width = x.size()
+        actor_states, critic_states = self._forward_single(x)
+        
+        # Actor
+        _, (h_n, _) = self.actor_lstm(actor_states)
+        action_logits = self.actor_linear(h_n.squeeze(0))
+        action_logits = action_logits.view(batch_size, self.num_frames - 1, 5)
+        
+        probs = F.softmax(action_logits, dim=-1)
+        dists = [Categorical(p) for p in probs.split(1, dim=1)]
+        
+        # Critic
+        critic_states = critic_states.view(batch_size, num_frames, -1).mean(dim=1) # Average over frames
+        value = self.critic_linear(critic_states)
+        
+        return dists, value
+
+    def _forward_single(self, x):
+        batch_size, num_frames, channels, height, width = x.size()
+        x = x.view(-1, channels, height, width)  # Flatten frames and batch
+        
+        # Shared feature extraction
+        x_shared = self.shared_resnet(x)
+        x_shared = F.adaptive_avg_pool2d(x_shared, (1, 1)).view(batch_size, num_frames, -1)  # Apply GAP and reshape
+
+        return x_shared, x_shared
+
 class MultiHeadAttention(nn.Module):
     def __init__(self, input_dim, output_dim, num_heads):
         super(MultiHeadAttention, self).__init__()
@@ -105,7 +165,9 @@ class ActorCritic_v2(nn.Module):
         _, (h_n, _) = self.actor_lstm(actor_states)
         action_logits = self.actor_linear(h_n.squeeze(0))
         action_logits = action_logits.view(batch_size, self.num_frames - 1, 5)
-        # print("what is critic_states: ", critic_states.size())
+        print("what is x: ", x)
+        print("what is actor_states: ", actor_states)
+        print("what is h_n: ", h_n)
         probs = F.softmax(action_logits, dim=-1)
         # print("prob:", probs.size())
         # print(probs.split(1, dim=1))
@@ -123,6 +185,8 @@ class ActorCritic_v2(nn.Module):
         
         # Shared feature extraction
         x_shared = self.shared_resnet(x)
+        print("what is x_shared: ", x_shared)
+
         x_shared = F.adaptive_avg_pool2d(x_shared, (1, 1)).view(batch_size, num_frames, -1)  # Apply GAP and reshape
 
         return x_shared, x_shared
