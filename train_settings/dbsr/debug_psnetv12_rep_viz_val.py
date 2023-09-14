@@ -74,20 +74,14 @@ def run(settings):
                                         'random_pixelshift': False,
                                         'specified_translation': permutation}
 
-    f = open("/home/yutong/zheng/projects/dbsr_rl/DBSR/util_scripts/zurich_test_meta_infos.pkl", 'rb')
-    meta_infos_val = pkl.load(f)
-    f.close()
-
     settings.burst_reference_aligned = True
     settings.image_processing_params = {'random_ccm': True, 'random_gains': True, 'smoothstep': True, 'gamma': True, 'add_noise': True}
-    image_processing_params_val = {'random_ccm': True, 'random_gains': True, 'smoothstep': True, 'gamma': True, 'add_noise': True, 'predefined_params': meta_infos_val}
-
 
     zurich_raw2rgb_train = datasets.ZurichRAW2RGB(split='train')
-    zurich_raw2rgb_val = datasets.ZurichRAW2RGB(split='test')  
+    zurich_raw2rgb_val = datasets.ZurichRAW2RGB(split='val')  
 
     transform_train = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True), tfm.RandomHorizontalFlip())
-    transform_val = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True), tfm.RandomHorizontalFlip())
+    transform_val = tfm.Transform(tfm.ToTensor(normalize=True, val=True))
 
     data_processing_train = processing.SyntheticBurstDatabaseProcessing(settings.crop_sz, settings.burst_sz,
                                                                 settings.downsample_factor,
@@ -99,7 +93,7 @@ def run(settings):
                                                               settings.downsample_factor,
                                                               burst_transformation_params=burst_transformation_params_val,
                                                               transform=transform_val,
-                                                              image_processing_params=image_processing_params_val,
+                                                              image_processing_params=settings.image_processing_params,
                                                               random_crop=False,
                                                               return_rgb_busrt=True)
 
@@ -118,30 +112,15 @@ def run(settings):
     print("train dataset length: ", len(loader_train))
     print("val dataset length: ", len(loader_val)) 
 
-    dbsr_net = dbsr_nets.dbsrnet_cvpr2021(enc_init_dim=64, enc_num_res_blocks=9, enc_out_dim=512,
-                                     dec_init_conv_dim=64, dec_num_pre_res_blocks=5,
-                                     dec_post_conv_dim=32, dec_num_post_res_blocks=4,
-                                     upsample_factor=settings.downsample_factor * 2,
-                                     offset_feat_dim=64,
-                                     weight_pred_proj_dim=64,
-                                     num_weight_predictor_res=3,
-                                     gauss_blur_sd=1.0,
-                                     icnrinit=True
-                                     )
-
     # Wrap the network for multi GPU training
     if settings.multi_gpu:
         net = MultiGPU(net, dim=0)
 
-    objective = {'rgb': PixelWiseError(metric='l1', boundary_ignore=40), 'psnr': PSNR(boundary_ignore=40)}
 
-    loss_weight = {'rgb': 1.0}
 
     # 获取encoder部分
-    dbsr_net = load_network('/home/yutong/zheng/projects/dbsr_rl/DBSR/pretrained_networks/dbsr_synthetic_default.pth')
+    dbsr_net = load_network('/mnt/samsung/zheng/downloaded_datasets/zheng_ccvl2/training_results_rep/checkpoints/deeprep/sr_synthetic_default/DeepRepNet_ep0141.pth.tar')
 
-    sr_encoder = dbsr_net.encoder
-    sr_merging = dbsr_net.merging
     
     actor = dbsr_actors.ActorCritic(num_frames=settings.burst_sz, num_channels=4, hidden_size=5)
 
@@ -153,6 +132,6 @@ def run(settings):
     lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=40, gamma=0.2)
     trainer = AgentTrainer(actor, [loader_val], optimizer, settings, lr_scheduler=lr_scheduler, 
                                sr_net=dbsr_net, iterations=4, reward_type='psnr',
-                               discount_factor=0.99, save_results=True, saving_dir="/mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/viz_results/debug_psnetv12_viz_epoch24_new0913")
+                               discount_factor=0.99, save_results=True, saving_dir="/mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/viz_results/debug_psnetv12_rep_viz_val_ep0024_new0913")
 
     trainer.train(1000, load_latest=False, fail_safe=True, checkpoint="/mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/checkpoints/dbsr/debug_psnetv12/ActorCritic_ep0024.pth.tar") # (epoch, )

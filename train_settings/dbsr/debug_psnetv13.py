@@ -28,22 +28,40 @@ import numpy as np
 import torch
 import pickle as pkl
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
 # torch.backends.cudnn.enabled = True
 # torch.backends.cudnn.benchmark = True
-
+def set_seed(seed_value=42):
+    """Set seed for reproducibility."""
+    import random
+    import numpy as np
+    import torch
+    
+    random.seed(seed_value)
+    np.random.seed(seed_value)
+    torch.manual_seed(seed_value)
+    
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed_value)
+        torch.cuda.manual_seed_all(seed_value)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+        
 def run(settings):
+    set_seed(42)
+
     settings.description = 'Default settings for training DBSR models on synthetic burst dataset(NightCity) with step(6), amplify factor(4), crop size(384,384), random translation'
-    settings.batch_size = 1
+    settings.batch_size = 32
     settings.num_workers = 16
     settings.multi_gpu = False
     settings.print_interval = 1
 
     settings.crop_sz = (384, 384)
+    # settings.crop_sz = (448, 448)
     settings.burst_sz = 4
     settings.downsample_factor = 4 # TODO: need to revise to 4?
 
@@ -52,7 +70,7 @@ def run(settings):
     #                                         'max_shear': 0.0,
     #                                         'max_scale': 0.0,
     #                                         'border_crop': 24}
-    permutation = np.array([
+    init_permutation = np.array([
         [0,0],
         [0,2],
         [2,2],
@@ -65,29 +83,27 @@ def run(settings):
                                         'max_scale': 0.0,
                                         # 'border_crop': 24,
                                         'random_pixelshift': False,
-                                        'specified_translation': permutation}
+                                        'specified_translation': init_permutation}
     burst_transformation_params_val = {'max_translation': 3.0,
                                         'max_rotation': 0.0,
                                         'max_shear': 0.0,
                                         'max_scale': 0.0,
                                         # 'border_crop': 24,
                                         'random_pixelshift': False,
-                                        'specified_translation': permutation}
-
+                                        'specified_translation': init_permutation}
     f = open("/home/yutong/zheng/projects/dbsr_rl/DBSR/util_scripts/zurich_test_meta_infos.pkl", 'rb')
     meta_infos_val = pkl.load(f)
     f.close()
-
+    
     settings.burst_reference_aligned = True
     settings.image_processing_params = {'random_ccm': True, 'random_gains': True, 'smoothstep': True, 'gamma': True, 'add_noise': True}
     image_processing_params_val = {'random_ccm': True, 'random_gains': True, 'smoothstep': True, 'gamma': True, 'add_noise': True, 'predefined_params': meta_infos_val}
-
 
     zurich_raw2rgb_train = datasets.ZurichRAW2RGB(split='train')
     zurich_raw2rgb_val = datasets.ZurichRAW2RGB(split='test')  
 
     transform_train = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True), tfm.RandomHorizontalFlip())
-    transform_val = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True), tfm.RandomHorizontalFlip())
+    transform_val = tfm.Transform(tfm.ToTensor(normalize=True))
 
     data_processing_train = processing.SyntheticBurstDatabaseProcessing(settings.crop_sz, settings.burst_sz,
                                                                 settings.downsample_factor,
@@ -100,8 +116,7 @@ def run(settings):
                                                               burst_transformation_params=burst_transformation_params_val,
                                                               transform=transform_val,
                                                               image_processing_params=image_processing_params_val,
-                                                              random_crop=False,
-                                                              return_rgb_busrt=True)
+                                                              random_crop=False)
 
     # Train sampler and loader
     dataset_train = sampler.RandomImage([zurich_raw2rgb_train], [1],
@@ -118,17 +133,6 @@ def run(settings):
     print("train dataset length: ", len(loader_train))
     print("val dataset length: ", len(loader_val)) 
 
-    dbsr_net = dbsr_nets.dbsrnet_cvpr2021(enc_init_dim=64, enc_num_res_blocks=9, enc_out_dim=512,
-                                     dec_init_conv_dim=64, dec_num_pre_res_blocks=5,
-                                     dec_post_conv_dim=32, dec_num_post_res_blocks=4,
-                                     upsample_factor=settings.downsample_factor * 2,
-                                     offset_feat_dim=64,
-                                     weight_pred_proj_dim=64,
-                                     num_weight_predictor_res=3,
-                                     gauss_blur_sd=1.0,
-                                     icnrinit=True
-                                     )
-
     # Wrap the network for multi GPU training
     if settings.multi_gpu:
         net = MultiGPU(net, dim=0)
@@ -143,16 +147,17 @@ def run(settings):
     sr_encoder = dbsr_net.encoder
     sr_merging = dbsr_net.merging
     
-    actor = dbsr_actors.ActorCritic(num_frames=settings.burst_sz, num_channels=4, hidden_size=5)
+    actor = dbsr_actors.ActorCritic_v2(num_frames=3, hidden_size=5)
 
     # optimizer = optim.Adam(actor.parameters())
 
     optimizer = optim.Adam([{'params': actor.parameters(), 'lr': 1e-4}],
                            lr=2e-4)
 
-    lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=40, gamma=0.2)
-    trainer = AgentTrainer(actor, [loader_val], optimizer, settings, lr_scheduler=lr_scheduler, 
+    lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.2)
+    trainer = AgentTrainer(actor, [loader_train, loader_val], optimizer, settings, lr_scheduler=lr_scheduler, 
                                sr_net=dbsr_net, iterations=4, reward_type='psnr',
-                               discount_factor=0.99, save_results=True, saving_dir="/mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/viz_results/debug_psnetv12_viz_epoch24_new0913")
+                               discount_factor=0.99, init_permutation=init_permutation, objective_burst_num=4, pre_init_permutation=None,
+                               tolerance=0.5)
 
-    trainer.train(1000, load_latest=False, fail_safe=True, checkpoint="/mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/checkpoints/dbsr/debug_psnetv12/ActorCritic_ep0024.pth.tar") # (epoch, )
+    trainer.train(100, load_latest=True, fail_safe=True) # (epoch, )

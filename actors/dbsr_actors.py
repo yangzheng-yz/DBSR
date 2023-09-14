@@ -33,7 +33,7 @@ class MultiHeadAttention(nn.Module):
 class ActorCritic(nn.Module):
     def __init__(self, num_frames, num_channels, hidden_size, height=0, width=0):
         super(ActorCritic, self).__init__()
-        
+        self.num_frames = num_frames
         # Actor Network
         self.actor_conv = nn.Sequential(
             nn.Conv2d(num_channels, 32, kernel_size=3, stride=1, padding=1),
@@ -54,17 +54,17 @@ class ActorCritic(nn.Module):
         self.critic_linear = nn.Linear(147456, 1) # [4,4,96,96]
 
     def forward(self, x):
-        batch_size, num_frames, channels, height, width = x.size()
+        batch_size, _num_frames, channels, height, width = x.size()
         
         x = x.view(-1, channels, height, width)  # Reshape to [batch_size*num_frames, channels, height, width]
         
         # Actor
         x_actor = self.actor_conv(x)
         
-        x_actor = x_actor.view(batch_size, num_frames, -1)  # Reshape back to [batch_size, num_frames, features]
+        x_actor = x_actor.view(batch_size, _num_frames, -1)  # Reshape back to [batch_size, num_frames, features]
         _, (h_n, _) = self.actor_lstm(x_actor)
         action_logits = self.actor_linear(h_n.squeeze(0))
-        action_logits = action_logits.view(batch_size, num_frames - 1, 5)  # Reshape to [batch_size, num_frames-1, 5]
+        action_logits = action_logits.view(batch_size, self.num_frames - 1, 5)  # Reshape to [batch_size, num_frames-1, 5]
         probs = F.softmax(action_logits, dim=-1)
         # print("prob:", probs.size())
         # print(probs.split(1, dim=1))
@@ -72,10 +72,61 @@ class ActorCritic(nn.Module):
         
         # Critic
         x_critic = self.critic_conv(x)
-        x_critic = x_critic.view(batch_size, num_frames, -1).mean(dim=1)  # Average over frames
+        x_critic = x_critic.view(batch_size, self.num_frames, -1).mean(dim=1)  # Average over frames
         value = self.critic_linear(x_critic)
         
         return dists, value
+
+class ActorCritic_v2(nn.Module):
+    def __init__(self, num_frames, hidden_size):
+        super(ActorCritic_v2, self).__init__()
+        
+        # Shared ResNet Feature Extractor
+        self.shared_resnet = torch.nn.Sequential(
+            torch.nn.Conv2d(4, 64, kernel_size=3, stride=1, padding=1),
+            torch.nn.BatchNorm2d(64),
+            torch.nn.ReLU(),
+            torch.nn.MaxPool2d(kernel_size=2, stride=2)
+        )
+        
+        # Actor Network
+        self.actor_lstm = torch.nn.LSTM(64, hidden_size, batch_first=True)
+        self.actor_linear = torch.nn.Linear(hidden_size, 5 * (num_frames-1))
+        self.num_frames = num_frames
+        
+        # Critic Network
+        self.critic_linear = torch.nn.Linear(64, 1)
+
+    def forward(self, x):
+        batch_size, num_frames, channels, height, width = x.size()
+        actor_states, critic_states = self._forward_single(x)
+        
+        # Actor
+        _, (h_n, _) = self.actor_lstm(actor_states)
+        action_logits = self.actor_linear(h_n.squeeze(0))
+        action_logits = action_logits.view(batch_size, self.num_frames - 1, 5)
+        # print("what is critic_states: ", critic_states.size())
+        probs = F.softmax(action_logits, dim=-1)
+        # print("prob:", probs.size())
+        # print(probs.split(1, dim=1))
+        dists = [Categorical(p) for p in probs.split(1, dim=1)]
+        # print("in DynamicActorCritic[tensor] [probs]: \n", probs.size())
+        # Critic
+        critic_states = critic_states.view(batch_size, num_frames, -1).mean(dim=1) # Average over frames
+        value = self.critic_linear(critic_states)  
+        
+        return dists, value
+
+    def _forward_single(self, x):
+        batch_size, num_frames, channels, height, width = x.size()
+        x = x.view(-1, channels, height, width)  # Flatten frames and batch
+        
+        # Shared feature extraction
+        x_shared = self.shared_resnet(x)
+        x_shared = F.adaptive_avg_pool2d(x_shared, (1, 1)).view(batch_size, num_frames, -1)  # Apply GAP and reshape
+
+        return x_shared, x_shared
+
 
 from torchvision.models import resnet18
 
@@ -146,6 +197,7 @@ class DynamicActorCritic(nn.Module):
         x_shared = F.adaptive_avg_pool2d(x_shared, (1, 1)).view(batch_size, num_frames, -1)  # Apply GAP and reshape
 
         return x_shared, x_shared
+
 class DynamicActorCriticWithSize(nn.Module):
     def __init__(self, hidden_size):
         super(DynamicActorCriticWithSize, self).__init__()

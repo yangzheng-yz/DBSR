@@ -34,7 +34,8 @@ class AgentTrainer(BaseAgentTrainer):
     def __init__(self, actor, loaders, optimizer, settings, 
                  init_permutation=None, discount_factor=0.99, sr_net=None, 
                  lr_scheduler=None, iterations=15, 
-                 interpolation_type='bilinear', reward_type='psnr', save_results=False, saving_dir=None):
+                 interpolation_type='bilinear', reward_type='psnr', save_results=False, saving_dir=None, objective_burst_num=4,
+                 pre_actor_step=4, pre_init_permutation=None, tolerance=0.5, pre_actor=None):
         """
         args:
             actor - The actor for training the network
@@ -81,6 +82,13 @@ class AgentTrainer(BaseAgentTrainer):
         self.final_psnr_sum = 0
         
         self.saving_dir = saving_dir
+        
+        self.objective_burst_num = objective_burst_num
+        
+        self.pre_actor_step = pre_actor_step
+        self.pre_init_permutation = pre_init_permutation
+        self.tolerance = tolerance
+        self.pre_actor = pre_actor
         
         
     def _set_default_settings(self):
@@ -177,6 +185,7 @@ class AgentTrainer(BaseAgentTrainer):
         device = HR_batch.device
         # images = images.cpu()
         batch_size = HR_batch.size(0)
+        # print("permutations_batch: ", permutations_batch)
         burst_size = permutations_batch.size(1)
         # print("permutations_batch.size(1): ", permutations_batch.size())
         transformed_images = []
@@ -200,13 +209,13 @@ class AgentTrainer(BaseAgentTrainer):
         
         return transformed_images_stacked
 
-    def _calculate_reward(self, frame_gt, pred_current, pred_last, reward_func=None, batch=True):
+    def _calculate_reward(self, frame_gt, pred_current, pred_last, reward_func=None, batch=True, tolerance=0.5):
         """Calculate the reward as the difference of PSNR between current and last prediction."""
         assert reward_func is not None and reward_func != 'ssim', "You must specify psnr."
         if self.reward_type == 'psnr':
             metric_current = reward_func[self.reward_type](pred_current, frame_gt, batch=batch)
             metric_last = reward_func[self.reward_type](pred_last, frame_gt, batch=batch)
-            reward_difference = [curr - last for curr, last in zip(metric_current, metric_last)]
+            reward_difference = [curr - last + tolerance for curr, last in zip(metric_current, metric_last)]
             reward_tensor = torch.stack(reward_difference).unsqueeze(1).to(self.device)
         elif self.reward_type == 'ssim':
             metric_current = reward_func[self.reward_type](pred_current, frame_gt)
@@ -249,7 +258,21 @@ class AgentTrainer(BaseAgentTrainer):
         cv2.imwrite('{}/{}_SR_final.png'.format(saving_dir, name), SR_final_image)
         self.initial_psnr_sum += initial_psnr
         self.final_psnr_sum += final_psnr
-  
+
+    def generate_objective(self, pre_actor, frame_gt, objective_burst_num=4, pre_actor_step=4, pre_init_permutation=None):
+        print("You can see this message cause you used the pre_actor function!")
+        
+        state = self.apply_actions_to_env(frame_gt, pre_init_permutation)
+        permutations = pre_init_permutation.clone()
+        
+        for it in range(pre_actor_step):
+            print("What is the permutations: ", permutations.size())
+            with torch.no_grad():
+                dists, value = pre_actor(state)
+            next_state, actions, permutations = self.step_environment(dists, frame_gt.clone(), permutations.clone())
+            state = next_state.clone()
+        return permutations, state
+
     def cycle_dataset(self, loader):
         """Do a cycle of training or validation."""
 
@@ -280,19 +303,31 @@ class AgentTrainer(BaseAgentTrainer):
             rewards   = []
             masks     = []
             preds     = []
-            entropy   =  0
+            entropy   = 0
             with torch.no_grad():
                 pred, _   = self.sr_net(data['burst'])
             preds.append(pred.clone())
 
             if self.init_permutation is not None:
                 permutations = torch.tensor(self.init_permutation).repeat(batch_size, 1, 1)
+                state = data['burst'].clone()
             else:
-                permutations = torch.tensor(np.array([[0,0],
-                                            [0,2],
-                                            [2,2],
-                                            [2,0]])).repeat(batch_size, 1, 1)
-            
+                assert self.pre_actor is not None, "Need a pre actor to produce objective permutation."
+                self.pre_actor.to(self.device)
+                if self.pre_init_permutation is None:
+                    self.pre_init_permutation = torch.tensor(np.array([
+                                                                [0,0],
+                                                                [0,2],
+                                                                [2,2],
+                                                                [2,0]
+                                                            ])).repeat(batch_size, 1, 1)
+                else:
+                    self.pre_init_permutation = torch.tensor(self.pre_init_permutation).repeat(batch_size, 1, 1)
+                permutations, state = self.generate_objective(self.pre_actor, data['frame_gt'].clone(), 
+                                                             objective_burst_num=self.objective_burst_num,
+                                                             pre_actor_step=self.pre_actor_step, pre_init_permutation=self.pre_init_permutation)
+            permutations = permutations[:, 0:self.actor.num_frames].clone()
+            # print("what is permutations: ", permutations.size())
             if self.reward_type == 'psnr':
                 reward_func = {'psnr': PSNR(boundary_ignore=40)}
             elif self.reward_type == 'ssim':
@@ -300,7 +335,7 @@ class AgentTrainer(BaseAgentTrainer):
             else:
                 assert 0 == 1, "wrong reward type"
 
-            state = data['burst'].clone()
+            
             # print("device of state: ", state.size())
             for it in range(self.iterations):
                 dists, value = self.actor(state)
@@ -312,7 +347,7 @@ class AgentTrainer(BaseAgentTrainer):
                     pred, _ = self.sr_net(next_state.clone())
                 preds.append(pred.clone())
 
-                reward = self._calculate_reward(data['frame_gt'], preds[-1], preds[-2], reward_func=reward_func, batch=True)
+                reward = self._calculate_reward(data['frame_gt'], preds[-1], preds[-2], reward_func=reward_func, batch=True, tolerance=self.tolerance)
                 # print("what is actions: ", actions.device)
                 # print("what is dist: ", dists[0].device)
 
@@ -339,15 +374,15 @@ class AgentTrainer(BaseAgentTrainer):
             # print("log_probs info, size %s, type %s" % (len(log_probs), type(log_probs)))
             # print("values info, size %s, type %s" % (len(values), type(values)))
 
-            print("what is log_probs before cat: ", log_probs)
-            print("what is returns before cat: ", returns)
-            print("what is values before cat: ", values)
+            # print("what is log_probs before cat: ", log_probs)
+            # print("what is returns before cat: ", returns)
+            # print("what is values before cat: ", values)
             log_probs = torch.cat(log_probs)
             returns   = torch.cat(returns).detach()
             values    = torch.cat(values)
-            print("what is log_probs after cat: ", log_probs)
-            print("what is returns after cat: ", returns)
-            print("what is values after cat: ", values)
+            # print("what is log_probs after cat: ", log_probs)
+            # print("what is returns after cat: ", returns)
+            # print("what is values after cat: ", values)
 
             advantage = returns - values
 
@@ -355,9 +390,9 @@ class AgentTrainer(BaseAgentTrainer):
             critic_loss = advantage.pow(2).mean()
 
             loss = actor_loss + 0.5 * critic_loss - 0.001 * entropy
-            print("what is actor_loss: ", actor_loss)
-            print("what is critic_loss: ", critic_loss)
-            print("what is entropy: ", entropy)
+            # print("what is actor_loss: ", actor_loss)
+            # print("what is critic_loss: ", critic_loss)
+            # print("what is entropy: ", entropy)
             # calculate metric for the initial and final burst
             metric_initial = reward_func[self.reward_type](preds[0].clone(), data['frame_gt'].clone())
             metric_final = reward_func[self.reward_type](preds[-1].clone(), data['frame_gt'].clone())
@@ -375,6 +410,7 @@ class AgentTrainer(BaseAgentTrainer):
 
             # print statistics
             self._print_stats(i, loader, batch_size)
+            # print("Final shift: ", permutations)
         
             if not loader.training:
                 if self.save_results:

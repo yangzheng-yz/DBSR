@@ -74,20 +74,16 @@ def run(settings):
                                         'random_pixelshift': False,
                                         'specified_translation': permutation}
 
-    f = open("/home/yutong/zheng/projects/dbsr_rl/DBSR/util_scripts/zurich_test_meta_infos.pkl", 'rb')
-    meta_infos_val = pkl.load(f)
-    f.close()
-
     settings.burst_reference_aligned = True
     settings.image_processing_params = {'random_ccm': True, 'random_gains': True, 'smoothstep': True, 'gamma': True, 'add_noise': True}
-    image_processing_params_val = {'random_ccm': True, 'random_gains': True, 'smoothstep': True, 'gamma': True, 'add_noise': True, 'predefined_params': meta_infos_val}
+    # image_processing_params_val = {'random_ccm': True, 'random_gains': True, 'smoothstep': True, 'gamma': True, 'add_noise': True, 'predefined_params': meta_infos_val}
 
 
     zurich_raw2rgb_train = datasets.ZurichRAW2RGB(split='train')
-    zurich_raw2rgb_val = datasets.ZurichRAW2RGB(split='test')  
+    zurich_raw2rgb_val = datasets.ZurichRAW2RGB(split='val')  
 
     transform_train = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True), tfm.RandomHorizontalFlip())
-    transform_val = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True), tfm.RandomHorizontalFlip())
+    transform_val = tfm.Transform(tfm.ToTensor(normalize=True, val=True))
 
     data_processing_train = processing.SyntheticBurstDatabaseProcessing(settings.crop_sz, settings.burst_sz,
                                                                 settings.downsample_factor,
@@ -99,7 +95,7 @@ def run(settings):
                                                               settings.downsample_factor,
                                                               burst_transformation_params=burst_transformation_params_val,
                                                               transform=transform_val,
-                                                              image_processing_params=image_processing_params_val,
+                                                              image_processing_params=settings.image_processing_params,
                                                               random_crop=False,
                                                               return_rgb_busrt=True)
 
@@ -153,6 +149,6 @@ def run(settings):
     lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=40, gamma=0.2)
     trainer = AgentTrainer(actor, [loader_val], optimizer, settings, lr_scheduler=lr_scheduler, 
                                sr_net=dbsr_net, iterations=4, reward_type='psnr',
-                               discount_factor=0.99, save_results=True, saving_dir="/mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/viz_results/debug_psnetv12_viz_epoch24_new0913")
+                               discount_factor=0.99, save_results=True, saving_dir="/mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/viz_results/debug_psnetv12_viz_val_epoch24_new0913")
 
     trainer.train(1000, load_latest=False, fail_safe=True, checkpoint="/mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/checkpoints/dbsr/debug_psnetv12/ActorCritic_ep0024.pth.tar") # (epoch, )

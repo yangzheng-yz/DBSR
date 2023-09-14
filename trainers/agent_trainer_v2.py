@@ -200,13 +200,17 @@ class AgentTrainer(BaseAgentTrainer):
         
         return transformed_images
 
-    def _calculate_reward(self, frame_gt, pred_current, pred_last, reward_func=None, batch=True):
+    def _calculate_reward(self, frame_gt, pred_current, pred_last, reward_func=None, batch=True, actions1=None):
         """Calculate the reward as the difference of PSNR between current and last prediction."""
         assert reward_func is not None and reward_func != 'ssim', "You must specify psnr."
         if self.reward_type == 'psnr':
             metric_current = reward_func[self.reward_type](pred_current, frame_gt, batch=batch)
             metric_last = reward_func[self.reward_type](pred_last, frame_gt, batch=batch)
-            reward_difference = [curr - last for curr, last in zip(metric_current, metric_last)]
+            if actions1 is not None:
+                print("what is actions1: ", actions1.size())
+                reward_difference = [(curr - last) / (actions1[idx].item()+1) for idx, (curr, last) in enumerate(zip(metric_current, metric_last))]
+            else:
+                reward_difference = [curr - last for curr, last in zip(metric_current, metric_last)]
             reward_tensor = torch.stack(reward_difference).unsqueeze(1).to(self.device)
         elif self.reward_type == 'ssim':
             metric_current = reward_func[self.reward_type](pred_current, frame_gt)
@@ -355,7 +359,7 @@ class AgentTrainer(BaseAgentTrainer):
                         pred = self.sr_net(next_state.clone())
                 preds.append(pred.clone())
 
-                reward = self._calculate_reward(data['frame_gt'], preds[-1], preds[-2], reward_func=reward_func, batch=True)
+                reward = self._calculate_reward(data['frame_gt'], preds[-1], preds[-2], reward_func=reward_func, batch=True, actions1=actions1)
                 # print("what is actions: ", actions.device)
                 # print("what is dist: ", dists[0].device)
                 log_prob1 = torch.zeros(batch_size).to(self.device)
@@ -508,7 +512,7 @@ class AgentTrainer(BaseAgentTrainer):
             batch_size = self.settings.batch_size
             self._update_stats({'Loss/total': loss.item(), 'Loss/actor1': actor_loss1.item(), 'Loss/critic1': critic_loss1.item(), 'Loss/entropy1': entropy1_final.mean().item(),
                                 'Loss/actor2': actor_loss2.item(), 'Loss/critic2': critic_loss2.item(), 'Loss/entropy2': entropy2_final.mean().item(), 'Loss/penalty': total_penalty.item(), ('%s/initial' % self.reward_type): metric_initial.item(), 
-                                ('%s/final' % self.reward_type): metric_final.item(), "Improvement": ((metric_final.item()-metric_initial.item()))}, batch_size, loader)
+                                ('%s/final' % self.reward_type): metric_final.item(), "Improvement": ((metric_final.item()-metric_initial.item())), "Action/actions1: ": actions1.mean().item()}, batch_size, loader)
 
             # print statistics
             self._print_stats(i, loader, batch_size)

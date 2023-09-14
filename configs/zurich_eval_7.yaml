@@ -11,9 +11,9 @@ downsample_factor: 4
 random_pixelshift: False
 calculate_loss: True
 
-ckpt_path: /mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/checkpoints/pvnet/train_optimal_shiftv2/best.pth.tar
+ckpt_path: /mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/checkpoints/pvnet_try1/train_optimal_shiftv2/DBSRNet_ep0052.pth.tar
 dataset_path: /mnt/samsung/zheng/downloaded_datasets/zheng_ccvl2/SyntheticDataset
-save_path: /mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/viz_results/dbsr_optimal_shift0
+save_path: /mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/viz_results/dbsr_optimal_shift0_epoch52_again
 specify_image_id: -1 # -1
 save_results: True
 split: val
