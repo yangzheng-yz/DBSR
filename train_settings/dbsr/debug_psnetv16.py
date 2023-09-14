@@ -147,7 +147,7 @@ def run(settings):
     sr_encoder = dbsr_net.encoder
     sr_merging = dbsr_net.merging
     
-    actor = dbsr_actors.ActorCritic_v2(num_frames=2, hidden_size=5)
+    actor = dbsr_actors.ActorCritic_v3(num_frames=3, hidden_size=5)
     
     # load pre_actor
     pre_actor = dbsr_actors.ActorCritic(num_frames=settings.burst_sz, num_channels=4, hidden_size=5)
@@ -179,7 +179,7 @@ def run(settings):
 
     lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.2)
     trainer = AgentTrainer(actor, [loader_train, loader_val], optimizer, settings, lr_scheduler=lr_scheduler, 
-                               sr_net=dbsr_net, iterations=4, reward_type='psnr',
+                               sr_net=dbsr_net, iterations=8, reward_type='psnr',
                                discount_factor=0.99, init_permutation=None, objective_burst_num=4, pre_init_permutation=init_permutation,
                                tolerance=0.5, pre_actor=pre_actor)
 

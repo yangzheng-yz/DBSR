@@ -22,7 +22,7 @@ from torch.distributions import Categorical
 class ResNet18(nn.Module):
     def __init__(self, in_channels):
         super(ResNet18, self).__init__()
-        self.resnet = torch.hub.load('pytorch/vision', 'resnet18', pretrained=False)
+        self.resnet = resnet18(pretrained=False)
         self.resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
 
     def forward(self, x):
@@ -165,9 +165,9 @@ class ActorCritic_v2(nn.Module):
         _, (h_n, _) = self.actor_lstm(actor_states)
         action_logits = self.actor_linear(h_n.squeeze(0))
         action_logits = action_logits.view(batch_size, self.num_frames - 1, 5)
-        print("what is x: ", x)
-        print("what is actor_states: ", actor_states)
-        print("what is h_n: ", h_n)
+        # print("what is x: ", x)
+        # print("what is actor_states: ", actor_states)
+        # print("what is h_n: ", h_n)
         probs = F.softmax(action_logits, dim=-1)
         # print("prob:", probs.size())
         # print(probs.split(1, dim=1))
@@ -185,7 +185,7 @@ class ActorCritic_v2(nn.Module):
         
         # Shared feature extraction
         x_shared = self.shared_resnet(x)
-        print("what is x_shared: ", x_shared)
+        # print("what is x_shared: ", x_shared)
 
         x_shared = F.adaptive_avg_pool2d(x_shared, (1, 1)).view(batch_size, num_frames, -1)  # Apply GAP and reshape
 

@@ -62,7 +62,7 @@ def run(settings):
 
     settings.crop_sz = (384, 384)
     # settings.crop_sz = (448, 448)
-    settings.burst_sz = 4
+    settings.burst_sz = 3
     settings.downsample_factor = 4 # TODO: need to revise to 4?
 
     # settings.burst_transformation_params = {'max_translation': 24.0,
@@ -74,7 +74,6 @@ def run(settings):
         [0,0],
         [0,2],
         [2,2],
-        [2,0]
     ])
     
     settings.burst_transformation_params = {'max_translation': 3.0,
@@ -147,7 +146,7 @@ def run(settings):
     sr_encoder = dbsr_net.encoder
     sr_merging = dbsr_net.merging
     
-    actor = dbsr_actors.ActorCritic_v2(num_frames=2, hidden_size=5)
+    actor = dbsr_actors.ActorCritic_v3(num_frames=3, hidden_size=5)
 
     # optimizer = optim.Adam(actor.parameters())
 
