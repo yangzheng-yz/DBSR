@@ -18,3 +18,4 @@ util_scripts/__pycache__/*
 utils/__pycache__/*
 results/*
 synburst/
+admin/*

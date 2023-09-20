@@ -84,7 +84,6 @@ mkdir pretrained_networks
 echo ""
 echo ""
 echo "****************** Downloading PWCNet model ******************"
-
 gdown https://drive.google.com/uc\?id\=1s11Ud1UMipk2AbZZAypLPRpnXOS9Y1KO -O pretrained_networks/pwcnet-network-default.pth
 
 echo ""
