@@ -130,50 +130,54 @@ def rgb2rawburstdatabase(image, burst_size, downsample_factor=1, burst_transform
         if k not in image_processing_params:
             image_processing_params[k] = v
     if isinstance(image_name, dict):
-        # print("image_name is not None!!!!!!!!!!!!")
-        for k, _ in image_processing_params.items():
-            if k in image_name.keys():
-                image_processing_params[k] = False
-    # Sample camera pipeline params
-    if image_processing_params['random_ccm']:
-        if image_processing_params.get('predefined_params', None) is not None:
-            assert image_name is not None, "You should pass the image_name into this function."
-            rgb2cam = image_processing_params['predefined_params'][image_name]['rgb2cam']
+        rgb2cam = image_name['rgb2cam']
+        cam2rgb = image_name['cam2rgb']
+        rgb_gain = image_name['rgb_gain']
+        red_gain = image_name['red_gain']
+        blue_gain = image_name['blue_gain']
+        use_smoothstep = image_name['smoothstep']
+        use_gamma = image_name['gamma']
+    else:
+        # Sample camera pipeline params
+        if image_processing_params['random_ccm']:
+            if image_processing_params.get('predefined_params', None) is not None:
+                assert image_name is not None, "You should pass the image_name into this function."
+                rgb2cam = image_processing_params['predefined_params'][image_name]['rgb2cam']
+            else:
+                rgb2cam = rgb2raw.random_ccm()
         else:
-            rgb2cam = rgb2raw.random_ccm()
-    else:
-        rgb2cam = torch.eye(3).float()
-    cam2rgb = rgb2cam.inverse()
+            rgb2cam = torch.eye(3).float()
+        cam2rgb = rgb2cam.inverse()
 
-    # Sample gains
-    if image_processing_params['random_gains']:
-        if image_processing_params.get('predefined_params', None) is not None:
-            assert image_name is not None, "You should pass the image_name into this function."
-            rgb_gain = image_processing_params['predefined_params'][image_name]['rgb_gain']
-            red_gain = image_processing_params['predefined_params'][image_name]['red_gain']
-            blue_gain = image_processing_params['predefined_params'][image_name]['blue_gain']
-        else:    
-            rgb_gain, red_gain, blue_gain = rgb2raw.random_gains()
-    else:
-        rgb_gain, red_gain, blue_gain = (1.0, 1.0, 1.0)
+        # Sample gains
+        if image_processing_params['random_gains']:
+            if image_processing_params.get('predefined_params', None) is not None:
+                assert image_name is not None, "You should pass the image_name into this function."
+                rgb_gain = image_processing_params['predefined_params'][image_name]['rgb_gain']
+                red_gain = image_processing_params['predefined_params'][image_name]['red_gain']
+                blue_gain = image_processing_params['predefined_params'][image_name]['blue_gain']
+            else:    
+                rgb_gain, red_gain, blue_gain = rgb2raw.random_gains()
+        else:
+            rgb_gain, red_gain, blue_gain = (1.0, 1.0, 1.0)
 
-    # Approximately inverts global tone mapping.
-    use_smoothstep = image_processing_params['smoothstep']
-    if use_smoothstep:
-        image = rgb2raw.invert_smoothstep(image)
+        # Approximately inverts global tone mapping.
+        use_smoothstep = image_processing_params['predefined_params'][image_name]['smoothstep'] if image_processing_params.get('predefined_params', None) is not None else image_processing_params['smoothstep']
+        if use_smoothstep:
+            image = rgb2raw.invert_smoothstep(image)
 
-    # Inverts gamma compression.
-    use_gamma = image_processing_params['gamma']
-    if use_gamma:
-        image = rgb2raw.gamma_expansion(image)
+        # Inverts gamma compression.
+        use_gamma = image_processing_params['predefined_params'][image_name]['gamma'] if image_processing_params.get('predefined_params', None) is not None else image_processing_params['gamma']
+        if use_gamma:
+            image = rgb2raw.gamma_expansion(image)
 
-    # Inverts color correction.
-    # print("image size: ", image.size())
-    image = rgb2raw.apply_ccm(image, rgb2cam)
+        # Inverts color correction.
+        # print("image size: ", image.size())
+        image = rgb2raw.apply_ccm(image, rgb2cam)
     
 
-    # Approximately inverts white balance and brightening.
-    image = rgb2raw.safe_invert_gains(image, rgb_gain, red_gain, blue_gain)
+        # Approximately inverts white balance and brightening.
+        image = rgb2raw.safe_invert_gains(image, rgb_gain, red_gain, blue_gain)
 
     # Clip saturated pixels.
     image = image.clamp(0.0, 1.0)

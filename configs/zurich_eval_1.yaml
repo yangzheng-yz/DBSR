@@ -13,7 +13,7 @@ calculate_loss: True
 
 ckpt_path: /mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/checkpoints/pvnet_try1/train_optimal_shiftv5/DeepRepNet_ep0052.pth.tar
 dataset_path: /mnt/samsung/zheng/downloaded_datasets/zheng_ccvl2/SyntheticDataset
-save_path: /mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/viz_results/deep_rep_optimal_shift0_epoch0052_again
+save_path: /mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/viz_results/deep_rep_optimal_shift0_epoch0052_newval
 specify_image_id: -1 # -1
 save_results: True
 split: val

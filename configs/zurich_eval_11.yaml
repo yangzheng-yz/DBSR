@@ -13,7 +13,7 @@ calculate_loss: True
 
 ckpt_path: /mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/checkpoints/pvnet/train_optimal_shiftv9/DBSRNet_ep0052.pth.tar
 dataset_path: /mnt/samsung/zheng/downloaded_datasets/zheng_ccvl2/SyntheticDataset
-save_path: /mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/viz_results/dbsr_optimal_shift4_ep0052
+save_path: /mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/viz_results/dbsr_optimal_shift4_ep0052_newval
 specify_image_id: -1 # -1
 save_results: True
 split: val

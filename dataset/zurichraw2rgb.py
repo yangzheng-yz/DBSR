@@ -85,12 +85,12 @@ class ZurichRAW2RGB(BaseImageDataset):
     def get_image(self, im_id, info=None):
         if self.split in ['train', 'test']:
             frame = self._get_image(im_id)
-
+            print("type of frame: ", type(frame[0,0,0]))
             if info is None:
                 info = self.get_image_info(im_id)
         elif self.split in ['val']:
             frame, info = self._get_val_image(im_id)
-            print("type of frame: ", type(frame))
+            
         else:
             Exception
 

@@ -103,7 +103,7 @@ def run(settings):
     zurich_raw2rgb_val = datasets.ZurichRAW2RGB(split='val')  
 
     transform_train = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True), tfm.RandomHorizontalFlip())
-    transform_val = tfm.Transform(tfm.ToTensor(normalize=True))
+    transform_val = tfm.Transform(tfm.ToTensor(normalize=True, val=True))
 
     data_processing_train = processing.SyntheticBurstDatabaseProcessing(settings.crop_sz, settings.burst_sz,
                                                                 settings.downsample_factor,

@@ -77,6 +77,7 @@ class AgentTrainer(BaseAgentTrainer):
         self.save_results = save_results
         
         self.final_permutations = []
+        self.actual_init_permutations = []
         
         self.initial_psnr_sum = 0
         self.final_psnr_sum = 0
@@ -266,7 +267,7 @@ class AgentTrainer(BaseAgentTrainer):
         permutations = pre_init_permutation.clone()
         
         for it in range(pre_actor_step):
-            print("What is the permutations: ", permutations.size())
+            # print("What is the permutations: ", permutations.size())
             with torch.no_grad():
                 dists, value = pre_actor(state)
             next_state, actions, permutations = self.step_environment(dists, frame_gt.clone(), permutations.clone())
@@ -325,6 +326,7 @@ class AgentTrainer(BaseAgentTrainer):
                                                                 pre_actor_step=self.pre_actor_step, pre_init_permutation=pre_init_permutation)
             with torch.no_grad():
                 pred, _   = self.sr_net(state)
+            self.actual_init_permutations.append(permutations.clone().numpy())
             # print("check 1 ok!")
             preds.append(pred.clone())
             permutations = permutations[:, 0:self.actor.num_frames].clone()
@@ -439,6 +441,9 @@ class AgentTrainer(BaseAgentTrainer):
                     # save trajectories
                     f=open("%s/traj.pkl" % self.saving_dir, 'wb')
                     pickle.dump(self.final_permutations, f)
+                    f.close()
+                    f=open("%s/traj_init.pkl" % self.saving_dir, 'wb')
+                    pickle.dump(self.actual_init_permutations, f)
                     f.close()
                     # save metrics
                     f=open("%s/metrics.txt" % self.saving_dir, 'a')
