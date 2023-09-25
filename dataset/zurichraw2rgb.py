@@ -90,6 +90,7 @@ class ZurichRAW2RGB(BaseImageDataset):
                 info = self.get_image_info(im_id)
         elif self.split in ['val']:
             frame, info = self._get_val_image(im_id)
+            print("type of frame: ", type(frame))
         else:
             Exception
 
