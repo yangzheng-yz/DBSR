@@ -134,14 +134,22 @@ def main():
                    np.array([[0,0],[0,1],[2,2],[3,0]]),
                    np.array([[0,0],[0,1],[2,3],[1,0]]),
                    np.array([[0,0],[0,2],[2,3],[2,0]]),
-                   np.array([[0,0],[1,2],[3,3],[2,0]])]
+                   np.array([[0,0],[1,2],[3,3],[2,0]]),
+                   np.array([[0,0], [0,2], [3,3]]),
+                   np.array([[0,0], [1,0], [3,3]]),
+                   np.array([[0,0],[0,1],[1,3]]),
+                   np.array([[0,0],[0,1],[3,2]]),
+                   np.array([[0,0],[0,1],[2,3]]),
+                   np.array([[0,0],[0,1],[3,3]]),
+                   np.array([[0,0],[1,0],[3,2]]),
+                   np.array([[0,0],[1,0],[2,3]])]
 
-    burst_transformation_params_val = {'max_translation': 24.0,
-                                        'max_rotation': 1.0,
+    burst_transformation_params_val = {'max_translation': 3.0,
+                                        'max_rotation': 0.0,
                                         'max_shear': 0.0,
                                         'max_scale': 0.0,
                                         # 'border_crop': 24, #24,
-                                        'random_pixelshift': False,
+                                        'random_pixelshift': cfg.random_pixelshift,
                                         'specified_translation': permutations[cfg.permu_nb]}
     
     data_processing_val = processing.SyntheticBurstDatabaseProcessing((cfg.crop_sz, cfg.crop_sz), cfg.burst_sz,
