@@ -5,3 +5,4 @@ from .burstsr_dataset import BurstSRDataset
 from .nightcity import NightCity
 from .nir_synthetic import nir_synthetic
 from .nir_visible import nir_visible
+from .MixedMiceNIR_Dai import MixedMiceNIR_Dai
