@@ -1,4 +1,4 @@
-# This version try to use loss descent and timestep 4, more training sample, for debug
+# What if init is random. 
 
 # Copyright (c) 2021 Huawei Technologies Co., Ltd.
 # Licensed under CC BY-NC-SA 4.0 (Attribution-NonCommercial-ShareAlike 4.0 International) (the "License");
@@ -28,7 +28,7 @@ import numpy as np
 import torch
 import pickle as pkl
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
@@ -78,11 +78,11 @@ def run(settings):
     ])
     
     settings.burst_transformation_params = {'max_translation': 3.0,
-                                        'max_rotation': 0.0,
+                                        'max_rotation': 1.0,
                                         'max_shear': 0.0,
                                         'max_scale': 0.0,
                                         # 'border_crop': 24,
-                                        'random_pixelshift': False,
+                                        'random_pixelshift': True,
                                         'specified_translation': init_permutation}
     burst_transformation_params_val = {'max_translation': 3.0,
                                         'max_rotation': 0.0,
@@ -155,7 +155,7 @@ def run(settings):
     
     trainer = JointTrainer(actors, [loader_train, loader_val], sr_optimizer, agent_optimizer, settings, sr_lr_scheduler=sr_lr_scheduler,
                            agent_lr_scheduler=agent_lr_scheduler, iterations=5, reward_type='psnr',
-                           discount_factor=0.99, burst_sz=settings.burst_sz, adaptive_entropy=True, agent_start_thresh=1.0)
+                           discount_factor=0.99, burst_sz=settings.burst_sz, adaptive_entropy=True, agent_start_thresh=0.5)
 
     trainer.train(500, load_latest=True, fail_safe=True) # (epoch, )
     

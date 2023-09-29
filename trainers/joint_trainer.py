@@ -36,7 +36,7 @@ class JointTrainer(BaseJointTrainer):
                  init_permutation=None, discount_factor=0.99, 
                  sr_lr_scheduler=None, agent_lr_scheduler=None, iterations=15, 
                  interpolation_type='bilinear', reward_type='psnr', save_results=False, saving_dir=None, burst_sz=4,
-                 adaptive_entropy=False, low_first_agent_lr=False):
+                 adaptive_entropy=False, low_first_agent_lr=False, agent_start_thresh=1.0):
         """
         args:
             actors - The actors[0] is a superresolution neural network, actors[1] is an agent for optimize pixel shift location with specific burst size
@@ -105,6 +105,8 @@ class JointTrainer(BaseJointTrainer):
         self.low_first_agent_lr = low_first_agent_lr
         
         self.adaptive_entropy = adaptive_entropy
+        
+        self.agent_start_thresh = agent_start_thresh
     def _set_default_settings(self):
         # Dict of all default values
         default = {'print_interval': 10,
@@ -424,9 +426,10 @@ class JointTrainer(BaseJointTrainer):
 
             # backward pass and update weights
             if loader.training:
-                self.agent_optimizer.zero_grad()
-                (loss).backward()
-                self.agent_optimizer.step()
+                if abs(metric_final.item()-metric_initial.item()) > self.agent_start_thresh:
+                    self.agent_optimizer.zero_grad()
+                    (loss).backward()
+                    self.agent_optimizer.step()
                 
                 self.sr_optimizer.zero_grad()
                 (loss_sr).backward()
