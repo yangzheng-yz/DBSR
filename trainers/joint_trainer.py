@@ -318,8 +318,15 @@ class JointTrainer(BaseJointTrainer):
 
 
             if self.init_permutation is not None:
-                permutations = torch.tensor(self.init_permutation).repeat(batch_size, 1, 1)
-                state = self.apply_actions_to_env(data['frame_gt'].clone(), permutations.clone())
+                if self.init_permutation == 'random' and self.epoch < 50:
+                    state = data['burst'].clone()
+                    permutations = torch.tensor(self.init_permutation).repeat(batch_size, 1, 1)
+                elif not isinstance(self.init_permutation, str):
+                    permutations = torch.tensor(self.init_permutation).repeat(batch_size, 1, 1)
+                    state = self.apply_actions_to_env(data['frame_gt'].clone(), permutations.clone())
+                else:
+                    permutations = torch.tensor(self.initial_permutations[self.burst_sz]).repeat(batch_size, 1, 1)
+                    state = self.apply_actions_to_env(data['frame_gt'].clone(), permutations.clone())
             else:
                 permutations = torch.tensor(self.initial_permutations[self.burst_sz]).repeat(batch_size, 1, 1)
                 state = self.apply_actions_to_env(data['frame_gt'].clone(), permutations.clone())
@@ -426,7 +433,8 @@ class JointTrainer(BaseJointTrainer):
 
             # backward pass and update weights
             if loader.training:
-                if abs(metric_final.item()-metric_initial.item()) > self.agent_start_thresh:
+                # if abs(metric_final.item()-metric_initial.item()) > self.agent_start_thresh:
+                if self.epoch > 50:
                     self.agent_optimizer.zero_grad()
                     (loss).backward()
                     self.agent_optimizer.step()

@@ -97,7 +97,7 @@ def run(settings):
     
     settings.burst_reference_aligned = True
     settings.image_processing_params = {'random_ccm': True, 'random_gains': True, 'smoothstep': True, 'gamma': True, 'add_noise': True}
-    image_processing_params_val = {'random_ccm': True, 'random_gains': True, 'smoothstep': True, 'gamma': True, 'add_noise': True, 'predefined_params': meta_infos_val}
+    image_processing_params_val = {'random_ccm': True, 'random_gains': True, 'smoothstep': True, 'gamma': True, 'add_noise': True}
 
     zurich_raw2rgb_train = datasets.MixedMiceNIR_Dai(split='train')
     zurich_raw2rgb_val = datasets.MixedMiceNIR_Dai(split='val')  
@@ -155,7 +155,7 @@ def run(settings):
     
     trainer = JointTrainer(actors, [loader_train, loader_val], sr_optimizer, agent_optimizer, settings, sr_lr_scheduler=sr_lr_scheduler,
                            agent_lr_scheduler=agent_lr_scheduler, iterations=5, reward_type='psnr',
-                           discount_factor=0.99, burst_sz=settings.burst_sz, adaptive_entropy=True, agent_start_thresh=0.5)
+                           discount_factor=0.99, burst_sz=settings.burst_sz, adaptive_entropy=True, agent_start_thresh=0.5, init_permutation='random')
 
     trainer.train(500, load_latest=True, fail_safe=True) # (epoch, )
     
