@@ -97,13 +97,13 @@ def run(settings):
     
     settings.burst_reference_aligned = True
     settings.image_processing_params = {'random_ccm': True, 'random_gains': True, 'smoothstep': True, 'gamma': True, 'add_noise': True}
-    image_processing_params_val = {'random_ccm': True, 'random_gains': True, 'smoothstep': True, 'gamma': True, 'add_noise': True}
+    image_processing_params_val = {'random_ccm': True, 'random_gains': True, 'smoothstep': True, 'gamma': True, 'add_noise': True, 'predefined_params': meta_infos_val}
 
     zurich_raw2rgb_train = datasets.ZurichRAW2RGB(split='train')
-    zurich_raw2rgb_val = datasets.ZurichRAW2RGB(split='val')  
+    zurich_raw2rgb_val = datasets.ZurichRAW2RGB(split='test')  
 
     transform_train = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True), tfm.RandomHorizontalFlip())
-    transform_val = tfm.Transform(tfm.ToTensor(normalize=True, val=True))
+    transform_val = tfm.Transform(tfm.ToTensor(normalize=True))
 
     data_processing_train = processing.SyntheticBurstDatabaseProcessing(settings.crop_sz, settings.burst_sz,
                                                                 settings.downsample_factor,
@@ -138,52 +138,45 @@ def run(settings):
     if settings.multi_gpu:
         net = MultiGPU(net, dim=0)
 
-    objective = {'rgb': PixelWiseError(metric='l1', boundary_ignore=40), 'psnr': PSNR(boundary_ignore=40)}
-
-    loss_weight = {'rgb': 1.0}
-
     # 获取encoder部分
     dbsr_net = load_network('/home/yutong/zheng/projects/dbsr_rl/DBSR/pretrained_networks/dbsr_synthetic_default.pth')
-
-    sr_encoder = dbsr_net.encoder
-    sr_merging = dbsr_net.merging
     
     actor = dbsr_actors.ActorCritic_v3(num_frames=3, hidden_size=5)
     
     # load pre_actor
-    # pre_actor = dbsr_actors.ActorCritic(num_frames=settings.burst_sz, num_channels=4, hidden_size=5)
-    # checkpoint_dict = torch.load('/mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/checkpoints/dbsr/debug_psnetv12_old/ActorCritic_ep0052.pth.tar')
-    # net_type = type(pre_actor).__name__
-    # assert net_type == checkpoint_dict['net_type'], 'Network is not of correct type.'
-    # fields = checkpoint_dict.keys()
-    # ignore_fields = ['settings']
-    # ignore_fields.extend(['lr_scheduler', 'constructor', 'net_type', 'actor_type', 'net_info'])
-    #     # Load all fields
-    # for key in fields:
-    #     if key in ignore_fields:
-    #         continue
-    #     if key == 'net':
-    #         pre_actor.load_state_dict(checkpoint_dict[key])
-    #     # elif key == 'optimizer':
-    #     #     self.optimizer.load_state_dict(checkpoint_dict[key])
-    #     # else:
-    #     #     setattr(self, key, checkpoint_dict[key])
+    pre_actor = dbsr_actors.ActorCritic(num_frames=settings.burst_sz, num_channels=4, hidden_size=5)
+    checkpoint_dict = torch.load('/mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/checkpoints/dbsr/debug_psnetv12_old/ActorCritic_ep0052.pth.tar')
+    net_type = type(pre_actor).__name__
+    assert net_type == checkpoint_dict['net_type'], 'Network is not of correct type.'
+    fields = checkpoint_dict.keys()
+    ignore_fields = ['settings']
+    ignore_fields.extend(['lr_scheduler', 'constructor', 'net_type', 'actor_type', 'net_info'])
+        # Load all fields
+    for key in fields:
+        if key in ignore_fields:
+            continue
+        if key == 'net':
+            pre_actor.load_state_dict(checkpoint_dict[key])
+        # elif key == 'optimizer':
+        #     self.optimizer.load_state_dict(checkpoint_dict[key])
+        # else:
+        #     setattr(self, key, checkpoint_dict[key])
 
-    # if 'net_info' in checkpoint_dict and checkpoint_dict['net_info'] is not None:
-    #     net.info = checkpoint_dict['net_info']
-    # optimizer = optim.Adam(actor.parameters())
+    if 'net_info' in checkpoint_dict and checkpoint_dict['net_info'] is not None:
+        net.info = checkpoint_dict['net_info']
+    optimizer = optim.Adam(actor.parameters())
 
     optimizer = optim.Adam([{'params': actor.parameters(), 'lr': 1e-4}],
-                           lr=2e-4)
+                            lr=2e-4)
 
     lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.2)
-    trainer = AgentTrainer(actor, [loader_val], optimizer, settings, lr_scheduler=lr_scheduler, 
-                               sr_net=dbsr_net, iterations=4, reward_type='psnr',
-                               discount_factor=0.99, init_permutation=init_permutation, objective_burst_num=4, pre_init_permutation=None,
-                               tolerance=0, save_results=True, saving_dir="/mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/viz_results/debug_psnetv16_dbsr_epoch34_init00022220")
     # trainer = AgentTrainer(actor, [loader_val], optimizer, settings, lr_scheduler=lr_scheduler, 
     #                            sr_net=dbsr_net, iterations=4, reward_type='psnr',
-    #                            discount_factor=0.99, init_permutation=None, objective_burst_num=4, pre_init_permutation=init_permutation,
-    #                            tolerance=0.5, pre_actor=pre_actor, save_results=True, saving_dir="/mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/viz_results/debug_psnetv16_dbsr_epoch34_preactor")
+    #                            discount_factor=0.99, init_permutation=init_permutation, objective_burst_num=4, pre_init_permutation=None,
+    #                            tolerance=0, save_results=True, saving_dir="/mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/viz_results/debug_psnetv16_dbsr_epoch34_init00022220")
+    trainer = AgentTrainer(actor, [loader_val], optimizer, settings, lr_scheduler=lr_scheduler, 
+                                sr_net=dbsr_net, iterations=4, reward_type='psnr',
+                                discount_factor=0.99, init_permutation=None, objective_burst_num=4, pre_init_permutation=init_permutation,
+                                tolerance=0.5, pre_actor=pre_actor, save_results=True, saving_dir="/mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/viz_results/debug_psnetv16_dbsr_epoch34_preactor_validation")
 
     trainer.train(100, load_latest=False, fail_safe=True, checkpoint="/mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/checkpoints/dbsr/debug_psnetv16/ActorCritic_v3_ep0034.pth.tar") # (epoch, )

@@ -4,16 +4,16 @@ smoothstep: False
 gamma: False
 add_noise: False
 return_rgb_burst: True
-permu_nb: 13
+permu_nb: 18
 crop_sz: 384
 burst_sz: 3
 downsample_factor: 4
 random_pixelshift: False
 calculate_loss: True
 
-ckpt_path: /mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/checkpoints/dbsr/burst3_random/best_burst3_random.pth.tar
+ckpt_path: /home/yutong/zheng/projects/dbsr_rl/DBSR/pretrained_networks/dbsr_synthetic_default.pth
 dataset_path: /mnt/samsung/zheng/downloaded_datasets/zheng_ccvl2/SyntheticDataset
-save_path: /mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/viz_results/dbsr_burst3_shift13_newweights
+save_path: /mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/viz_results/dbsr_burst3_shift18
 specify_image_id: -1 # -1
 save_results: True
 split: val

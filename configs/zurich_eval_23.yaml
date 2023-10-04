@@ -11,9 +11,9 @@ downsample_factor: 4
 random_pixelshift: True
 calculate_loss: True
 
-ckpt_path: /home/yutong/zheng/projects/dbsr_rl/DBSR/pretrained_networks/dbsr_synthetic_default.pth
+ckpt_path: /mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/checkpoints/dbsr/burst3_random/best_burst3_random.pth.tar
 dataset_path: /mnt/samsung/zheng/downloaded_datasets/zheng_ccvl2/SyntheticDataset
-save_path: /mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/viz_results/dbsr_burst3_shift15
+save_path: /mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/viz_results/dbsr_burst3_shift_random_newweights
 specify_image_id: -1 # -1
 save_results: True
 split: val

@@ -142,7 +142,10 @@ def main():
                    np.array([[0,0],[0,1],[2,3]]),
                    np.array([[0,0],[0,1],[3,3]]),
                    np.array([[0,0],[1,0],[3,2]]),
-                   np.array([[0,0],[1,0],[2,3]])]
+                   np.array([[0,0],[1,0],[2,3]]),
+                   np.array([[0,0],[0,1]]),
+                   np.array([[0,0],[3,3]]),
+                   np.array([[0,0],[0,2],[3,2]])]
 
     burst_transformation_params_val = {'max_translation': 3.0,
                                         'max_rotation': 0.0,
