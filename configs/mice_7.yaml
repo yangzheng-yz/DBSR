@@ -12,9 +12,9 @@ downsample_factor: 4
 random_pixelshift: False
 calculate_loss: True
 
-ckpt_path: /mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/checkpoints/dbsr/burst3_random/best_burst3_random.pth.tar
+ckpt_path: /mnt/samsung/zheng_data/training_log/checkpoints/dbsr/deeprep_synthetic_mice_7/DeepRepNet_ep0190.pth.tar
 dataset_path: /mnt/samsung/zheng_data/datasets/NIRI_to_NIRII
-save_path: /mnt/samsung/zheng_data/training_log/viz_results/deeprep_b7_mice
+save_path: /mnt/samsung/zheng_data/training_log/viz_results/deeprep_b7_mice_allinone
 specify_image_id: -1 # -1
-save_results: True
+save_results: False
 split: val

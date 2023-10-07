@@ -116,8 +116,8 @@ def main():
     assert cfg.ckpt_path is not None, "You must specify a pretrained weights to evaluate."
     ckpt_root = cfg.ckpt_path[:-25]
     
-    ckpts = [os.path.join(ckpt_root, i) for i in os.listdir(ckpt_root)] # if int(i.split('ep')[1].split('.')[0]) > 100]
-    print(ckpts)
+    ckpts = [os.path.join(ckpt_root, i) for i in os.listdir(ckpt_root) if int(i.split('_ep')[1].split('.')[0]) > 100]
+    # print(ckpts[0].split('_ep')[1].split('.')[0])
     time.sleep(1000)
     ckpts.sort()
     for ckpt_path in ckpts:
@@ -299,10 +299,10 @@ def main():
             scores_all_mean = {m: sum(s) / len(s) for m, s in scores.items()}
         if not os.path.isdir(cfg.save_path):
             os.makedirs('{}'.format(cfg.save_path), exist_ok=True)
-        if cfg.calculate_loss:
-            with open(os.path.join(cfg.save_path, 'results.pkl'), 'wb') as f:
-                pkl.dump(scores_all_mean, f)
-        f = print("%s epoch's average psnr is %s, ssim is %s" % (int(cfg.ckpt_path.split('ep')[1].split('.')[0]), scores_all_mean['psnr'], scores_all_mean['ssim'])) # TODO: to recovery, delete this
+        # if cfg.calculate_loss: # TODO: uncomment these three lines
+        #     with open(os.path.join(cfg.save_path, 'results.pkl'), 'wb') as f:
+        #         pkl.dump(scores_all_mean, f)
+        f = print("%s epoch's average psnr is %s, ssim is %s" % (int(cfg.ckpt_path.split('_ep')[1].split('.')[0]), scores_all_mean['psnr'], scores_all_mean['ssim']), file=save_txt) # TODO: to recovery, delete this
         
             
 

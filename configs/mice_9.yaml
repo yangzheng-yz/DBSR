@@ -10,7 +10,7 @@ crop_sz_w: 640
 burst_sz: 9
 downsample_factor: 4
 random_pixelshift: False
-calculate_loss: True
+calculate_loss: false
 
 ckpt_path: /mnt/samsung/zheng_data/training_log/checkpoints/dbsr/deeprep_synthetic_mice_9/DeepRepNet_ep0190.pth.tar
 dataset_path: /mnt/samsung/zheng_data/datasets/NIRI_to_NIRII
