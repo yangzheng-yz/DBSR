@@ -118,8 +118,21 @@ def main():
     
     ckpts = [os.path.join(ckpt_root, i) for i in os.listdir(ckpt_root) if int(i.split('_ep')[1].split('.')[0]) > 100]
     # print(ckpts[0].split('_ep')[1].split('.')[0])
-    time.sleep(1000)
+    # time.sleep(1000)
     ckpts.sort()
+    """The fourth part is to perform prediction"""
+    if not os.path.isdir(cfg.save_path):
+        os.makedirs('{}'.format(cfg.save_path), exist_ok=True)
+    # save_txt_path = os.path.join(cfg.save_path, 'metrics_record.txt') # TODO: to recover, uncomment these four lines
+    # if os.path.exists(save_txt_path):
+    #     os.remove(save_txt_path)
+    # save_txt = open(save_txt_path, 'a')
+
+    save_txt_path = os.path.join(cfg.save_path, 'metrics_record_allinone.txt') # TODO: to recover, delete these four lines
+    if os.path.exists(save_txt_path):
+        os.remove(save_txt_path)
+    save_txt = open(save_txt_path, 'a')
+    
     for ckpt_path in ckpts:
         cfg.ckpt_path = ckpt_path # TODO: to recovery, delete this
         n = NetworkParam(network_path='%s' % cfg.ckpt_path, # both .pth and .pth.tar can be loaded 
@@ -180,31 +193,18 @@ def main():
         
         process_fn = SimplePostProcess(return_np=True)
 
-        """The fourth part is to perform prediction"""
-        if not os.path.isdir(cfg.save_path):
-            os.makedirs('{}'.format(cfg.save_path), exist_ok=True)
-        save_txt_path = os.path.join(cfg.save_path, 'metrics_record.txt')
-        if os.path.exists(save_txt_path):
-            os.remove(save_txt_path)
-        save_txt = open(save_txt_path, 'a')
 
-        if not os.path.isdir(cfg.save_path):
-            os.makedirs('{}'.format(cfg.save_path), exist_ok=True)
-        save_txt_path = os.path.join(cfg.save_path, 'metrics_record_allinone.txt')
-        if os.path.exists(save_txt_path):
-            os.remove(save_txt_path)
-        save_txt = open(save_txt_path, 'a')
         
-        for idx, (data, image_name) in enumerate(dataset_val):
+        for idx, (data) in enumerate(dataset_val):
 
             burst = data['burst']
             gt = data['frame_gt']
 
             if meta_infos_found:
-                meta_info = meta_infos_val[image_name]
+                meta_info = meta_infos_val[data['image_name']]
             else:
                 meta_info = data['meta_info']
-                meta_infos_val[image_name] = meta_info
+                meta_infos_val[data['image_name']] = meta_info
                 with open(os.path.join(dir_path, 'mice_%s_meta_infos.pkl' % cfg.split), 'wb') as f:
                     pkl.dump(meta_infos_val, f)
                     
