@@ -20,12 +20,7 @@ from admin.environment import env_settings
 import pickle as pkl
 
 class MixedMiceNIR_Dai(BaseImageDataset):
-    """
-    Dataset class for loading the Canon RGB images from the Zurich RAW 2 RGB dataset [1]
 
-    [1] Replacing Mobile Camera ISP with a Single Deep Learning Model. Andrey Ignatov, Luc Van Gool and Radu Timofte,
-        CVPRW 2020
-    """
     def __init__(self, root=None, split='train', image_loader=opencv_loader, initialize=True):
         """
         args:

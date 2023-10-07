@@ -1,0 +1,20 @@
+random_ccm: False
+random_gains: False
+smoothstep: False
+gamma: False
+add_noise: False
+return_rgb_burst: True
+permu_nb: 0
+crop_sz_h: 512
+crop_sz_w: 640
+burst_sz: 6
+downsample_factor: 4
+random_pixelshift: False
+calculate_loss: True
+
+ckpt_path: /mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/checkpoints/dbsr/burst3_random/best_burst3_random.pth.tar
+dataset_path: /mnt/samsung/zheng_data/datasets/NIRI_to_NIRII
+save_path: /mnt/samsung/zheng_data/training_log/viz_results/deeprep_b6_mice
+specify_image_id: -1 # -1
+save_results: True
+split: val

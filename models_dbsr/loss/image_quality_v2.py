@@ -76,6 +76,12 @@ class PixelWiseError(nn.Module):
         if valid is None:
             # print("pred: ", pred.size())
             # print("gt: ", gt.size())
+            # Check if sizes of pred and gt are different
+            if pred.size() != gt.size():
+                # Resize gt to match the size of pred
+                gt = F.interpolate(gt, size=(pred.size(2), pred.size(3)), mode='bilinear', align_corners=False)
+            else:
+                gt = gt
             err = self.loss_fn(pred, gt)
         else:
             err = self.loss_fn(pred, gt, reduction='none')
