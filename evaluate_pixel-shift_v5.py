@@ -116,7 +116,7 @@ def main():
     assert cfg.ckpt_path is not None, "You must specify a pretrained weights to evaluate."
     ckpt_root = cfg.ckpt_path[:-25]
     
-    ckpts = [os.path.join(ckpt_root, i) for i in os.listdir(ckpt_root) if int(i.split('_ep')[1].split('.')[0]) > 100]
+    ckpts = [os.path.join(ckpt_root, i) for i in os.listdir(ckpt_root) if int(i.split('_ep')[1].split('.')[0]) > 169]
     # print(ckpts[0].split('_ep')[1].split('.')[0])
     # time.sleep(1000)
     ckpts.sort()
@@ -202,6 +202,7 @@ def main():
 
             if meta_infos_found:
                 meta_info = meta_infos_val[data['image_name']]
+                # print(meta_info)
             else:
                 meta_info = data['meta_info']
                 meta_infos_val[data['image_name']] = meta_info
@@ -289,7 +290,7 @@ def main():
                 if not cfg.calculate_loss:
                     print(" Evaluated %s/%s images of %s/%s" % (idx, len(dataset_val)-1, cfg.dataset_path, burst_name), file=save_txt)
                     continue
-                print(" Evaluated %s/%s images of %s/%s, its PSNR is %s, its SSIM is %s" % (idx, len(dataset_val)-1, cfg.dataset_path, burst_name, scores['psnr'][-1], scores['ssim'][-1]), file=save_txt)
+                # print(" Evaluated %s/%s images of %s/%s, its PSNR is %s, its SSIM is %s" % (idx, len(dataset_val)-1, cfg.dataset_path, burst_name, scores['psnr'][-1], scores['ssim'][-1]), file=save_txt)
 
             if int(cfg.specify_image_id) != -1:
                 break

@@ -27,7 +27,7 @@ from models_dbsr.loss.image_quality_v2 import PSNR, PixelWiseError
 import numpy as np
 import torch
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
@@ -44,7 +44,7 @@ def run(settings):
     settings.print_interval = 1
 
     settings.crop_sz = (512, 640)
-    settings.burst_sz = 8
+    settings.burst_sz = 6
     settings.downsample_factor = 4 # TODO: need to revise to 4?
 
     # settings.burst_transformation_params = {'max_translation': 24.0,
@@ -52,7 +52,7 @@ def run(settings):
     #                                         'max_shear': 0.0,
     #                                         'max_scale': 0.0,
     #                                         'border_crop': 24}
-    permutation = np.array([[0,0],[0,1],[0,2],[1,0],[1,1],[1,2],[2,0],[2,1]])
+    permutation = np.array([[0,0],[0,1],[0,2],[1,0],[1,1],[1,2]])
     
     settings.burst_transformation_params = {'max_translation': 3.0,
                                         'max_rotation': 0.0,
@@ -116,7 +116,7 @@ def run(settings):
         net = MultiGPU(net, dim=0)
 
     # 获取encoder部分
-    dbsr_net = load_network('/mnt/samsung/zheng_data/training_log/checkpoints/dbsr/deeprep_synthetic_mice_8/DeepRepNet_ep0190.pth.tar')
+    dbsr_net = load_network('/mnt/samsung/zheng_data/training_log/checkpoints/dbsr/deeprep_synthetic_mice_6/DeepRepNet_ep0190.pth.tar')
     
     actor = dbsr_actors.ActorCritic_v2(num_frames=settings.burst_sz, hidden_size=5)
 

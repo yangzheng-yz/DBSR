@@ -1,8 +1,8 @@
-random_ccm: False
-random_gains: False
-smoothstep: False
-gamma: False
-add_noise: False
+random_ccm: True
+random_gains: True
+smoothstep: True
+gamma: True
+add_noise: True
 return_rgb_burst: True
 permu_nb: 2
 crop_sz_h: 512

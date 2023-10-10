@@ -1,8 +1,8 @@
-random_ccm: False
-random_gains: False
-smoothstep: False
-gamma: False
-add_noise: False
+random_ccm: True
+random_gains: True
+smoothstep: True
+gamma: True
+add_noise: True
 return_rgb_burst: True
 permu_nb: 1
 crop_sz_h: 512
@@ -12,7 +12,7 @@ downsample_factor: 4
 random_pixelshift: False
 calculate_loss: True
 
-ckpt_path: /mnt/samsung/zheng_data/training_log/checkpoints/dbsr/deeprep_synthetic_mice_7/DeepRepNet_ep0190.pth.tar
+ckpt_path: /mnt/samsung/zheng_data/training_log/checkpoints/dbsr/deeprep_synthetic_mice_7/DeepRepNet_ep0199.pth.tar
 dataset_path: /mnt/samsung/zheng_data/datasets/NIRI_to_NIRII
 save_path: /mnt/samsung/zheng_data/training_log/viz_results/deeprep_b7_mice_allinone
 specify_image_id: -1 # -1
