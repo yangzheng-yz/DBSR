@@ -4,7 +4,7 @@ smoothstep: True
 gamma: True
 add_noise: True
 return_rgb_burst: True
-permu_nb: 2
+permu_nb: 7
 crop_sz_h: 512
 crop_sz_w: 640
 burst_sz: 8
@@ -12,9 +12,9 @@ downsample_factor: 4
 random_pixelshift: False
 calculate_loss: True
 
-ckpt_path: /mnt/samsung/zheng_data/training_log/checkpoints/dbsr/deeprep_synthetic_mice_8/DeepRepNet_ep0190.pth.tar
+ckpt_path: /mnt/samsung/zheng_data/training_log/checkpoints/dbsr/deeprep_synthetic_mice_8/DeepRepNet_ep0199.pth.tar
 dataset_path: /mnt/samsung/zheng_data/datasets/NIRI_to_NIRII
-save_path: /mnt/samsung/zheng_data/training_log/viz_results/deeprep_b8_mice_allinone
+save_path: /mnt/samsung/zheng_data/training_log/viz_results/deeprep_b8_mice_traj7
 specify_image_id: -1 # -1
-save_results: False
-split: val
+save_results: True
+split: test

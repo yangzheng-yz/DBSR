@@ -35,7 +35,7 @@ class AgentTrainer(BaseAgentTrainer):
                  init_permutation=None, discount_factor=0.99, sr_net=None, 
                  lr_scheduler=None, iterations=15, 
                  interpolation_type='bilinear', reward_type='psnr', save_results=False, saving_dir=None, objective_burst_num=4,
-                 pre_actor_step=4, pre_init_permutation=None, tolerance=0.5, pre_actor=None):
+                 pre_actor_step=4, pre_init_permutation=None, tolerance=0.5, pre_actor=None, one_step_length=1/4, base_length=1/4):
         """
         args:
             actor - The actor for training the network
@@ -90,6 +90,9 @@ class AgentTrainer(BaseAgentTrainer):
         self.tolerance = tolerance
         self.pre_actor = pre_actor
         
+        self.one_step_length_in_grid = one_step_length / base_length
+        # self.base_length = base_length
+        
         
     def _set_default_settings(self):
         # Dict of all default values
@@ -100,21 +103,6 @@ class AgentTrainer(BaseAgentTrainer):
         for param, default_value in default.items():
             if getattr(self.settings, param, None) is None:
                 setattr(self.settings, param, default_value)
-    
-    def _update_permutations(self, permutations, actions):
-        """Update permutations based on the actions."""
-        batch_size, num_images, _ = permutations.shape
-        action_offsets = torch.tensor([[0, 0], [0, -1], [0, 1], [-1, 0], [1, 0]])
-        for i in range(1, num_images):  # start from 1 because the base frame does not move
-            permutations[:, i] = permutations[:, i] + action_offsets[actions[:, i-1]]
-        
-        # Clip the values between 0 and 3 using modulo and loop
-        while torch.any(permutations < 0):
-            permutations[permutations < 0] += 4
-        while torch.any(permutations > 3):
-            permutations[permutations > 3] -= 4
-                
-        return permutations
     
     def update_permutations_and_actions(self, actions_batch, initial_permutations_batch):
         device = actions_batch.device
@@ -139,13 +127,13 @@ class AgentTrainer(BaseAgentTrainer):
             for idx, action in enumerate(actions):
                 movement = movements[action.item()]
                 # print("%sth burst frame movement: " % idx, movement)
-                new_permutations[idx+1][0] = initial_permutations[idx+1][0].item() + movement[0]
-                new_permutations[idx+1][1] = initial_permutations[idx+1][1].item() + movement[1] 
+                new_permutations[idx+1][0] = initial_permutations[idx+1][0].item() + movement[0] * self.one_step_length_in_grid
+                new_permutations[idx+1][1] = initial_permutations[idx+1][1].item() + movement[1] * self.one_step_length_in_grid
                 # print("new_permutations[idx+1]", new_permutations[idx+1])
 
                 # Clip to boundaries
-                new_permutations[idx+1][0] = min(max(new_permutations[idx+1][0].item(), 0), 3)
-                new_permutations[idx+1][1] = min(max(new_permutations[idx+1][1].item(), 0), 3)
+                new_permutations[idx+1][0] = min(max(new_permutations[idx+1][0].item(), 0.), 3.)
+                new_permutations[idx+1][1] = min(max(new_permutations[idx+1][1].item(), 0.), 3.)
 
                 # Check for duplicates, if there's a duplicate, select "stay still" action
                 duplicated = False
@@ -405,7 +393,7 @@ class AgentTrainer(BaseAgentTrainer):
             actor_loss  = -(log_probs * advantage.detach()).mean()
             critic_loss = advantage.pow(2).mean()
 
-            loss = actor_loss + 0.5 * critic_loss - 0.001 * entropy # 0.001
+            loss = actor_loss + 0.5 * critic_loss - 0.1 * entropy # 0.001
             # print("check 12 ok!")
             # print("what is actor_loss: ", actor_loss)
             # print("what is critic_loss: ", critic_loss)

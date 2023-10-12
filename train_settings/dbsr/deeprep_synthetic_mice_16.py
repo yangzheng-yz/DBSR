@@ -23,8 +23,9 @@ import data.transforms as tfm
 from admin.multigpu import MultiGPU
 from models_dbsr.loss.image_quality_v2 import PSNR, PixelWiseError
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 import numpy as np
+import pickle as pkl
 
 def set_seed(seed_value=42):
     """Set seed for reproducibility."""
@@ -52,10 +53,10 @@ def run(settings):
     settings.print_interval = 1
 
     settings.crop_sz = (512, 640)
-    settings.burst_sz = 4
+    settings.burst_sz = 16
     settings.downsample_factor = 4
 
-    permutation = np.array([[0,0],[2,0],[2,2],[0,2]])
+    permutation = np.array([[0,0],[0,1],[0,2],[0,3],[1,3],[1,2],[1,1],[1,0],[2,0],[2,1],[2,2],[2,3],[3,3],[3,2],[3,1],[3,0]])
 
     settings.burst_transformation_params = {'max_translation': 24.0,
                                             'max_rotation': 1.0,
@@ -77,7 +78,11 @@ def run(settings):
     
     settings.burst_reference_aligned = True
     settings.image_processing_params = {'random_ccm': True, 'random_gains': True, 'smoothstep': True, 'gamma': True, 'add_noise': True}
-    image_processing_params_val = {'random_ccm': True, 'random_gains': True, 'smoothstep': True, 'gamma': True, 'add_noise': True}
+    dir_path = "/home/yutong/zheng/projects/dbsr_rl/DBSR/util_scripts"
+    with open(os.path.join(dir_path, 'mice_val_meta_infos.pkl'), 'rb') as f:
+        meta_infos_val = pkl.load(f)
+    image_processing_params_val = {'random_ccm': True, 'random_gains': True, 'smoothstep': True, 'gamma': True, 'add_noise': True, \
+        'predefined_params': meta_infos_val}
 
     zurich_raw2rgb_train = datasets.MixedMiceNIR_Dai(split='train')
     zurich_raw2rgb_val = datasets.MixedMiceNIR_Dai(split='val')
@@ -97,24 +102,24 @@ def run(settings):
                                                               transform=transform_val,
                                                               image_processing_params=image_processing_params_val,
                                                               random_crop=False)
-    data_processing_val_2 = processing.SyntheticBurstDatabaseProcessing(settings.crop_sz, settings.burst_sz,
-                                                              1.0,
-                                                              burst_transformation_params=burst_transformation_params_val,
-                                                              transform=transform_val,
-                                                              image_processing_params=image_processing_params_val,
-                                                              random_crop=False)
+    # data_processing_val_2 = processing.SyntheticBurstDatabaseProcessing(settings.crop_sz, settings.burst_sz,
+    #                                                           1.0,
+    #                                                           burst_transformation_params=burst_transformation_params_val,
+    #                                                           transform=transform_val,
+    #                                                           image_processing_params=image_processing_params_val,
+    #                                                           random_crop=False)
 
     # Train sampler and loader
     dataset_train = sampler.RandomImage([zurich_raw2rgb_train], [1],
                                         samples_per_epoch=settings.batch_size * 1000, processing=data_processing_train)
     dataset_val = sampler.IndexedImage(zurich_raw2rgb_val, processing=data_processing_val)
-    dataset_val_2 = sampler.IndexedImage(zurich_raw2rgb_val, processing=data_processing_val_2)
+    # dataset_val_2 = sampler.IndexedImage(zurich_raw2rgb_val, processing=data_processing_val_2)
     loader_train = DataLoader('train', dataset_train, training=True, num_workers=settings.num_workers,
                               stack_dim=0, batch_size=settings.batch_size)
     loader_val = DataLoader('val', dataset_val, training=False, num_workers=settings.num_workers,
                             stack_dim=0, batch_size=settings.batch_size, epoch_interval=5)
-    loader_val_2 = DataLoader('val_2', dataset_val_2, training=False, num_workers=settings.num_workers,
-                            stack_dim=0, batch_size=1, epoch_interval=10)
+    # loader_val_2 = DataLoader('val_2', dataset_val_2, training=False, num_workers=settings.num_workers,
+    #                         stack_dim=0, batch_size=1, epoch_interval=10)
 
     net = deeprep_nets.deeprep_sr_iccv21(num_iter=3, enc_dim=64, enc_num_res_blocks=5, enc_out_dim=256,
                                          dec_dim_pre=64, dec_dim_post=32, dec_num_pre_res_blocks=5,
@@ -137,6 +142,6 @@ def run(settings):
                            lr=2e-4)
 
     lr_scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[100, 150], gamma=0.2)
-    trainer = SimpleTrainer(actor, [loader_train, loader_val_2, loader_val], optimizer, settings, lr_scheduler)
+    trainer = SimpleTrainer(actor, [loader_train, loader_val], optimizer, settings, lr_scheduler)
 
     trainer.train(200, load_latest=True, fail_safe=True)

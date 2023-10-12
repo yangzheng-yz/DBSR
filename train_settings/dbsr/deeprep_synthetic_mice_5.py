@@ -23,7 +23,7 @@ import data.transforms as tfm
 from admin.multigpu import MultiGPU
 from models_dbsr.loss.image_quality_v2 import PSNR, PixelWiseError
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 import numpy as np
 
 def set_seed(seed_value=42):
@@ -52,10 +52,10 @@ def run(settings):
     settings.print_interval = 1
 
     settings.crop_sz = (512, 640)
-    settings.burst_sz = 4
+    settings.burst_sz = 5
     settings.downsample_factor = 4
 
-    permutation = np.array([[0,0],[2,0],[2,2],[0,2]])
+    permutation = np.array([[0,0],[2,0],[2,2],[0,2],[3,3]])
 
     settings.burst_transformation_params = {'max_translation': 24.0,
                                             'max_rotation': 1.0,
