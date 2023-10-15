@@ -79,19 +79,19 @@ class BaseAgentTrainer:
                     if isinstance(checkpoint, str) or isinstance(checkpoint, list):
                         self.load_checkpoint(checkpoint)
                 
+                self.train_sac()
+                # for epoch in range(self.epoch+1, max_epochs+1):
+                #     self.epoch = epoch
 
-                for epoch in range(self.epoch+1, max_epochs+1):
-                    self.epoch = epoch
+                    # self.train_epoch()
 
-                    self.train_epoch()
+                    # if self.high_level_lr_scheduler is not None:
+                    #     self.high_level_lr_scheduler.step()
+                    # if self.option_lr_scheduler is not None:
+                    #     self.option_lr_scheduler.step()
 
-                    if self.high_level_lr_scheduler is not None:
-                        self.high_level_lr_scheduler.step()
-                    if self.option_lr_scheduler is not None:
-                        self.option_lr_scheduler.step()
-
-                    if self._checkpoint_dir:
-                        self.save_checkpoint()
+                    # if self._checkpoint_dir:
+                    #     self.save_checkpoint()
             except:
                 print('Training crashed at epoch {}'.format(epoch))
                 if fail_safe:
