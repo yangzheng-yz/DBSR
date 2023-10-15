@@ -64,7 +64,7 @@ def run(settings):
                                    'predefined_params': meta_infos_val}
 
     zurich_raw2rgb_train = datasets.MixedMiceNIR_Dai(split='train')
-    zurich_raw2rgb_val = datasets.MixedMiceNIR_Dai(split='val')  
+    zurich_raw2rgb_val = datasets.MixedMiceNIR_Dai(split='val_two')  
 
     transform_train = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True), tfm.RandomHorizontalFlip())
     transform_val = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True))
@@ -84,7 +84,7 @@ def run(settings):
 
     # Train sampler and loader
     dataset_train = sampler.RandomImage([zurich_raw2rgb_train], [1],
-                                        samples_per_epoch=3000, processing=data_processing_train)
+                                        samples_per_epoch=10, processing=data_processing_train)
     # dataset_val = sampler.RandomImage([NightCity_val], [1],
     #                                   samples_per_epoch=settings.batch_size * 1300, processing=data_processing_val)
     dataset_val = sampler.IndexedImage(zurich_raw2rgb_val, processing=data_processing_val)
