@@ -11,7 +11,7 @@ class BaseAgentTrainer:
     """Base trainer class. Contains functions for training and saving/loading chackpoints.
     Trainer classes should inherit from this one and overload the train_epoch function."""
 
-    def __init__(self, actors, loaders, actor_optimizer, critic_1_optimizer, critic_2_optimizer, log_alpha_optimizer, settings, actor_lr_scheduler=None, critic_1_lr_scheduler=None, critic_2_lr_scheduler=None, log_alpha_lr_scheduler=None):
+    def __init__(self, actors, loaders, actor_optimizer, critic_1_optimizer, critic_2_optimizer, log_alpha_optimizer, settings, actor_lr_scheduler=None, critic_1_lr_scheduler=None, critic_2_lr_scheduler=None, log_alpha_lr_scheduler=None, log_alpha=0):
         """
         args:
             actor - The actor for training the network
@@ -29,7 +29,7 @@ class BaseAgentTrainer:
         self.critic_1_lr_scheduler = critic_1_lr_scheduler
         self.critic_2_lr_scheduler = critic_2_lr_scheduler
 
-        self.log_alpha = torch.tensor(np.log(0.01), dtype=torch.float)
+        self.log_alpha = log_alpha
         self.log_alpha.requires_grad = True  # 可以对alpha求梯度
         self.log_alpha_optimizer = log_alpha_optimizer
         self.log_alpha_lr_scheduler = log_alpha_lr_scheduler

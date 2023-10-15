@@ -1,3 +1,4 @@
+import torch
 import torch.optim as optim
 import dataset as datasets
 from utils.loading import load_network
@@ -91,7 +92,7 @@ def run(settings):
     loader_train = DataLoader('train', dataset_train, training=True, num_workers=settings.num_workers,
                               stack_dim=0, batch_size=settings.batch_size)
     loader_val = DataLoader('val', dataset_val, training=False, num_workers=settings.num_workers,
-                            stack_dim=0, batch_size=settings.batch_size, epoch_interval=5) # default is also 1
+                            stack_dim=0, batch_size=settings.batch_size, epoch_interval=2) # default is also 1
     
     print("train dataset length: ", len(loader_train))
     print("val dataset length: ", len(loader_val)) 
@@ -103,16 +104,36 @@ def run(settings):
     # 获取encoder部分
     dbsr_net = load_network('/mnt/samsung/zheng_data/training_log/checkpoints/dbsr/deeprep_synthetic_mice_4/best.pth.tar')
     
-    actor = dbsr_actors.ActorCritic_v2(num_frames=settings.burst_sz, hidden_size=5)
+    actors = [dbsr_actors.ActorSAC(num_frames=settings.burst_sz, hidden_size=5), dbsr_actors.qValueNetwork(num_frames=settings.burst_sz), \
+        dbsr_actors.qValueNetwork(num_frames=settings.burst_sz)]
 
     # optimizer = optim.Adam(actor.parameters())
 
-    optimizer = optim.Adam([{'params': actor.parameters(), 'lr': 1e-4}],
+    actor_optimizer = optim.Adam([{'params': actors[0].parameters(), 'lr': 1e-4}],
                            lr=2e-4)
+    critic_1_optimizer = optim.Adam([{'params': actors[1].parameters(), 'lr': 1e-3}],
+                           lr=2e-3)
+    critic_2_optimizer = optim.Adam([{'params': actors[2].parameters(), 'lr': 1e-3}],
+                           lr=2e-3)
+    log_alpha = torch.tensor(np.log(0.01), dtype=torch.float)
+    log_alpha_optimizer = optim.Adam([{'params': log_alpha, 'lr': 1e-3}],
+                           lr=2e-3)
 
-    lr_scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[100, 150], gamma=0.2)
-    trainer = AgentTrainer(actor, [loader_train, loader_val], optimizer, settings, lr_scheduler=lr_scheduler, 
-                               sr_net=dbsr_net, iterations=10, reward_type='psnr',
-                               discount_factor=0.99, init_permutation=permutation, tolerance=0, one_step_length=one_step_length, base_length=base_length)
+    actor_lr_scheduler = optim.lr_scheduler.MultiStepLR(actor_optimizer, milestones=[100, 150], gamma=0.2)
+    critic_1_lr_scheduler = optim.lr_scheduler.MultiStepLR(critic_1_optimizer, milestones=[100, 150], gamma=0.2)
+    critic_2_lr_scheduler = optim.lr_scheduler.MultiStepLR(critic_2_optimizer, milestones=[100, 150], gamma=0.2)
+    log_alpha_lr_scheduler = optim.lr_scheduler.MultiStepLR(log_alpha_optimizer, milestones=[100, 150], gamma=0.2)
+    
+    trainer = AgentSAC(actors, 
+                        [loader_train, loader_val], 
+                        actor_optimizer, critic_1_optimizer, critic_2_optimizer, log_alpha_optimizer,
+                        settings, 
+                        actor_lr_scheduler=actor_lr_scheduler, 
+                        critic_1_lr_scheduler=critic_1_lr_scheduler, 
+                        critic_2_lr_scheduler=critic_2_lr_scheduler, 
+                        log_alpha_lr_scheduler=log_alpha_lr_scheduler,
+                        log_alpha=log_alpha, 
+                        sr_net=dbsr_net, iterations=10, reward_type='psnr',
+                        discount_factor=0.98, init_permutation=permutation, one_step_length=one_step_length, base_length=base_length)
 
     trainer.train(200, load_latest=True, fail_safe=True) # (epoch, )
