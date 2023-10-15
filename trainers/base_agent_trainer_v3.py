@@ -5,6 +5,7 @@ import torch
 import traceback
 from admin import loading, multigpu
 import numpy as np
+from utils.rl_utils import ReplayBuffer
 
 class BaseAgentTrainer:
     """Base trainer class. Contains functions for training and saving/loading chackpoints.
@@ -61,7 +62,7 @@ class BaseAgentTrainer:
         else:
             self._checkpoint_dir = None
 
-    def train(self, max_epochs, load_latest=False, fail_safe=True, checkpoint = None):
+    def train(self, max_epochs, load_latest=False, fail_safe=True, checkpoint = None, buffer_size=10000):
         """Do training for the given number of epochs.
         args:
             max_epochs - Max number of training epochs,
@@ -78,8 +79,8 @@ class BaseAgentTrainer:
                 else:
                     if isinstance(checkpoint, str) or isinstance(checkpoint, list):
                         self.load_checkpoint(checkpoint)
-                
-                self.train_sac()
+                replay_buffer = ReplayBuffer(buffer_size)
+                self.train_sac(max_epochs, replay_buffer)
                 # for epoch in range(self.epoch+1, max_epochs+1):
                 #     self.epoch = epoch
 
@@ -106,6 +107,9 @@ class BaseAgentTrainer:
         print('Finished training!')
 
     def train_epoch(self):
+        raise NotImplementedError
+
+    def train_sac(self):
         raise NotImplementedError
 
     def save_checkpoint(self):

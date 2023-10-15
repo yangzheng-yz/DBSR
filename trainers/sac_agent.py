@@ -14,6 +14,7 @@ from data.postprocessing_functions import SimplePostProcess
 import cv2
 import pickle
 from tqdm import tqdm
+import torch.nn.functional as F
 
 
 class AgentSAC(BaseAgentTrainer):
@@ -147,13 +148,16 @@ class AgentSAC(BaseAgentTrainer):
 
         return updated_permutations_tensor, updated_actions_tensor.to(device)
 
-    def step_environment(self, dists, HR_batch, permutations):
+    def step_environment(self, dists, HR_batch, permutations, iter):
         actions = torch.stack([dist.sample() for dist in dists], dim=1)
         # print("actions: ", actions)
         permutations, actions  = self.update_permutations_and_actions(actions, permutations)
         
         next_state = self.apply_actions_to_env(HR_batch, permutations)
-        return next_state, actions, permutations
+        done = False
+        if iter == self.iterations:
+            done = True
+        return next_state, actions, permutations, done
 
     def apply_actions_to_env(self, HR_batch, permutations_batch):
         """Apply actions to a batch of images."""
@@ -423,9 +427,6 @@ class AgentSAC(BaseAgentTrainer):
                                 self.initial_psnr_sum/float(i), self.final_psnr_sum/float(i), \
                                     self.final_psnr_sum/float(i) - self.initial_psnr_sum/float(i)), file=f)
                     f.close()
-            
-
-
 
     def train_epoch(self):
         """Do one epoch for each loader."""
@@ -438,16 +439,8 @@ class AgentSAC(BaseAgentTrainer):
         self._stats_new_epoch()
         self._write_tensorboard()
         
-    def train_sac(self):
-        """Do one epoch for each loader."""
-        for loader in self.loaders:
-            if self.epoch % loader.epoch_interval == 0:
-                self.cycle_dataset(loader)
-                if self.save_results:
-                    assert 1==2, "This means you choose the only eval mode to provide visualization results, so we just run one loader then stop here~"
-
-        self._stats_new_epoch()
-        self._write_tensorboard()
+    def train_sac(self, max_epochs, replay_buffer):
+        self.train_off_policy_agent(self.loaders, max_epochs, replay_buffer, minimal_size=500)
 
     def _init_timing(self):
         self.num_frames = 0
@@ -502,84 +495,143 @@ class AgentSAC(BaseAgentTrainer):
 
         self.tensorboard_writer.write_epoch(self.stats, self.epoch)
 
-    def train_off_policy_agent(self, loader, num_episodes, replay_buffer, minimal_size=500):
-        for idx, _ in enumerate(self.actors):
-            self.actors[idx].train(loader.training)
-        torch.set_grad_enabled(loader.training)
-        return_list = []
+    def train_off_policy_agent(self, loaders, num_episodes, replay_buffer, minimal_size=500):
+
+        return_list = [] # only for training
+        epoch = self.epoch
         for i in range(10):
             with tqdm(total=int(num_episodes/10), desc='Iteration %d' % i) as pbar:
                 for i_episode in range(int(num_episodes/10)):
-                    ######## preparation
-                    preds = []
-                    episode_return = 0
-                    data = next(loader)
-                    if self.move_data_to_gpu:
-                        data = data.to(self.device)
-                    self.epoch = num_episodes/10 * i + i_episode+1
-                    data['epoch'] = self.epoch
-                    data['settings'] = self.settings
-                    state = data['burst']
-                    
-                    done = False
-                    with torch.no_grad():
-                        pred, _   = self.sr_net(state)
-                    preds.append(pred.clone())
-                    batch_size = data['frame_gt'].size(0)
-                    permutations = torch.tensor(self.init_permutation).repeat(batch_size, 1, 1)
+                    for loader in loaders:
+                        if epoch % loader.epoch_interval == 0:
+                            if loader.training:
+                                ######## preparation
+                                for idx, _ in enumerate(self.actors):
+                                    self.actors[idx].train(loader.training)
+                                torch.set_grad_enabled(loader.training)
+                                preds = []
+                                episode_return = 0
+                                data = next(loader)
+                                if self.move_data_to_gpu:
+                                    data = data.to(self.device)
+                                self.epoch = num_episodes/10 * i + i_episode+1
+                                data['epoch'] = self.epoch
+                                data['settings'] = self.settings
+                                state = data['burst']
+                                
+                                done = False
+                                with torch.no_grad():
+                                    pred, _   = self.sr_net(state)
+                                preds.append(pred.clone())
+                                batch_size = data['frame_gt'].size(0)
+                                permutations = torch.tensor(self.init_permutation).repeat(batch_size, 1, 1)
 
-                    if self.reward_type == 'psnr':
-                        reward_func = {'psnr': PSNR(boundary_ignore=40)}
-                    elif self.reward_type == 'ssim':
-                        reward_func = {'ssim': SSIM(boundary_ignore=40)}
-                    else:
-                        assert 0 == 1, "wrong reward type"
-                    ######## preparation done 
-                    
-                    
-                    while not done:
-                        # action = agent.take_action(state)
-                        # next_state, reward, done, _ = env.step(action)
-                        
-                        # substitute the above two lines with below line
-                        dists = self.actor(state) # here the state should be one
-                        next_state, action, permutations, done = self.step_environment(dists, data['frame_gt'].clone(), permutations.clone())
-                        with torch.no_grad():
-                            # print("device of model: ", next(self.sr_net.parameters()).device)
-                            # print("device of nextstate: ", next_state.size())
-                            pred, _ = self.sr_net(next_state.clone())
-                        preds.append(pred.clone())
-                        reward = self._calculate_reward(data['frame_gt'], preds[-1], preds[-2], reward_func=reward_func, batch=True, tolerance=0)
+                                if self.reward_type == 'psnr':
+                                    reward_func = {'psnr': PSNR(boundary_ignore=40)}
+                                elif self.reward_type == 'ssim':
+                                    reward_func = {'ssim': SSIM(boundary_ignore=40)}
+                                else:
+                                    assert 0 == 1, "wrong reward type"
+                                ######## preparation done 
+                                
+                                iteration = 0
+                                while not done:
+                                    # action = agent.take_action(state)
+                                    # next_state, reward, done, _ = env.step(action)
+                                    
+                                    # substitute the above two lines with below line
+                                    dists = self.actors[0](state) # here the state should be one
+                                    next_state, action, permutations, done = self.step_environment(dists, data['frame_gt'].clone(), permutations.clone(), iteration)
+                                    with torch.no_grad():
+                                        # print("device of model: ", next(self.sr_net.parameters()).device)
+                                        # print("device of nextstate: ", next_state.size())
+                                        pred, _ = self.sr_net(next_state.clone())
+                                    preds.append(pred.clone())
+                                    reward = self._calculate_reward(data['frame_gt'], preds[-1], preds[-2], reward_func=reward_func, batch=True, tolerance=0)
 
-                        replay_buffer.add(state.clone(), action.clone(), reward, next_state.clone(), done)
-                        state = next_state.clone()
-                        episode_return += reward * (self.discount_factor ** i_episode)
-                        if replay_buffer.size() > minimal_size:
-                            b_s, b_a, b_r, b_ns, b_d = replay_buffer.sample(batch_size)
-                            transition_dict = {'states': b_s, 'actions': b_a, 'next_states': b_ns, 'rewards': b_r, 'dones': b_d}
-                            actor_loss, critic_1_loss, critic_2_loss, alpha_loss = self.update(transition_dict)
-                    metric_initial = reward_func[self.reward_type](preds[0].clone(), data['frame_gt'].clone())
-                    metric_final = reward_func[self.reward_type](preds[-1].clone(), data['frame_gt'].clone())
-                    return_list.append(episode_return)
-                    if (i_episode+1) % 10 == 0:
-                        pbar.set_postfix({'episode': '%d' % (num_episodes/10 * i + i_episode+1), 'return': '%.3f' % np.mean(return_list[-10:])})
-                    pbar.update(1)
-                    self._update_stats({'Return': episode_return, 'actor_loss': actor_loss, 'critic_1_loss': critic_1_loss, \
-                                        'critic_2_loss': critic_2_loss, "alpha_loss": alpha_loss, \
-                                        "Improvement": ((metric_final.item()-metric_initial.item()))}, batch_size, loader)
-                    self.save_checkpoint()
+                                    replay_buffer.add(state.clone(), action.clone(), reward, next_state.clone(), done)
+                                    state = next_state.clone()
+                                    episode_return += reward * (self.discount_factor ** i_episode)
+                                    if replay_buffer.size() > minimal_size:
+                                        b_s, b_a, b_r, b_ns, b_d = replay_buffer.sample(batch_size)
+                                        transition_dict = {'states': b_s, 'actions': b_a, 'next_states': b_ns, 'rewards': b_r, 'dones': b_d}
+                                        actor_loss, critic_1_loss, critic_2_loss, alpha_loss = self.update(transition_dict)
+                                    iteration += 1
+                                metric_initial = reward_func[self.reward_type](preds[0].clone(), data['frame_gt'].clone())
+                                metric_final = reward_func[self.reward_type](preds[-1].clone(), data['frame_gt'].clone())
+                                return_list.append(episode_return)
+                                if (i_episode+1) % 10 == 0:
+                                    pbar.set_postfix({'episode': '%d' % (num_episodes/10 * i + i_episode+1), 'return': '%.3f' % np.mean(return_list[-10:])})
+                                pbar.update(1)
+                                self._update_stats({'Return': episode_return, 'actor_loss': actor_loss, 'critic_1_loss': critic_1_loss, \
+                                                    'critic_2_loss': critic_2_loss, "alpha_loss": alpha_loss, \
+                                                    "Improvement": ((metric_final.item()-metric_initial.item()))}, batch_size, loader)
+                                self.save_checkpoint()
 
+                            else:
+                                print("I am validating!!!")
+                                for idx, _ in enumerate(self.actors):
+                                    self.actors[idx].train(loader.training)
+                                torch.set_grad_enabled(loader.training) 
+                                
+                                for idx, data in enumerate(loader):
+                                    state = data['burst']
+                                    done = False
+                                    with torch.no_grad():
+                                        pred, _   = self.sr_net(state)
+                                    initial_pred = pred.clone()
+                                    batch_size = data['frame_gt'].size(0)
+                                    permutations = torch.tensor(self.init_permutation).repeat(batch_size, 1, 1)
+
+                                    if self.reward_type == 'psnr':
+                                        reward_func = {'psnr': PSNR(boundary_ignore=40)}
+                                    elif self.reward_type == 'ssim':
+                                        reward_func = {'ssim': SSIM(boundary_ignore=40)}
+                                    else:
+                                        assert 0 == 1, "wrong reward type"
+                                    ######## preparation done 
+                                    
+                                    while not done:
+                                        dists = self.actors[0](state) # here the state should be one
+                                        next_state, action, permutations, done = self.step_environment(dists, data['frame_gt'].clone(), permutations.clone())
+                                        with torch.no_grad():
+                                            # print("device of model: ", next(self.sr_net.parameters()).device)
+                                            # print("device of nextstate: ", next_state.size())
+                                            pred, _ = self.sr_net(next_state.clone())
+                                        final_pred = pred.clone()
+                                        state = next_state.clone()
+
+                                    metric_initial = reward_func[self.reward_type](initial_pred.clone(), data['frame_gt'].clone())
+                                    metric_final = reward_func[self.reward_type](final_pred.clone(), data['frame_gt'].clone())
+                                    self._update_stats({"Improvement": ((metric_final.item()-metric_initial.item())), "Inital_pred": metric_initial.item(), \
+                                        "Fianl_pred": metric_final.item()}, batch_size, loader)
+                                    
+                    self._stats_new_epoch()
+                    self._write_tensorboard()
         return return_list
-
     def calc_target(self, rewards, next_states, dones):
-        next_probs = self.actor(next_states)
-        next_log_probs = torch.log(next_probs + 1e-8)
-        entropy = -torch.sum(next_probs * next_log_probs, dim=1, keepdim=True)
-        q1_value = self.target_critic_1(next_states)
+        dists = self.actors[0](next_states)
+        
+        # Calculate probabilities and log probabilities for each distribution
+        probs = [dist.probs for dist in dists]
+        log_probs = [dist.logits+1e-8 for dist in dists]  # logits are the log probabilities in the Categorical distribution
+
+        # Calculate entropy for each distribution
+        entropy = [-torch.sum(p * lp, dim=-1, keepdim=True) for p, lp in zip(probs, log_probs)]
+        entropy = sum(entropy) # [batch_size, 1]
+        
+        next_probs = torch.tensor(probs).to(self.device)
+        next_probs = next_probs.permute(1, 0, 2) # [batch_size, self.burst_sz-1, action_dim]
+        
+        # next_probs = self.actors[0](next_states)
+        # next_log_probs = torch.log(next_probs + 1e-8)
+        # entropy = -torch.sum(next_probs * next_log_probs, dim=1, keepdim=True)
+        q1_value = self.target_critic_1(next_states) # [batch_size, self.burst_sz-1, action_dim]
         q2_value = self.target_critic_2(next_states)
         min_qvalue = torch.sum(next_probs * torch.min(q1_value, q2_value),
-                               dim=1,
-                               keepdim=True)
+                               dim=-1,
+                               keepdim=False)
+        min_qvalue = torch.min(min_qvalue, dim=1, keepdim=True) # to avoid overestimate, we should select the minimum agent sum qvalue
         next_value = min_qvalue + self.log_alpha.exp() * entropy
         td_target = rewards + self.gamma * next_value * (1 - dones)
         return td_target
@@ -595,10 +647,16 @@ class AgentSAC(BaseAgentTrainer):
 
         # 更新两个Q网络
         td_target = self.calc_target(rewards, next_states, dones)
-        critic_1_q_values = self.critic_1(states).gather(1, actions) # the critic network output all qvalue, then we select according to actions
+        # critic_1_q_values = self.actors[1](states).gather(1, actions) # the critic network output all qvalue, then we select according to actions
+        critic_1_q_values = torch.gather(self.actors[1](states), \
+            dim=2, index=actions.unsqueeze(-1)).squeeze(-1)
+        critic_1_q_values = critic_1_q_values.sum(dim=1, keepdim=True)
         critic_1_loss = torch.mean(
             F.mse_loss(critic_1_q_values, td_target.detach()))
-        critic_2_q_values = self.critic_2(states).gather(1, actions)
+        # critic_2_q_values = self.actors[2](states).gather(1, actions)
+        critic_2_q_values = torch.gather(self.actors[2](states), \
+            dim=2, index=actions.unsqueeze(-1)).squeeze(-1)
+        critic_2_q_values = critic_2_q_values.sum(dim=1, keepdim=True)
         critic_2_loss = torch.mean(
             F.mse_loss(critic_2_q_values, td_target.detach()))
         self.critic_1_optimizer.zero_grad()
@@ -609,15 +667,23 @@ class AgentSAC(BaseAgentTrainer):
         self.critic_2_optimizer.step()
 
         # 更新策略网络
-        probs = self.actor(states)
-        log_probs = torch.log(probs + 1e-8)
+        dists = self.actors[0](states)
+        
+        # Calculate probabilities and log probabilities for each distribution
+        probs = [dist.probs for dist in dists]
+        log_probs = [dist.logits+1e-8 for dist in dists]
+        # log_probs = torch.log(probs + 1e-8)
         # 直接根据概率计算熵
-        entropy = -torch.sum(probs * log_probs, dim=1, keepdim=True)  #
-        q1_value = self.critic_1(states)
-        q2_value = self.critic_2(states)
+        entropy = [-torch.sum(p * lp, dim=-1, keepdim=True) for p, lp in zip(probs, log_probs)]
+        entropy = sum(entropy) # [batch_size, 1]
+        probs = torch.tensor(probs).to(self.device)
+        probs = probs.permute(1, 0, 2) # [batch_size, self.burst_sz-1, action_dim]
+        q1_value = self.actors[1](states)
+        q2_value = self.actors[2](states)
         min_qvalue = torch.sum(probs * torch.min(q1_value, q2_value),
-                               dim=1,
-                               keepdim=True)  # 直接根据概率计算期望
+                               dim=-1,
+                               keepdim=False)  # 直接根据概率计算期望
+        min_qvalue = torch.min(min_qvalue, dim=1, keepdim=True)
         actor_loss = torch.mean(-self.log_alpha.exp() * entropy - min_qvalue)
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
@@ -630,8 +696,8 @@ class AgentSAC(BaseAgentTrainer):
         alpha_loss.backward()
         self.log_alpha_optimizer.step()
 
-        self.soft_update(self.critic_1, self.target_critic_1)
-        self.soft_update(self.critic_2, self.target_critic_2)
+        self.soft_update(self.actors[1], self.target_critic_1)
+        self.soft_update(self.actors[2], self.target_critic_2)
         
         return actor_loss.item(), critic_1_loss.item(), critic_2_loss.item(), alpha_loss.item()
         
