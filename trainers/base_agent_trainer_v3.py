@@ -4,13 +4,13 @@ import glob
 import torch
 import traceback
 from admin import loading, multigpu
-
+import numpy as np
 
 class BaseAgentTrainer:
     """Base trainer class. Contains functions for training and saving/loading chackpoints.
     Trainer classes should inherit from this one and overload the train_epoch function."""
 
-    def __init__(self, actors, loaders, high_level_optimizer, option_optimizer, settings, high_level_lr_scheduler=None, option_lr_scheduler=None):
+    def __init__(self, actors, loaders, actor_optimizer, critic_1_optimizer, critic_2_optimizer, log_alpha_optimizer, settings, actor_lr_scheduler=None, critic_1_lr_scheduler=None, critic_2_lr_scheduler=None, log_alpha_lr_scheduler=None):
         """
         args:
             actor - The actor for training the network
@@ -21,10 +21,18 @@ class BaseAgentTrainer:
             high_level_lr_scheduler - Learning rate scheduler
         """
         self.actors = actors
-        self.high_level_optimizer = high_level_optimizer
-        self.option_optimizer = option_optimizer
-        self.high_level_lr_scheduler = high_level_lr_scheduler
-        self.option_lr_scheduler = option_lr_scheduler
+        self.actor_optimizer = actor_optimizer
+        self.critic_1_optimizer = critic_1_optimizer
+        self.critic_2_optimizer = critic_2_optimizer
+        self.actor_lr_scheduler = actor_lr_scheduler
+        self.critic_1_lr_scheduler = critic_1_lr_scheduler
+        self.critic_2_lr_scheduler = critic_2_lr_scheduler
+
+        self.log_alpha = torch.tensor(np.log(0.01), dtype=torch.float)
+        self.log_alpha.requires_grad = True  # 可以对alpha求梯度
+        self.log_alpha_optimizer = log_alpha_optimizer
+        self.log_alpha_lr_scheduler = log_alpha_lr_scheduler
+        
         self.loaders = loaders
 
         self.update_settings(settings)
@@ -107,8 +115,8 @@ class BaseAgentTrainer:
         nets = self.actors
         print("Temporarily we do not support multigpu.")
         
-        actors_type = [type(actor).__name__ for actor in self.actors]
-        nets_type = [type(net).__name__ for net in nets]
+        actors_type = [f"{type(actor).__name__}_{idx}" for idx, actor in enumerate(self.actors)]
+        nets_type = [f"{type(net).__name__}_{idx}" for idx, net in enumerate(nets)]
         states = [{
             'epoch': self.epoch,
             'actor_type': actors_type[idx],
@@ -157,8 +165,8 @@ class BaseAgentTrainer:
         nets = self.actors
         print("Temporarily we do not support multigpu. ")
         
-        actors_type = [type(actor).__name__ for actor in self.actors]
-        nets_type = [type(net).__name__ for net in nets]
+        actors_type = [f"{type(actor).__name__}_{idx}" for idx, actor in enumerate(self.actors)]
+        nets_type = [f"{type(net).__name__}_{idx}" for idx, net in enumerate(nets)]
 
         if checkpoint is None:
             # Load most recent checkpoint
