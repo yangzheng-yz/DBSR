@@ -10,7 +10,7 @@ import data.transforms as tfm
 from admin.multigpu import MultiGPU
 import numpy as np
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 import warnings
 # 忽略特定的警告
 warnings.filterwarnings("ignore", category=UserWarning, module="torch.functional")
@@ -22,7 +22,7 @@ import pickle as pkl
 # torch.backends.cudnn.benchmark = True
 
 def run(settings):
-    settings.description = 'adjust 4 with pixel step 1/8 LR pixel, discount_factor: 0.99, one_step_length: 1 / 8, iterations: 10, SAC'
+    settings.description = 'adjust 4 with pixel step 1/12 LR pixel, discount_factor: 0.99, one_step_length: 1 / 8, iterations: 10, SAC'
     settings.batch_size = 1
     settings.num_workers = 12
     settings.multi_gpu = False
@@ -32,7 +32,7 @@ def run(settings):
     # settings.image_size = 256
     settings.burst_sz = 4
     settings.downsample_factor = 4 # TODO: need to revise to 4?
-    one_step_length = 1 / 8
+    one_step_length = 1 / 12
     base_length = 1 / settings.downsample_factor
     buffer_size = 10000
 
@@ -137,6 +137,6 @@ def run(settings):
                         log_alpha_lr_scheduler=log_alpha_lr_scheduler,
                         log_alpha=log_alpha, 
                         sr_net=dbsr_net, iterations=10, reward_type='psnr',
-                        discount_factor=0.98, init_permutation=permutation, one_step_length=one_step_length, base_length=base_length, minimal_size=50)
+                        discount_factor=0.98, init_permutation=permutation, one_step_length=one_step_length, base_length=base_length, minimal_size=500)
 
     trainer.train(200, load_latest=True, fail_safe=True, buffer_size=buffer_size) # (epoch, )

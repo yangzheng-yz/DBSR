@@ -9,12 +9,21 @@ class ReplayBuffer:
         self.buffer = collections.deque(maxlen=capacity) 
 
     def add(self, state, action, reward, next_state, done): 
+        # for i in range(state.size(0)):
+        #     self.buffer.append(state[i], action[i], reward[i], next_state[i], done[i])
+
         self.buffer.append((state, action, reward, next_state, done)) 
 
     def sample(self, batch_size): 
         transitions = random.sample(self.buffer, batch_size)
         state, action, reward, next_state, done = zip(*transitions)
-        return np.array(state), action, reward, np.array(next_state), done 
+        # print(f"Debug what is the size of state: {state[0].size()} {state[1].size()} {state[2].size()} {state[3].size()}")
+        # print(f"Debug what is the size of action: {action}")
+        # print(f"Debug what is the size of reward: {reward}")
+        # print(f"Debug what is the size of next_state: {next_state[0].size()} {next_state[1].size()} {next_state[2].size()} {next_state[3].size()}")
+        # print(f"Debug what is the size of done: {done}")
+        return state, action, reward, next_state, done 
+        # return state, action, reward, next_state, done 
 
     def size(self): 
         return len(self.buffer)

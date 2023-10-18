@@ -128,8 +128,10 @@ class BaseAgentTrainer:
             'net': nets[idx].state_dict(),
             'net_info': getattr(nets[idx], 'info', None),
             'constructor': getattr(nets[idx], 'constructor', None),
-            'high_level_optimizer': self.high_level_optimizer.state_dict(),
-            'low_level_optimizer': self.option_optimizer.state_dict(),
+            'actor_optimizer': self.actor_optimizer.state_dict(),
+            'critic_1_optimizer': self.critic_1_optimizer.state_dict(),
+            'critic_2_optimizer': self.critic_2_optimizer.state_dict(),
+            'log_alpha_optimizer': self.log_alpha_optimizer.state_dict(),
             'stats': self.stats,
             'settings': self.settings
         } for idx, _ in enumerate(nets_type)]
@@ -223,10 +225,14 @@ class BaseAgentTrainer:
             if key == 'net':
                 for idx, _ in enumerate(nets):
                     nets[idx].load_state_dict(checkpoints_dict[idx][key])
-            elif key == 'high_level_optimizer':
-                self.high_level_optimizer.load_state_dict(checkpoints_dict[0][key])
-            elif key == 'low_level_optimizer':
-                self.option_optimizer.load_state_dict(checkpoints_dict[1][key]) # the second model is the low level model
+            elif key == 'actor_optimizer':
+                self.actor_optimizer.load_state_dict(checkpoints_dict[0][key])
+            elif key == 'critic_1_optimizer':
+                self.critic_1_optimizer.load_state_dict(checkpoints_dict[0][key])
+            elif key == 'critic_2_optimizer':
+                self.critic_2_optimizer.load_state_dict(checkpoints_dict[0][key])
+            elif key == 'log_alpha_optimizer':
+                self.log_alpha_optimizer.load_state_dict(checkpoints_dict[0][key])
             else:
                 # print("what are the keys: ", checkpoints_dict[0].keys())
                 # print("what is current key: ", key)
@@ -242,7 +248,9 @@ class BaseAgentTrainer:
 
         # Update the epoch in lr scheduler
         if 'epoch' in fields:
-            self.high_level_lr_scheduler.last_epoch = self.epoch
-            self.option_lr_scheduler.last_epoch = self.epoch
+            self.actor_lr_scheduler.last_epoch = self.epoch
+            self.critic_1_lr_scheduler.last_epoch = self.epoch
+            self.critic_2_lr_scheduler.last_epoch = self.epoch
+            self.log_alpha_lr_scheduler.last_epoch = self.epoch
 
         return True

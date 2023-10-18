@@ -21,6 +21,7 @@ import data.camera_pipeline as rgb2raw
 import data.transforms as tfm
 import data.processing_utils as prutils
 from utils.data_format_utils import torch_to_numpy, numpy_to_torch
+import time
 
 
 def rgb2rawburst(image, burst_size, downsample_factor=1, burst_transformation_params=None,
@@ -506,7 +507,10 @@ def single2lrburstdatabase(image, burst_size, downsample_factor=1, transformatio
     sample_pos_inv_all = []
 
     rvs, cvs = torch.meshgrid([torch.arange(0, image.shape[0]),
-                               torch.arange(0, image.shape[1])])
+                               torch.arange(0, image.shape[1])], indexing="ij")
+    # print("what is rvs: ", rvs)
+    # print("what is cvs: ", cvs)
+    # time.sleep(1000)
 
     sample_grid = torch.stack((cvs, rvs, torch.ones_like(cvs)), dim=-1).float()
 
