@@ -15,14 +15,16 @@ import cv2
 import pickle
 from tqdm import tqdm
 import torch.nn.functional as F
+from actors.dbsr_actors import qValueNetwork
 
 
 class AgentSAC(BaseAgentTrainer):
-    def __init__(self, actors, loaders, optimizer, settings, 
-                 init_permutation=None, discount_factor=0.99, sr_net=None, 
-                 lr_scheduler=None, iterations=15, 
-                 interpolation_type='bilinear', reward_type='psnr', save_results=False, saving_dir=None, one_step_length=1/4, base_length=1/4,
-                 target_entropy=-1, tau=0.005):
+    def __init__(self, actors, loaders, actor_optimizer, critic_1_optimizer, critic_2_optimizer, log_alpha_optimizer, settings, 
+                actor_lr_scheduler=None, critic_1_lr_scheduler=None, critic_2_lr_scheduler=None, log_alpha_lr_scheduler=None, log_alpha=0,
+                discount_factor=0.99, sr_net=None, 
+                lr_scheduler=None, iterations=15, 
+                interpolation_type='bilinear', reward_type='psnr', save_results=False, saving_dir=None, one_step_length=1/4, base_length=1/4,
+                target_entropy=-1, tau=0.005, init_permutation=None):
         """
         args:
             actor - The actor for training the network
@@ -32,12 +34,13 @@ class AgentSAC(BaseAgentTrainer):
             settings - Training settings
             lr_scheduler - Learning rate scheduler
         """
-        super().__init__(actors, loaders, optimizer, settings, lr_scheduler)
+        super().__init__(actors, loaders, actor_optimizer, critic_1_optimizer, critic_2_optimizer, \
+            log_alpha_optimizer, settings, actor_lr_scheduler, critic_1_lr_scheduler, critic_2_lr_scheduler, log_alpha_lr_scheduler, log_alpha)
 
         self._set_default_settings()
         
-        self.target_critic_1 = QValueNet().to(self.device)
-        self.target_critic_2 = QValueNet().to(self.device)
+        self.target_critic_1 = qValueNetwork(num_frames=settings.burst_sz).to(self.device)
+        self.target_critic_2 = qValueNetwork(num_frames=settings.burst_sz).to(self.device)
         
         self.target_critic_1.load_state_dict(self.actors[1].state_dict())
         self.target_critic_2.load_state_dict(self.actors[2].state_dict())
@@ -80,13 +83,14 @@ class AgentSAC(BaseAgentTrainer):
         
         self.one_step_length_in_grid = one_step_length / base_length
         # self.base_length = base_length
+        self.tau = tau
         
         
     def _set_default_settings(self):
         # Dict of all default values
         default = {'print_interval': 10,
-                   'print_stats': None,
-                   'description': ''}
+                'print_stats': None,
+                'description': ''}
 
         for param, default_value in default.items():
             if getattr(self.settings, param, None) is None:
@@ -503,6 +507,7 @@ class AgentSAC(BaseAgentTrainer):
             with tqdm(total=int(num_episodes/10), desc='Iteration %d' % i) as pbar:
                 for i_episode in range(int(num_episodes/10)):
                     for loader in loaders:
+                        loader_iter = iter(loader)
                         if epoch % loader.epoch_interval == 0:
                             if loader.training:
                                 ######## preparation
@@ -511,7 +516,7 @@ class AgentSAC(BaseAgentTrainer):
                                 torch.set_grad_enabled(loader.training)
                                 preds = []
                                 episode_return = 0
-                                data = next(loader)
+                                data = next(loader_iter)
                                 if self.move_data_to_gpu:
                                     data = data.to(self.device)
                                 self.epoch = num_episodes/10 * i + i_episode+1
@@ -629,21 +634,27 @@ class AgentSAC(BaseAgentTrainer):
         q1_value = self.target_critic_1(next_states) # [batch_size, self.burst_sz-1, action_dim]
         q2_value = self.target_critic_2(next_states)
         min_qvalue = torch.sum(next_probs * torch.min(q1_value, q2_value),
-                               dim=-1,
-                               keepdim=False)
+                            dim=-1,
+                            keepdim=False)
         min_qvalue = torch.min(min_qvalue, dim=1, keepdim=True) # to avoid overestimate, we should select the minimum agent sum qvalue
         next_value = min_qvalue + self.log_alpha.exp() * entropy
         td_target = rewards + self.gamma * next_value * (1 - dones)
         return td_target
 
+    def soft_update(self, net, target_net):
+        for param_target, param in zip(target_net.parameters(),
+                                    net.parameters()):
+            param_target.data.copy_(param_target.data * (1.0 - self.tau) +
+                                    param.data * self.tau)
+
     def update(self, transition_dict):
         states = transition_dict['states']
         actions = transition_dict['actions']
         rewards = torch.tensor(transition_dict['rewards'],
-                               dtype=torch.float).view(-1, 1).to(self.device)
+                            dtype=torch.float).view(-1, 1).to(self.device)
         next_states = transition_dict['next_states']
         dones = torch.tensor(transition_dict['dones'],
-                             dtype=torch.float).view(-1, 1).to(self.device)
+                            dtype=torch.float).view(-1, 1).to(self.device)
 
         # 更新两个Q网络
         td_target = self.calc_target(rewards, next_states, dones)
@@ -681,8 +692,8 @@ class AgentSAC(BaseAgentTrainer):
         q1_value = self.actors[1](states)
         q2_value = self.actors[2](states)
         min_qvalue = torch.sum(probs * torch.min(q1_value, q2_value),
-                               dim=-1,
-                               keepdim=False)  # 直接根据概率计算期望
+                            dim=-1,
+                            keepdim=False)  # 直接根据概率计算期望
         min_qvalue = torch.min(min_qvalue, dim=1, keepdim=True)
         actor_loss = torch.mean(-self.log_alpha.exp() * entropy - min_qvalue)
         self.actor_optimizer.zero_grad()

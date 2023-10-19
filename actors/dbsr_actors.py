@@ -20,6 +20,7 @@ import torch.nn.functional as F
 from torch.distributions import Categorical
 import torchvision.models as models
 import torchvision.models as models
+import time
 
 
 class ResNet18(nn.Module):
@@ -258,7 +259,8 @@ class ActorSAC(nn.Module):
         
         # Shared feature extraction
         x_shared = self.shared_resnet(x)
-
+        print(f"input size {x.size}")
+        time.sleep(1000)
         # Global Average Pooling (GAP)
         x_shared = F.adaptive_avg_pool2d(x_shared, (1, 1))
         x_shared = x_shared.view(batch_size, num_frames, -1)

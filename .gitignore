@@ -5,17 +5,8 @@ pretrained_networks/*.pth
 downloaded_datasets/
 
 model-*_output.txt
-
-data/__pycache__/*
-admin/__pycache__/*
-actors/__pycache__/*
-dataset/__pycache__/*
-evaluation/__pycache__/*
-models/__pycache__/*
-train_settings/__pycache__/*
-trainers/__pycache__/*
-util_scripts/__pycache__/*
-utils/__pycache__/*
-results/*
+__pycache__/
+results/
 synburst/
-admin/*
+admin/
+*.pyc

@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import torch.optim as optim
 import dataset as datasets
 from utils.loading import load_network
@@ -10,7 +11,7 @@ import data.transforms as tfm
 from admin.multigpu import MultiGPU
 import numpy as np
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
@@ -21,7 +22,7 @@ import pickle as pkl
 
 def run(settings):
     settings.description = 'adjust 4 with pixel step 1/8 LR pixel, discount_factor: 0.99, one_step_length: 1 / 8, iterations: 10, SAC'
-    settings.batch_size = 4
+    settings.batch_size = 1
     settings.num_workers = 16
     settings.multi_gpu = False
     settings.print_interval = 1
@@ -57,7 +58,7 @@ def run(settings):
     
     settings.burst_reference_aligned = True
     settings.image_processing_params = {'random_ccm': True, 'random_gains': True, 'smoothstep': True, 'gamma': True, 'add_noise': True}
-    dir_path = "/home/yutong/zheng/projects/dbsr_rl/DBSR/util_scripts"
+    dir_path = "/home/yutong/zheng/projects/dbsr_rl/mice_train_ccvl6/util_scripts"
     with open(os.path.join(dir_path, 'mice_val_meta_infos.pkl'), 'rb') as f:
         meta_infos_val = pkl.load(f)
     image_processing_params_val = {'random_ccm': True, 'random_gains': True, 'smoothstep': True, 'gamma': True, 'add_noise': True, \
@@ -97,12 +98,10 @@ def run(settings):
     print("train dataset length: ", len(loader_train))
     print("val dataset length: ", len(loader_val)) 
 
-    # Wrap the network for multi GPU training
-    if settings.multi_gpu:
-        net = MultiGPU(net, dim=0)
+
 
     # 获取encoder部分
-    dbsr_net = load_network('/mnt/samsung/zheng_data/training_log/checkpoints/dbsr/deeprep_synthetic_mice_4/best.pth.tar')
+    dbsr_net = load_network('/home/yutong/zheng/projects/dbsr_rl/mice_train_ccvl6/pretrained_networks/best.pth.tar')
     
     actors = [dbsr_actors.ActorSAC(num_frames=settings.burst_sz, hidden_size=5), dbsr_actors.qValueNetwork(num_frames=settings.burst_sz), \
         dbsr_actors.qValueNetwork(num_frames=settings.burst_sz)]
@@ -123,6 +122,11 @@ def run(settings):
     critic_1_lr_scheduler = optim.lr_scheduler.MultiStepLR(critic_1_optimizer, milestones=[100, 150], gamma=0.2)
     critic_2_lr_scheduler = optim.lr_scheduler.MultiStepLR(critic_2_optimizer, milestones=[100, 150], gamma=0.2)
     log_alpha_lr_scheduler = optim.lr_scheduler.MultiStepLR(log_alpha_optimizer, milestones=[100, 150], gamma=0.2)
+
+    # Wrap the network for multi GPU training
+    if settings.multi_gpu:
+        dbsr_net = nn.DataParallel(dbsr_net).cuda()
+        actors = [nn.DataParallel(actor).cuda() for actor in actors]
     
     trainer = AgentSAC(actors, 
                         [loader_train, loader_val], 
