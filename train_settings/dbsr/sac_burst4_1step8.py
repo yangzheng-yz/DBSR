@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import torch.optim as optim
 import dataset as datasets
 from utils.loading import load_network
@@ -93,16 +94,14 @@ def run(settings):
     dataset_val = sampler.IndexedImage(zurich_raw2rgb_val, processing=data_processing_val)
 
     loader_train = DataLoader('train', dataset_train, training=True, num_workers=settings.num_workers,
-                              stack_dim=0, batch_size=settings.batch_size)
+                              stack_dim=0, pin_memory=True, batch_size=settings.batch_size)
     loader_val = DataLoader('val', dataset_val, training=False, num_workers=settings.num_workers,
-                            stack_dim=0, batch_size=settings.batch_size, epoch_interval=2) # default is also 1
+                            stack_dim=0, pin_memory=True, batch_size=settings.batch_size, epoch_interval=2) # default is also 1
     
     print("train dataset length: ", len(loader_train))
     print("val dataset length: ", len(loader_val)) 
 
-    # Wrap the network for multi GPU training
-    if settings.multi_gpu:
-        net = MultiGPU(net, dim=0)
+
 
     # 获取encoder部分
     dbsr_net = load_network('/mnt/samsung/zheng_data/training_log/checkpoints/dbsr/deeprep_synthetic_mice_4/best.pth.tar')
@@ -126,7 +125,13 @@ def run(settings):
     critic_1_lr_scheduler = optim.lr_scheduler.MultiStepLR(critic_1_optimizer, milestones=[100, 150], gamma=0.2)
     critic_2_lr_scheduler = optim.lr_scheduler.MultiStepLR(critic_2_optimizer, milestones=[100, 150], gamma=0.2)
     log_alpha_lr_scheduler = optim.lr_scheduler.MultiStepLR(log_alpha_optimizer, milestones=[100, 150], gamma=0.2)
-    
+
+    # Wrap the network for multi GPU training
+    if settings.multi_gpu:
+        dbsr_net = nn.DataParallel(dbsr_net).cuda()
+        actors = [nn.DataParallel(actor).cuda() for actor in actors]
+
+   
     trainer = AgentSAC(actors, 
                         [loader_train, loader_val], 
                         actor_optimizer, critic_1_optimizer, critic_2_optimizer, log_alpha_optimizer,

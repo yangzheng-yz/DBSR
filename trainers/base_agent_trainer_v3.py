@@ -115,9 +115,9 @@ class BaseAgentTrainer:
     def save_checkpoint(self):
         """Saves a checkpoint of the network and other variables."""
 
-        # net = self.actor.module if multigpu.is_multi_gpu(self.actor) else self.actor
-        nets = self.actors
-        print("Temporarily we do not support multigpu.")
+        nets = [actor.module for actor in self.actors if multigpu.is_multi_gpu(actor) else actor]
+        # nets = self.actors
+        # print("Temporarily we do not support multigpu.")
         
         actors_type = [f"{type(actor).__name__}_{idx}" for idx, actor in enumerate(self.actors)]
         nets_type = [f"{type(net).__name__}_{idx}" for idx, net in enumerate(nets)]
@@ -167,11 +167,11 @@ class BaseAgentTrainer:
                 Loads the file from the given absolute path (str).
         """
 
-        # net = self.actor.module if multigpu.is_multi_gpu(self.actor) else self.actor
-        nets = self.actors
-        print("Temporarily we do not support multigpu. ")
+        nets = [actor.module for actor in self.actors if multigpu.is_multi_gpu(actor) else actor]
+        # nets = self.actors
+        # print("Temporarily we do not support multigpu. ")
         
-        actors_type = [f"{type(actor).__name__}_{idx}" for idx, actor in enumerate(self.actors)]
+        # actors_type = [f"{type(actor).__name__}_{idx}" for idx, actor in enumerate(self.actors)]
         nets_type = [f"{type(net).__name__}_{idx}" for idx, net in enumerate(nets)]
 
         if checkpoint is None:
