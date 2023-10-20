@@ -10,3 +10,4 @@ results/
 synburst/
 admin/
 *.pyc
+*.txt
