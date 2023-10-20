@@ -1,0 +1,92 @@
+Training:  dbsr  sac_burst4_1step8_multigpu
+Training:  dbsr  sac_burst4_1step8_multigpu
+Training:  dbsr  sac_burst4_1step8_multigpu
+Training:  dbsr  sac_burst4_1step8_multigpu
+train dataset length:  250
+val dataset length:  36
+Cannot load SpatialCorrelationSampler module
+WARNING: Keyword argument "backbone_pretrained" not found when loading network. It was ignored.
+train dataset length:  250
+val dataset length:  36
+train dataset length:  250
+val dataset length:  36
+Cannot load SpatialCorrelationSampler module
+WARNING: Keyword argument "backbone_pretrained" not found when loading network. It was ignored.
+Cannot load SpatialCorrelationSampler module
+WARNING: Keyword argument "backbone_pretrained" not found when loading network. It was ignored.
+train dataset length:  250
+val dataset length:  36
+Cannot load SpatialCorrelationSampler module
+WARNING: Keyword argument "backbone_pretrained" not found when loading network. It was ignored.
+No matching checkpoint file found[DistributedDataParallel_0]
+No matching checkpoint file found[DistributedDataParallel_0]
+No matching checkpoint file found[DistributedDataParallel_0]
+No matching checkpoint file found[DistributedDataParallel_0]
+Training crashed at epoch -1
+Traceback for the error!
+Traceback (most recent call last):
+  File "/home/yutong/zheng/projects/dbsr_rl/mice_train_ccvl6/trainers/base_agent_trainer_v3.py", line 83, in train
+    self.train_sac(max_epochs, replay_buffer)
+  File "/home/yutong/zheng/projects/dbsr_rl/mice_train_ccvl6/trainers/sac_agent.py", line 457, in train_sac
+    self.train_off_policy_agent(self.loaders, max_epochs, replay_buffer, minimal_size=self.minimal_size)
+  File "/home/yutong/zheng/projects/dbsr_rl/mice_train_ccvl6/trainers/sac_agent.py", line 913, in train_off_policy_agent
+    avg_loss, avg_return = self.train_one_epoch(loader, replay_buffer, minimal_size, epoch=epoch, loader_attributes=self.loader_attributes[i_loader])
+  File "/home/yutong/zheng/projects/dbsr_rl/mice_train_ccvl6/trainers/sac_agent.py", line 839, in train_one_epoch
+    replay_buffer.add(state.cpu().clone(), action.cpu().clone(), reward.cpu().clone(), next_state.cpu().clone(), done)
+  File "/home/yutong/zheng/projects/dbsr_rl/mice_train_ccvl6/utils/rl_utils.py", line 13, in add
+    for s, a, r, ns, d in zip(states, actions, rewards, next_states, dones):
+TypeError: 'int' object is not iterable
+
+Restarting training from last epoch ...
+Finished training!
+Training crashed at epoch -1
+Traceback for the error!
+Traceback (most recent call last):
+  File "/home/yutong/zheng/projects/dbsr_rl/mice_train_ccvl6/trainers/base_agent_trainer_v3.py", line 83, in train
+    self.train_sac(max_epochs, replay_buffer)
+  File "/home/yutong/zheng/projects/dbsr_rl/mice_train_ccvl6/trainers/sac_agent.py", line 457, in train_sac
+    self.train_off_policy_agent(self.loaders, max_epochs, replay_buffer, minimal_size=self.minimal_size)
+  File "/home/yutong/zheng/projects/dbsr_rl/mice_train_ccvl6/trainers/sac_agent.py", line 913, in train_off_policy_agent
+    avg_loss, avg_return = self.train_one_epoch(loader, replay_buffer, minimal_size, epoch=epoch, loader_attributes=self.loader_attributes[i_loader])
+  File "/home/yutong/zheng/projects/dbsr_rl/mice_train_ccvl6/trainers/sac_agent.py", line 839, in train_one_epoch
+    replay_buffer.add(state.cpu().clone(), action.cpu().clone(), reward.cpu().clone(), next_state.cpu().clone(), done)
+  File "/home/yutong/zheng/projects/dbsr_rl/mice_train_ccvl6/utils/rl_utils.py", line 13, in add
+    for s, a, r, ns, d in zip(states, actions, rewards, next_states, dones):
+TypeError: 'int' object is not iterable
+
+Restarting training from last epoch ...
+Finished training!
+Training crashed at epoch -1
+Traceback for the error!
+Traceback (most recent call last):
+  File "/home/yutong/zheng/projects/dbsr_rl/mice_train_ccvl6/trainers/base_agent_trainer_v3.py", line 83, in train
+    self.train_sac(max_epochs, replay_buffer)
+  File "/home/yutong/zheng/projects/dbsr_rl/mice_train_ccvl6/trainers/sac_agent.py", line 457, in train_sac
+    self.train_off_policy_agent(self.loaders, max_epochs, replay_buffer, minimal_size=self.minimal_size)
+  File "/home/yutong/zheng/projects/dbsr_rl/mice_train_ccvl6/trainers/sac_agent.py", line 913, in train_off_policy_agent
+    avg_loss, avg_return = self.train_one_epoch(loader, replay_buffer, minimal_size, epoch=epoch, loader_attributes=self.loader_attributes[i_loader])
+  File "/home/yutong/zheng/projects/dbsr_rl/mice_train_ccvl6/trainers/sac_agent.py", line 839, in train_one_epoch
+    replay_buffer.add(state.cpu().clone(), action.cpu().clone(), reward.cpu().clone(), next_state.cpu().clone(), done)
+  File "/home/yutong/zheng/projects/dbsr_rl/mice_train_ccvl6/utils/rl_utils.py", line 13, in add
+    for s, a, r, ns, d in zip(states, actions, rewards, next_states, dones):
+TypeError: 'int' object is not iterable
+
+Restarting training from last epoch ...
+Finished training!
+Training crashed at epoch -1
+Traceback for the error!
+Traceback (most recent call last):
+  File "/home/yutong/zheng/projects/dbsr_rl/mice_train_ccvl6/trainers/base_agent_trainer_v3.py", line 83, in train
+    self.train_sac(max_epochs, replay_buffer)
+  File "/home/yutong/zheng/projects/dbsr_rl/mice_train_ccvl6/trainers/sac_agent.py", line 457, in train_sac
+    self.train_off_policy_agent(self.loaders, max_epochs, replay_buffer, minimal_size=self.minimal_size)
+  File "/home/yutong/zheng/projects/dbsr_rl/mice_train_ccvl6/trainers/sac_agent.py", line 913, in train_off_policy_agent
+    avg_loss, avg_return = self.train_one_epoch(loader, replay_buffer, minimal_size, epoch=epoch, loader_attributes=self.loader_attributes[i_loader])
+  File "/home/yutong/zheng/projects/dbsr_rl/mice_train_ccvl6/trainers/sac_agent.py", line 839, in train_one_epoch
+    replay_buffer.add(state.cpu().clone(), action.cpu().clone(), reward.cpu().clone(), next_state.cpu().clone(), done)
+  File "/home/yutong/zheng/projects/dbsr_rl/mice_train_ccvl6/utils/rl_utils.py", line 13, in add
+    for s, a, r, ns, d in zip(states, actions, rewards, next_states, dones):
+TypeError: 'int' object is not iterable
+
+Restarting training from last epoch ...
+Finished training!

@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import time
 from actors.base_actor import BaseActor
 from models_dbsr.loss.spatial_color_alignment import SpatialColorAlignment
 import torch
@@ -20,7 +20,6 @@ import torch.nn.functional as F
 from torch.distributions import Categorical
 import torchvision.models as models
 import torchvision.models as models
-import time
 
 
 class ResNet18(nn.Module):
@@ -201,6 +200,7 @@ class SelfAttention(nn.Module):
         self.query = nn.Linear(feature_dim, feature_dim)
         self.key = nn.Linear(feature_dim, feature_dim)
         self.value = nn.Linear(feature_dim, feature_dim)
+        self.feature_dim = feature_dim
 
     def forward(self, x):
         # x: [batch_size, num_frames, feature_dim]
@@ -218,9 +218,9 @@ class ActorSAC(nn.Module):
         # Initialize and modify ResNet for 4-channel input
         self.shared_resnet = models.resnet50(pretrained=False)
         self.modify_resnet_input_channels()
-        
+
         self.attention = SelfAttention(2048)  # Assuming ResNet-50's feature size
-        
+
         # Actor Network
         self.actor_lstm = nn.LSTM(2048, hidden_size, batch_first=True)
         self.actor_linear = nn.Linear(hidden_size, 5 * (num_frames-1))
@@ -229,46 +229,68 @@ class ActorSAC(nn.Module):
     def modify_resnet_input_channels(self):
         original_conv = self.shared_resnet.conv1
         new_conv = nn.Conv2d(4, original_conv.out_channels, 
-                             kernel_size=original_conv.kernel_size, 
-                             stride=original_conv.stride, 
-                             padding=original_conv.padding,
-                             bias=original_conv.bias is not None)
+                            kernel_size=original_conv.kernel_size, 
+                            stride=original_conv.stride, 
+                            padding=original_conv.padding,
+                            bias=original_conv.bias is not None)
         # Copy weights from original layer to new layer
         with torch.no_grad():
             new_conv.weight[:, :3] = original_conv.weight
             new_conv.weight[:, 3] = original_conv.weight[:, 0]
         self.shared_resnet.conv1 = new_conv
+        
+        # Remove the fully connected layer
+        self.shared_resnet = nn.Sequential(*list(self.shared_resnet.children())[:-2])
 
-    def forward(self, x):
+
+    def _forward(self, x):
         batch_size, num_frames, channels, height, width = x.size()
         actor_states = self._forward_single(x)
-        
+
         # Actor
         _, (h_n, _) = self.actor_lstm(actor_states)
         action_logits = self.actor_linear(h_n.squeeze(0))
         action_logits = action_logits.view(batch_size, self.num_frames - 1, 5)
-        
+
         probs = F.softmax(action_logits, dim=-1)
         dists = [Categorical(p) for p in probs.split(1, dim=1)]
-        
+
         return dists
+    
+    def forward(self, x):
+        batch_size, num_frames, channels, height, width = x.size()
+        actor_states = self._forward_single(x)
+
+        # Actor
+        _, (h_n, _) = self.actor_lstm(actor_states)
+        action_logits = self.actor_linear(h_n.squeeze(0))
+        action_logits = action_logits.view(batch_size, self.num_frames - 1, 5)
+
+        probs = F.softmax(action_logits, dim=-1)
+        # dists = [Categorical(p) for p in probs.split(1, dim=1)]
+        return probs
 
     def _forward_single(self, x):
         batch_size, num_frames, channels, height, width = x.size()
-        x = x.view(-1, channels, height, width)  # Flatten frames and batch
         
-        # Shared feature extraction
-        x_shared = self.shared_resnet(x)
-        print(f"input size {x.size}")
-        time.sleep(1000)
-        # Global Average Pooling (GAP)
-        x_shared = F.adaptive_avg_pool2d(x_shared, (1, 1))
-        x_shared = x_shared.view(batch_size, num_frames, -1)
-        
-        # Attention
-        x_shared = self.attention(x_shared)
+        # Process each frame separately and store features in a list
+        features = []
+        for i in range(num_frames):
+            frame = x[:, i, :, :, :]
+            # print(frame.shape)
+            frame_features = self.shared_resnet(frame)
+            
+            # time.sleep(1000)
+            frame_features = F.adaptive_avg_pool2d(frame_features, (1, 1)).squeeze(-1).squeeze(-1)  # shape: [batch_size, 2048]
+            features.append(frame_features)
 
-        return x_shared
+        # Stack features along the new dimension
+        features_stacked = torch.stack(features, dim=1)  # shape: [batch_size, num_frames, 2048]
+
+        # Attention over the frames
+        aggregated_features = self.attention(features_stacked)
+
+        return aggregated_features
 
 class qValueNetwork(nn.Module):
     def __init__(self, num_frames):
@@ -286,41 +308,53 @@ class qValueNetwork(nn.Module):
         
         # Value prediction for each frame
         self.value_head = nn.Linear(1024, 5 * (num_frames - 1))
+        
+        self.transform_layer = nn.Linear(60, 15)
 
     def modify_resnet_input_channels(self):
         original_conv = self.shared_resnet.conv1
         new_conv = nn.Conv2d(4, original_conv.out_channels, 
-                             kernel_size=original_conv.kernel_size, 
-                             stride=original_conv.stride, 
-                             padding=original_conv.padding,
-                             bias=original_conv.bias is not None)
+                            kernel_size=original_conv.kernel_size, 
+                            stride=original_conv.stride, 
+                            padding=original_conv.padding,
+                            bias=original_conv.bias is not None)
+        # Copy weights from original layer to new layer
         with torch.no_grad():
             new_conv.weight[:, :3] = original_conv.weight
             new_conv.weight[:, 3] = original_conv.weight[:, 0]
         self.shared_resnet.conv1 = new_conv
+        
+        # Remove the fully connected layer
+        self.shared_resnet = nn.Sequential(*list(self.shared_resnet.children())[:-2])
 
     def forward(self, x):
         batch_size, num_frames, channels, height, width = x.size()
         x = x.view(-1, channels, height, width)  # Flatten frames and batch
-
+        # print(f"Debug x shape: {x.size()}")
         # Shared feature extraction
         spatial_features = self.shared_resnet(x)
-
+        # print(f"Debug spatial_features shape: {spatial_features.size()}")
         # Global Average Pooling (GAP)
         spatial_features = F.adaptive_avg_pool2d(spatial_features, (1, 1))
+        # print(f"Debug spatial_features shape: {spatial_features.size()}")
         spatial_features = spatial_features.view(batch_size, num_frames, -1)
-        
+        # print(f"Debug spatial_features shape: {spatial_features.size()}")
         # Temporal Attention
         temporal_features = self.temporal_attention(spatial_features)
-
+        # print(f"Debug temporal_features shape: {temporal_features.size()}")
         # Temporal LSTM layer
         lstm_out, _ = self.lstm(temporal_features)
-
+        # print(f"Debug lstm_out shape: {lstm_out.size()}")
         # Value prediction
         values = self.value_head(lstm_out)
-        values = values.view(batch_size, num_frames - 1, 5)
+        # print(f"Debug values shape: {values.size()}")
+        values = values.view(batch_size, -1)
+        
+        transformed_values = self.transform_layer(values)
+        transformed_values = transformed_values.view(batch_size, num_frames-1, 5)
+        
 
-        return values
+        return transformed_values
 
 
 from torchvision.models import resnet18

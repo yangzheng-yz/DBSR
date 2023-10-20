@@ -41,13 +41,13 @@ class BaseAgentTrainer:
         self.epoch = 0
         self.stats = {}
 
-        self.device = getattr(settings, 'device', None)
-        if self.device is None:
-            self.device = torch.device("cuda:0" if torch.cuda.is_available() and settings.use_gpu else "cpu")
+        # self.device = getattr(settings, 'device', None)
+        # if self.device is None:
+        #     self.device = torch.device("cuda:0" if torch.cuda.is_available() and settings.use_gpu else "cpu")
 
         # print("basetrainer's device: ", self.device)
-        for idx, _ in enumerate(self.actors): 
-            self.actors[idx].to(self.device)
+        # for idx, _ in enumerate(self.actors): 
+        #     self.actors[idx].to(self.device)
 
     def update_settings(self, settings=None):
         """Updates the trainer settings. Must be called to update internal settings."""
@@ -112,12 +112,55 @@ class BaseAgentTrainer:
     def train_sac(self):
         raise NotImplementedError
 
+    # def save_checkpoint(self):
+    #     """Saves a checkpoint of the network and other variables."""
+
+    #     # nets = [actor.module if multigpu.is_multi_gpu(actor) else actor for actor in self.actors]
+    #     nets = self.actors
+    #     # print("Temporarily we do not support multigpu.")
+        
+    #     actors_type = [f"{type(actor).__name__}_{idx}" for idx, actor in enumerate(self.actors)]
+    #     nets_type = [f"{type(net).__name__}_{idx}" for idx, net in enumerate(nets)]
+    #     states = [{
+    #         'epoch': self.epoch,
+    #         'actor_type': actors_type[idx],
+    #         'net_type': nets_type[idx],
+    #         'net': nets[idx].state_dict(),
+    #         'net_info': getattr(nets[idx], 'info', None),
+    #         'constructor': getattr(nets[idx], 'constructor', None),
+    #         'actor_optimizer': self.actor_optimizer.state_dict(),
+    #         'critic_1_optimizer': self.critic_1_optimizer.state_dict(),
+    #         'critic_2_optimizer': self.critic_2_optimizer.state_dict(),
+    #         'log_alpha_optimizer': self.log_alpha_optimizer.state_dict(),
+    #         'stats': self.stats,
+    #         'settings': self.settings
+    #     } for idx, _ in enumerate(nets_type)]
+
+    #     directory = '{}/{}'.format(self._checkpoint_dir, self.settings.project_path)
+    #     if not os.path.exists(directory):
+    #         os.makedirs(directory)
+        
+    #     for net_type in nets_type:
+    #         if not os.path.exists(os.path.join(directory, net_type)):
+    #             os.makedirs(os.path.join(directory, net_type))
+
+    #     # First save as a tmp file
+    #     tmp_files_path = ['{}/{}/ep{:04d}.tmp'.format(directory, nets_type[idx], self.epoch) for idx, _ in enumerate(nets_type)]
+    #     for idx, tmp_file_path in enumerate(tmp_files_path):
+    #         torch.save(states[idx], tmp_file_path)
+
+    #         file_path = '{}/{}/ep{:04d}.pth.tar'.format(directory, nets_type[idx], self.epoch)
+
+    #         # Now rename to actual checkpoint. os.rename seems to be atomic if files are on same filesystem. Not 100% sure
+            
+    #         os.rename(tmp_file_path, file_path)
+
     def save_checkpoint(self):
         """Saves a checkpoint of the network and other variables."""
 
-        nets = [actor.module for actor in self.actors if multigpu.is_multi_gpu(actor) else actor]
-        # nets = self.actors
-        # print("Temporarily we do not support multigpu.")
+        
+        # Unwrap actors for saving
+        nets = [self.accelerator.unwrap_model(actor) for actor in self.actors]
         
         actors_type = [f"{type(actor).__name__}_{idx}" for idx, actor in enumerate(self.actors)]
         nets_type = [f"{type(net).__name__}_{idx}" for idx, net in enumerate(nets)]
@@ -128,8 +171,10 @@ class BaseAgentTrainer:
             'net': nets[idx].state_dict(),
             'net_info': getattr(nets[idx], 'info', None),
             'constructor': getattr(nets[idx], 'constructor', None),
-            'high_level_optimizer': self.high_level_optimizer.state_dict(),
-            'low_level_optimizer': self.option_optimizer.state_dict(),
+            'actor_optimizer': self.actor_optimizer.state_dict(),
+            'critic_1_optimizer': self.critic_1_optimizer.state_dict(),
+            'critic_2_optimizer': self.critic_2_optimizer.state_dict(),
+            'log_alpha_optimizer': self.log_alpha_optimizer.state_dict(),
             'stats': self.stats,
             'settings': self.settings
         } for idx, _ in enumerate(nets_type)]
@@ -153,6 +198,7 @@ class BaseAgentTrainer:
             
             os.rename(tmp_file_path, file_path)
 
+
     def load_checkpoint(self, checkpoint = None, fields = None, ignore_fields = None, load_constructor = False):
         """Loads a network checkpoint file.
 
@@ -165,11 +211,11 @@ class BaseAgentTrainer:
                 Loads the file from the given absolute path (str).
         """
 
-        nets = [actor.module for actor in self.actors if multigpu.is_multi_gpu(actor) else actor]
+        nets = [actor.module if multigpu.is_multi_gpu(actor) else actor for actor in self.actors]
         # nets = self.actors
         # print("Temporarily we do not support multigpu. ")
         
-        actors_type = [f"{type(actor).__name__}_{idx}" for idx, actor in enumerate(self.actors)]
+        # actors_type = [f"{type(actor).__name__}_{idx}" for idx, actor in enumerate(self.actors)]
         nets_type = [f"{type(net).__name__}_{idx}" for idx, net in enumerate(nets)]
 
         if checkpoint is None:
@@ -223,10 +269,14 @@ class BaseAgentTrainer:
             if key == 'net':
                 for idx, _ in enumerate(nets):
                     nets[idx].load_state_dict(checkpoints_dict[idx][key])
-            elif key == 'high_level_optimizer':
-                self.high_level_optimizer.load_state_dict(checkpoints_dict[0][key])
-            elif key == 'low_level_optimizer':
-                self.option_optimizer.load_state_dict(checkpoints_dict[1][key]) # the second model is the low level model
+            elif key == 'actor_optimizer':
+                self.actor_optimizer.load_state_dict(checkpoints_dict[0][key])
+            elif key == 'critic_1_optimizer':
+                self.critic_1_optimizer.load_state_dict(checkpoints_dict[0][key])
+            elif key == 'critic_2_optimizer':
+                self.critic_2_optimizer.load_state_dict(checkpoints_dict[0][key])
+            elif key == 'log_alpha_optimizer':
+                self.log_alpha_optimizer.load_state_dict(checkpoints_dict[0][key])
             else:
                 # print("what are the keys: ", checkpoints_dict[0].keys())
                 # print("what is current key: ", key)
@@ -242,7 +292,9 @@ class BaseAgentTrainer:
 
         # Update the epoch in lr scheduler
         if 'epoch' in fields:
-            self.high_level_lr_scheduler.last_epoch = self.epoch
-            self.option_lr_scheduler.last_epoch = self.epoch
+            self.actor_lr_scheduler.last_epoch = self.epoch
+            self.critic_1_lr_scheduler.last_epoch = self.epoch
+            self.critic_2_lr_scheduler.last_epoch = self.epoch
+            self.log_alpha_lr_scheduler.last_epoch = self.epoch
 
         return True
