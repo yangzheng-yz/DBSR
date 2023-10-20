@@ -1,0 +1,44 @@
+Training:  dbsr  sac_burst4_1step12_multigpu
+Training:  dbsr  sac_burst4_1step12_multigpu
+Training:  dbsr  sac_burst4_1step12_multigpu
+Training:  dbsr  sac_burst4_1step12_multigpu
+Training:  dbsr  sac_burst4_1step12_multigpu
+Training:  dbsr  sac_burst4_1step12_multigpu
+Training:  dbsr  sac_burst4_1step12_multigpu
+Training:  dbsr  sac_burst4_1step12_multigpu
+Cannot load SpatialCorrelationSampler module
+WARNING: Keyword argument "backbone_pretrained" not found when loading network. It was ignored.
+Cannot load SpatialCorrelationSampler module
+WARNING: Keyword argument "backbone_pretrained" not found when loading network. It was ignored.
+train dataset length:  30
+val dataset length:  18
+Cannot load SpatialCorrelationSampler moduleCannot load SpatialCorrelationSampler module
+
+WARNING: Keyword argument "backbone_pretrained" not found when loading network. It was ignored.
+WARNING: Keyword argument "backbone_pretrained" not found when loading network. It was ignored.
+Cannot load SpatialCorrelationSampler module
+WARNING: Keyword argument "backbone_pretrained" not found when loading network. It was ignored.
+Cannot load SpatialCorrelationSampler moduleCannot load SpatialCorrelationSampler module
+
+WARNING: Keyword argument "backbone_pretrained" not found when loading network. It was ignored.WARNING: Keyword argument "backbone_pretrained" not found when loading network. It was ignored.
+
+Cannot load SpatialCorrelationSampler module
+WARNING: Keyword argument "backbone_pretrained" not found when loading network. It was ignored.
+Starting saving checkpoint!!!!!!
+what is now processing True
+Completed!!!!!!!!!!
+Starting saving checkpoint!!!!!!
+what is now processing True
+Completed!!!!!!!!!!
+Starting saving checkpoint!!!!!!
+what is now processing True
+Completed!!!!!!!!!!
+Starting saving checkpoint!!!!!!
+what is now processing True
+Completed!!!!!!!!!!
+Starting saving checkpoint!!!!!!
+what is now processing True
+Completed!!!!!!!!!!
+Starting saving checkpoint!!!!!!
+what is now processing True
+Completed!!!!!!!!!!

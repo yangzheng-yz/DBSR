@@ -17,7 +17,7 @@ from tqdm import tqdm
 import torch.nn.functional as F
 from actors.dbsr_actors import qValueNetwork
 from torch.distributions import Categorical
-
+from torch.utils.tensorboard import SummaryWriter
 
 
 class AgentSAC(BaseAgentTrainer):
@@ -27,7 +27,7 @@ class AgentSAC(BaseAgentTrainer):
                 lr_scheduler=None, iterations=15, 
                 interpolation_type='bilinear', reward_type='psnr', save_results=False, saving_dir=None, one_step_length=1/4, base_length=1/4,
                 target_entropy=-1, tau=0.005, init_permutation=None, minimal_size=500, sample_size=4, accelerator=None,
-                loader_attributes=None):
+                loader_attributes=None, actors_attr=None):
         """
         args:
             actor - The actor for training the network
@@ -38,7 +38,7 @@ class AgentSAC(BaseAgentTrainer):
             lr_scheduler - Learning rate scheduler
         """
         super().__init__(actors, loaders, actor_optimizer, critic_1_optimizer, critic_2_optimizer, \
-            log_alpha_optimizer, settings, actor_lr_scheduler, critic_1_lr_scheduler, critic_2_lr_scheduler, log_alpha_lr_scheduler, log_alpha)
+            log_alpha_optimizer, settings, actor_lr_scheduler, critic_1_lr_scheduler, critic_2_lr_scheduler, log_alpha_lr_scheduler, log_alpha, actors_attr)
 
         self._set_default_settings()
         
@@ -88,11 +88,18 @@ class AgentSAC(BaseAgentTrainer):
         
         self.saving_dir = saving_dir
         
-        self.one_step_length_in_grid = one_step_length / base_length
+        self.one_step_length_in_grid = float(one_step_length / base_length)
         # self.base_length = base_length
         self.tau = tau
         
         self.minimal_size = minimal_size
+        tb_save_root_dir = os.path.join(settings.env.workspace_dir, 'tensorboard')
+        if not os.path.exists(tb_save_root_dir):
+            os.makedirs(tb_save_root_dir, exist_ok=True)
+        tb_save_dir = os.path.join(tb_save_root_dir, settings.project_path)
+        os.makedirs(tb_save_dir, exist_ok=True)
+        
+        self.writer = SummaryWriter(log_dir=tb_save_dir)
         
         
     def _set_default_settings(self):
@@ -794,9 +801,10 @@ class AgentSAC(BaseAgentTrainer):
         return actor_loss.item(), critic_1_loss.item(), critic_2_loss.item(), alpha_loss.item()
 
     def train_one_epoch(self, loader, replay_buffer, minimal_size, epoch, loader_attributes):
-        total_loss = 0.0
-        total_return = 0.0
-        num_samples = 0
+        total_loss          = 0.0
+        total_return        = 0.0
+        total_improvement   = 0.0
+        num_samples         = 0
         with tqdm(total=len(loader), desc='Training') as pbar:
             for data in loader:
                 ######## preparation
@@ -870,14 +878,16 @@ class AgentSAC(BaseAgentTrainer):
                 metric_final = reward_func[self.reward_type](preds[-1].clone(), data['frame_gt'].clone())
                 total_loss += actor_loss_episode + critic_1_loss_episode + critic_2_loss_episode + alpha_loss_episode
                 total_return += episode_return.mean().item()
-                num_samples += 1
-                pbar.set_postfix({'loss': total_loss / num_samples, 'return': total_return / num_samples, 'Improvement': metric_final.item()-metric_initial.item()})
+                num_samples += 1 
+                improvement = metric_final.item() - metric_initial.item()
+                total_improvement += improvement
+                pbar.set_postfix({'loss': total_loss / num_samples, 'return': total_return / num_samples, 'Improvement': improvement})
                 pbar.update(1)
-        return total_loss / num_samples, total_return / num_samples
+        return total_loss / num_samples, total_return / num_samples, total_improvement / num_samples
 
     def validate_one_epoch(self, loader, loader_attributes):
-        total_improvement = 0.0
-        num_samples = 0
+        total_improvement   = 0.0
+        num_samples         = 0
         with tqdm(total=len(loader), desc='Validation') as pbar:
             for idx, data in enumerate(loader):
                 # if self.move_data_to_gpu:
@@ -889,7 +899,6 @@ class AgentSAC(BaseAgentTrainer):
                 initial_pred = pred.clone()
                 batch_size = data['frame_gt'].size(0)
                 permutations = torch.tensor(self.init_permutation, device=self.accelerator.device).repeat(batch_size, 1, 1)
-
                 if self.reward_type == 'psnr':
                     reward_func = {'psnr': PSNR(boundary_ignore=40)}
                 elif self.reward_type == 'ssim':
@@ -899,7 +908,8 @@ class AgentSAC(BaseAgentTrainer):
                 ######## preparation done 
                 iteration = 0
                 while not done:
-                    dists = self.actors[0](state) # here the state should be one
+                    probs = self.actors[0](state) # here the state should be one
+                    dists = [Categorical(p) for p in probs.split(1, dim=1)]
                     next_state, action, permutations, done = self.step_environment(dists, data['frame_gt'].clone(), permutations.clone(), iter=iteration)
                     with torch.no_grad():
                         # print("device of model: ", next(self.sr_net.parameters()).device)
@@ -924,17 +934,21 @@ class AgentSAC(BaseAgentTrainer):
             for i_loader, loader in enumerate(loaders):
                 if self.epoch % self.loader_attributes[i_loader]['epoch_interval'] == 0:
                     if self.loader_attributes[i_loader]['training']:
-                        avg_loss, avg_return = self.train_one_epoch(loader, replay_buffer, minimal_size, epoch=epoch, loader_attributes=self.loader_attributes[i_loader])
+                        avg_loss, avg_return, avg_improvement = self.train_one_epoch(loader, replay_buffer, minimal_size, epoch=epoch, loader_attributes=self.loader_attributes[i_loader])
                         # Optionally log or print avg_loss and avg_return
                         
                         if self.accelerator.is_main_process:
                             print(f"Starting saving checkpoint!!!!!!")
                             self.save_checkpoint()
                             print(f"Completed!!!!!!!!!!")
+                        self.writer.add_scalar('Training Loss', avg_loss, self.epoch)
+                        self.writer.add_scalar('Training Return', avg_return, self.epoch)
+                        self.writer.add_scalar('Training Improvement', avg_improvement, self.epoch)
                     else:
                         avg_improvement = self.validate_one_epoch(loader, loader_attributes=self.loader_attributes[i_loader])
+                        self.writer.add_scalar('Testing Improvement', avg_improvement, self.epoch)
                         # Optionally log or print avg_improvement
                     self._stats_new_epoch()
-                    self._write_tensorboard()
+                    # self._write_tensorboard()
                     self.epoch += 1
         return return_list

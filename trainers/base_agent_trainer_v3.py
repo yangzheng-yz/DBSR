@@ -11,7 +11,7 @@ class BaseAgentTrainer:
     """Base trainer class. Contains functions for training and saving/loading chackpoints.
     Trainer classes should inherit from this one and overload the train_epoch function."""
 
-    def __init__(self, actors, loaders, actor_optimizer, critic_1_optimizer, critic_2_optimizer, log_alpha_optimizer, settings, actor_lr_scheduler=None, critic_1_lr_scheduler=None, critic_2_lr_scheduler=None, log_alpha_lr_scheduler=None, log_alpha=0):
+    def __init__(self, actors, loaders, actor_optimizer, critic_1_optimizer, critic_2_optimizer, log_alpha_optimizer, settings, actor_lr_scheduler=None, critic_1_lr_scheduler=None, critic_2_lr_scheduler=None, log_alpha_lr_scheduler=None, log_alpha=0, actors_attr=None):
         """
         args:
             actor - The actor for training the network
@@ -21,6 +21,7 @@ class BaseAgentTrainer:
             settings - Training settings
             high_level_lr_scheduler - Learning rate scheduler
         """
+        self.actors_attr = actors_attr
         self.actors = actors
         self.actor_optimizer = actor_optimizer
         self.critic_1_optimizer = critic_1_optimizer
@@ -158,14 +159,13 @@ class BaseAgentTrainer:
     def save_checkpoint(self):
         """Saves a checkpoint of the network and other variables."""
 
-
+        print(f"what is now processing {self.accelerator.is_main_process}")
         if not self.accelerator.is_main_process:
             return
-        # Unwrap actors for saving
         nets = [self.accelerator.unwrap_model(actor) for actor in self.actors]
         
-        actors_type = [f"{type(actor).__name__}_{idx}" for idx, actor in enumerate(self.actors)]
-        nets_type = [f"{type(net).__name__}_{idx}" for idx, net in enumerate(nets)]
+        actors_type = self.actors_attr
+        nets_type = self.actors_attr
         states = [{
             'epoch': self.epoch,
             'actor_type': actors_type[idx],
@@ -199,7 +199,6 @@ class BaseAgentTrainer:
             # Now rename to actual checkpoint. os.rename seems to be atomic if files are on same filesystem. Not 100% sure
             
             os.rename(tmp_file_path, file_path)
-        self.accelerator.wait_for_everyone()
 
     def load_checkpoint(self, checkpoint = None, fields = None, ignore_fields = None, load_constructor = False):
         """Loads a network checkpoint file.

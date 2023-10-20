@@ -34,7 +34,7 @@ def run(settings):
     settings.crop_sz = (512, 640)
     settings.burst_sz = 4
     settings.downsample_factor = 4
-    one_step_length = 1 / 8
+    one_step_length = 1 / 12
     base_length = 1 / settings.downsample_factor
     buffer_size = 10000
     
