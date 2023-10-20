@@ -676,9 +676,9 @@ class AgentSAC(BaseAgentTrainer):
                         self._write_tensorboard()
         return return_list
     def calc_target(self, rewards, next_states, dones):
-        probs = self.actors[0](next_states)
+        next_probs = self.actors[0](next_states)
         # 根据概率直接计算log_probs
-        log_probs = torch.log(probs + 1e-8)
+        next_log_probs = torch.log(next_probs + 1e-8)
 
         # Calculate probabilities and log probabilities for each distribution
         # probs = [dist.probs.squeeze(1) for dist in dists]
@@ -686,12 +686,15 @@ class AgentSAC(BaseAgentTrainer):
         # print(f"Debug probs[0]: {probs[0].size()}")
         # print(f"Debug log_probs: {log_probs[0].size()}")
         # Calculate entropy for each distribution
-        entropy = [-torch.sum(p * lp, dim=-1, keepdim=True) for p, lp in zip(probs, log_probs)]
-        entropy = sum(entropy) # [batch_size, 1]
+        entropy = [-torch.sum(p * lp, dim=-1, keepdim=False) for p, lp in zip(next_probs, next_log_probs)]
+        entropy = [torch.sum(e, dim=-1, keepdim=True) for e in entropy]
+        entropy = torch.stack(entropy)
+        # print(f"Debug entropy: {entropy}")
+        # entropy = sum(entropy) # [batch_size, 1]
         # print(f"Debug entropy: {entropy}")        
-        next_probs = torch.stack(probs).to(self.device)
+        # next_probs = torch.stack(next_probs).to(self.accelerator.device)
         
-        next_probs = next_probs.permute(1, 0, 2) # [batch_size, self.burst_sz-1, action_dim]
+        # next_probs = next_probs.permute(1, 0, 2) # [batch_size, self.burst_sz-1, action_dim]
         
         # next_probs = self.actors[0](next_states)
         # next_log_probs = torch.log(next_probs + 1e-8)
@@ -703,6 +706,7 @@ class AgentSAC(BaseAgentTrainer):
                             keepdim=False)
         min_qvalue, _ = torch.min(min_qvalue, dim=1, keepdim=True) # to avoid overestimate, we should select the minimum agent sum qvalue
         # print(f"Debug min_qvalue: {min_qvalue}")
+        # print(f"Debug entropy: {entropy}")
         next_value = min_qvalue + self.log_alpha.exp() * entropy
         
         td_target = rewards + self.discount_factor * next_value * (1 - dones)
@@ -715,13 +719,13 @@ class AgentSAC(BaseAgentTrainer):
                                     param.data * self.tau)
 
     def update(self, transition_dict):
-        states = torch.stack(transition_dict['states']).to(self.device)
+        states = torch.stack(transition_dict['states']).to(self.accelerator.device)
         actions = torch.stack(transition_dict['actions']).to(
-            self.device) 
-        rewards = torch.stack(transition_dict['rewards']).to(self.device)
-        next_states = torch.stack(transition_dict['next_states']).to(self.device)
+            self.accelerator.device) 
+        rewards = torch.stack(transition_dict['rewards']).to(self.accelerator.device)
+        next_states = torch.stack(transition_dict['next_states']).to(self.accelerator.device)
         dones = torch.tensor(transition_dict['dones'],
-                            ).view(-1, 1).to(self.device)
+                            ).view(-1, 1).to(self.accelerator.device)
 
         # print(f"Debug next_states: {next_states.size()}")
         # print(f"Debug actions: {actions.size()}")
@@ -758,17 +762,18 @@ class AgentSAC(BaseAgentTrainer):
         # log_probs = [dist.logits.squeeze(1)+1e-8 for dist in dists]
         # log_probs = torch.log(probs + 1e-8)
         # 直接根据概率计算熵
-        entropy = [-torch.sum(p * lp, dim=-1, keepdim=True) for p, lp in zip(probs, log_probs)]
-        entropy = sum(entropy) # [batch_size, 1]
-
+        entropy = [-torch.sum(p * lp, dim=-1, keepdim=False) for p, lp in zip(probs, log_probs)]
+        entropy = [torch.sum(e, dim=-1, keepdim=True) for e in entropy]
+        entropy = torch.stack(entropy)
         q1_value = self.actors[1](states)
         q2_value = self.actors[2](states)
-        probs = torch.stack(probs)
-        probs = probs.permute(1, 0, 2) # [batch_size, self.burst_sz-1, action_dim]
+        # probs = torch.stack(probs)
+        # probs = probs.permute(1, 0, 2) # [batch_size, self.burst_sz-1, action_dim]
         min_qvalue = torch.sum(probs * torch.min(q1_value, q2_value),
                             dim=-1,
                             keepdim=False)  # 直接根据概率计算期望
         min_qvalue, _ = torch.min(min_qvalue, dim=1, keepdim=True)
+        
         actor_loss = torch.mean(-self.log_alpha.exp() * entropy - min_qvalue)
         self.actor_optimizer.zero_grad()
         # actor_loss.backward()
@@ -780,7 +785,7 @@ class AgentSAC(BaseAgentTrainer):
             (entropy - self.target_entropy).detach() * self.log_alpha.exp())
         self.log_alpha_optimizer.zero_grad()
         # alpha_loss.backward()
-        self.accelerator.backward(actor_loss)
+        self.accelerator.backward(alpha_loss)
         self.log_alpha_optimizer.step()
 
         self.soft_update(self.actors[1], self.target_critic_1)
@@ -821,6 +826,7 @@ class AgentSAC(BaseAgentTrainer):
                 ######## preparation done 
                 
                 iteration = 0
+                actor_loss_episode, critic_1_loss_episode, critic_2_loss_episode, alpha_loss_episode = 0, 0, 0, 0
                 while not done:
                     # action = agent.take_action(state)
                     # next_state, reward, done, _ = env.step(action)
@@ -848,14 +854,22 @@ class AgentSAC(BaseAgentTrainer):
                         b_s, b_a, b_r, b_ns, b_d = replay_buffer.sample(self.sample_size)
                         transition_dict = {'states': b_s, 'actions': b_a, 'next_states': b_ns, 'rewards': b_r, 'dones': b_d}
                         actor_loss, critic_1_loss, critic_2_loss, alpha_loss = self.update(transition_dict)
+                        actor_loss_episode += actor_loss
+                        critic_1_loss_episode += critic_1_loss
+                        critic_2_loss_episode += critic_2_loss
+                        alpha_loss_episode += alpha_loss
                         self._update_stats({'Loss/actor_loss': actor_loss, 'Loss/critic_1_loss': critic_1_loss, \
                                 'Loss/critic_2_loss': critic_2_loss, "Loss/alpha_loss": alpha_loss, \
                                 }, batch_size, loader_attributes)
                     iteration += 1
+                actor_loss_episode = actor_loss_episode / iteration
+                critic_1_loss_episode = critic_1_loss_episode / iteration
+                critic_2_loss_episode = critic_2_loss_episode / iteration
+                alpha_loss_episode = alpha_loss_episode / iteration
                 metric_initial = reward_func[self.reward_type](preds[0].clone(), data['frame_gt'].clone())
                 metric_final = reward_func[self.reward_type](preds[-1].clone(), data['frame_gt'].clone())
-                total_loss += actor_loss.item() + critic_1_loss.item() + critic_2_loss.item() + alpha_loss.item()
-                total_return += episode_return.item()
+                total_loss += actor_loss_episode + critic_1_loss_episode + critic_2_loss_episode + alpha_loss_episode
+                total_return += episode_return.mean().item()
                 num_samples += 1
                 pbar.set_postfix({'loss': total_loss / num_samples, 'return': total_return / num_samples, 'Improvement': metric_final.item()-metric_initial.item()})
                 pbar.update(1)
@@ -912,7 +926,11 @@ class AgentSAC(BaseAgentTrainer):
                     if self.loader_attributes[i_loader]['training']:
                         avg_loss, avg_return = self.train_one_epoch(loader, replay_buffer, minimal_size, epoch=epoch, loader_attributes=self.loader_attributes[i_loader])
                         # Optionally log or print avg_loss and avg_return
-                        self.save_checkpoint()
+                        
+                        if self.accelerator.is_main_process:
+                            print(f"Starting saving checkpoint!!!!!!")
+                            self.save_checkpoint()
+                            print(f"Completed!!!!!!!!!!")
                     else:
                         avg_improvement = self.validate_one_epoch(loader, loader_attributes=self.loader_attributes[i_loader])
                         # Optionally log or print avg_improvement

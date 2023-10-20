@@ -158,7 +158,9 @@ class BaseAgentTrainer:
     def save_checkpoint(self):
         """Saves a checkpoint of the network and other variables."""
 
-        
+
+        if not self.accelerator.is_main_process:
+            return
         # Unwrap actors for saving
         nets = [self.accelerator.unwrap_model(actor) for actor in self.actors]
         
@@ -197,7 +199,7 @@ class BaseAgentTrainer:
             # Now rename to actual checkpoint. os.rename seems to be atomic if files are on same filesystem. Not 100% sure
             
             os.rename(tmp_file_path, file_path)
-
+        self.accelerator.wait_for_everyone()
 
     def load_checkpoint(self, checkpoint = None, fields = None, ignore_fields = None, load_constructor = False):
         """Loads a network checkpoint file.
@@ -211,45 +213,51 @@ class BaseAgentTrainer:
                 Loads the file from the given absolute path (str).
         """
 
+        # nets preparation for loading
         nets = [actor.module if multigpu.is_multi_gpu(actor) else actor for actor in self.actors]
-        # nets = self.actors
-        # print("Temporarily we do not support multigpu. ")
+        nets_type = [f"{type(net).__name__}_{idx}" for idx, net in enumerate(nets)]
         
         # actors_type = [f"{type(actor).__name__}_{idx}" for idx, actor in enumerate(self.actors)]
         nets_type = [f"{type(net).__name__}_{idx}" for idx, net in enumerate(nets)]
 
-        if checkpoint is None:
-            # Load most recent checkpoint
-            checkpoints_list = [sorted(glob.glob('{}/{}/{}/ep*.pth.tar'.format(self._checkpoint_dir,
-                                                                             self.settings.project_path, net_type))) for net_type in nets_type]
-            checkpoints_path = []
-            for idx, checkpoint_list in enumerate(checkpoints_list):
-                if checkpoint_list:
-                    checkpoints_path.append(checkpoint_list[-1])
-                else:
-                    print('No matching checkpoint file found[%s]' % nets_type[idx])
-                    return
-        elif isinstance(checkpoint, int):
-            # Checkpoint is the epoch number
-            checkpoints_path = ['{}/{}/{}/ep{:04d}.pth.tar'.format(self._checkpoint_dir, self.settings.project_path,
-                                                                 net_type, checkpoint) for net_type in nets_type]
-        elif isinstance(checkpoint, str):
-            # checkpoint is the path
-            if os.path.isdir(checkpoint):
-                checkpoints_list = [sorted(glob.glob('{}/{}/ep*.pth.tar'.format(checkpoint, net_type))) for net_type in nets_type]
+        if self.accelerator.is_main_process:
+            if checkpoint is None:
+                # Load most recent checkpoint
+                checkpoints_list = [sorted(glob.glob('{}/{}/{}/ep*.pth.tar'.format(self._checkpoint_dir,
+                                                                                self.settings.project_path, net_type))) for net_type in nets_type]
                 checkpoints_path = []
                 for idx, checkpoint_list in enumerate(checkpoints_list):
                     if checkpoint_list:
                         checkpoints_path.append(checkpoint_list[-1])
                     else:
-                        raise Exception('No checkpoint found[%s]' % nets_type[idx])
-        elif isinstance(checkpoint, list):
-            checkpoints_path = [os.path.expanduser(checkp) for checkp in checkpoint]
-        else:
-            raise TypeError
+                        print('No matching checkpoint file found[%s]' % nets_type[idx])
+                        return
+            elif isinstance(checkpoint, int):
+                # Checkpoint is the epoch number
+                checkpoints_path = ['{}/{}/{}/ep{:04d}.pth.tar'.format(self._checkpoint_dir, self.settings.project_path,
+                                                                    net_type, checkpoint) for net_type in nets_type]
+            elif isinstance(checkpoint, str):
+                # checkpoint is the path
+                if os.path.isdir(checkpoint):
+                    checkpoints_list = [sorted(glob.glob('{}/{}/ep*.pth.tar'.format(checkpoint, net_type))) for net_type in nets_type]
+                    checkpoints_path = []
+                    for idx, checkpoint_list in enumerate(checkpoints_list):
+                        if checkpoint_list:
+                            checkpoints_path.append(checkpoint_list[-1])
+                        else:
+                            raise Exception('No checkpoint found[%s]' % nets_type[idx])
+            elif isinstance(checkpoint, list):
+                checkpoints_path = [os.path.expanduser(checkp) for checkp in checkpoint]
+            else:
+                raise TypeError
 
-        # Load network
-        checkpoints_dict = [torch.load(checkpoint_path) for checkpoint_path in checkpoints_path]
+            # Load network
+            checkpoints_dict = [torch.load(checkpoint_path) for checkpoint_path in checkpoints_path]
+        else:
+            checkpoints_dict = [None] * len(nets_type)
+            
+        checkpoints_dict = [self.accelerator.broadcast(checkpoint) for checkpoint in checkpoints_dict]
+
 
         for idx, net_type in enumerate(nets_type):
             assert net_type == checkpoints_dict[idx]['net_type'], 'Network [%s] is not of correct type.' % net_type

@@ -10,13 +10,19 @@ class ReplayBuffer:
 
     def add(self, states, actions, rewards, next_states, dones): 
         # 批量添加数据到缓冲区
-        for s, a, r, ns, d in zip(states, actions, rewards, next_states, dones):
-            self.buffer.append((s, a, r, ns, d))
+        for s, a, r, ns in zip(states, actions, rewards, next_states):
+            self.buffer.append((s, a, r, ns, torch.tensor(dones)))
 
     def sample(self, batch_size): 
         transitions = random.sample(self.buffer, batch_size)
         state, action, reward, next_state, done = zip(*transitions)
-        return np.array(state), action, reward, np.array(next_state), done 
+        # for i, s in enumerate(next_state):
+        #     print(f"Debug next_state[{i}] size: {next_state[i].size()}")
+        # print(f"Debug action size: {action.size()}")
+        # print(f"Debug reward size: {reward.size()}")
+        # print(f"Debug next_state size: {next_state.size()}")
+        # print(f"Debug done size: {done.size()}")
+        return state, action, reward, next_state, done 
 
     def size(self): 
         return len(self.buffer)

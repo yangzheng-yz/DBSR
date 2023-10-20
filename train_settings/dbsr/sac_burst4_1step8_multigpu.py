@@ -11,7 +11,7 @@ import data.transforms as tfm
 from admin.multigpu import MultiGPU
 import numpy as np
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3,4,5,6,7"
 import pickle as pkl
 from actors.dbsr_actors import qValueNetwork
 from accelerate import Accelerator, DistributedType
@@ -19,8 +19,8 @@ from accelerate import Accelerator, DistributedType
 def run(settings):
     ##############SETTINGS#####################
     settings.description = 'adjust 4 with pixel step 1/8 LR pixel, discount_factor: 0.99, one_step_length: 1 / 8, iterations: 10, SAC'
-    settings.batch_size = 8
-    sample_size = 8
+    settings.batch_size = 16
+    sample_size = 16
     settings.num_workers = 12
     settings.multi_gpu = True
     settings.print_interval = 1
@@ -53,7 +53,7 @@ def run(settings):
     
     settings.burst_reference_aligned = True
     settings.image_processing_params = {'random_ccm': True, 'random_gains': True, 'smoothstep': True, 'gamma': True, 'add_noise': True}
-    dir_path = "/home/yutong/zheng/projects/dbsr_rl/mice_train_ccvl6/util_scripts"
+    dir_path = "/home/user/zheng/DBSR/util_scripts"
     with open(os.path.join(dir_path, 'mice_val_meta_infos.pkl'), 'rb') as f:
         meta_infos_val = pkl.load(f)
     image_processing_params_val = {'random_ccm': True, 'random_gains': True, 'smoothstep': True, 'gamma': True, 'add_noise': True, \
@@ -81,7 +81,7 @@ def run(settings):
 
     # Train sampler and loader
     dataset_train = sampler.RandomImage([zurich_raw2rgb_train], [1],
-                                        samples_per_epoch=2000, processing=data_processing_train)
+                                        samples_per_epoch=480, processing=data_processing_train)
     # dataset_val = sampler.RandomImage([NightCity_val], [1],
     #                                   samples_per_epoch=settings.batch_size * 1300, processing=data_processing_val)
     dataset_val = sampler.IndexedImage(zurich_raw2rgb_val, processing=data_processing_val)
@@ -94,10 +94,11 @@ def run(settings):
     print("val dataset length: ", len(loader_val)) 
 
     #############IMPORT SR NET#####################
-    sr_net = load_network('/home/yutong/zheng/projects/dbsr_rl/mice_train_ccvl6/pretrained_networks/best.pth.tar')
+    sr_net = load_network('/home/user/zheng/DBSR/pretrained_networks/best.pth.tar')
 
     #############DEFINE SAC 1-ACTOR 4-CRITICS###########
     p_net  = dbsr_actors.ActorSAC(num_frames=settings.burst_sz, hidden_size=5)
+    
     q_net1 = dbsr_actors.qValueNetwork(num_frames=settings.burst_sz)
     q_net2 = dbsr_actors.qValueNetwork(num_frames=settings.burst_sz)
 
@@ -106,6 +107,21 @@ def run(settings):
 
     target_critic_1.load_state_dict(q_net1.state_dict())
     target_critic_2.load_state_dict(q_net2.state_dict())
+    actors = [p_net, q_net1, q_net2, target_critic_1, target_critic_2]
+    #############LOAD LATEST CHECKPOINT###############
+    actors_type = [f"{type(actor).__name__}_{idx}" for idx, actor in enumerate(actors)]
+    checkpoint_root_path = os.path.join(settings.env.workspace_dir, 'checkpoints', settings.project_path)
+    if os.path.exists(checkpoint_root_path):
+        if len(os.path.join(checkpoint_root_path, actors_type[0])) != 0:
+            nets_checkpoints_dir_path = [os.path.join(checkpoint_root_path, i) for i in actors_type]
+            for idx, net_checkpoints_dir_path in enumerate(nets_checkpoints_dir_path):
+                files = os.listdir(net_checkpoints_dir_path)
+                files.sort()
+                cp_path = os.path.join(net_checkpoints_dir_path, files[-1])
+                checkpoint = torch.load(cp_path, map_location='cpu')
+                state_dict = checkpoint['net']
+                actors[idx].load_state_dict(state_dict)
+
 
     ############DEFINE MULTIGPU SETTINGS###########
     accelerator = Accelerator(
@@ -113,23 +129,33 @@ def run(settings):
             mixed_precision='fp16' if fp16 else 'no'
         )    
     sr_net = accelerator.prepare(sr_net)
-    p_net = accelerator.prepare(p_net)
-    q_net1 = accelerator.prepare(q_net1)
-    q_net2 = accelerator.prepare(q_net2)
-    target_critic_1 = accelerator.prepare(target_critic_1)
-    target_critic_2 = accelerator.prepare(target_critic_2)
+    actors[0] = accelerator.prepare(actors[0])
+    actors[1] = accelerator.prepare(actors[1])
+    actors[2] = accelerator.prepare(actors[2])
+    actors[3] = accelerator.prepare(actors[3])
+    actors[4] = accelerator.prepare(actors[4])
     log_alpha = torch.tensor(np.log(0.01), dtype=torch.float)
     log_alpha.requires_grad = True
     log_alpha = accelerator.prepare(log_alpha)
 
-    # Update the actors list
-    actors = [p_net, q_net1, q_net2, target_critic_1, target_critic_2]
-
     ##############DEFINE OPTIMIZER##########
     actor_optimizer = optim.Adam(p_net.parameters(), lr=1e-3)
+    # torch.save(actor_optimizer, './test.pth.tar')
     critic_1_optimizer = optim.Adam(q_net1.parameters(), lr=1e-3)
     critic_2_optimizer = optim.Adam(q_net2.parameters(), lr=1e-3)
     log_alpha_optimizer = optim.Adam([log_alpha], lr=1e-3)
+
+    if os.path.exists(checkpoint_root_path):
+        if len(os.path.join(checkpoint_root_path, actors_type[0])) != 0:
+            net_checkpoints_dir_path = os.path.join(checkpoint_root_path, actors_type[0])
+            files = os.listdir(net_checkpoints_dir_path)
+            files.sort()
+            cp_path = os.path.join(net_checkpoints_dir_path, files[-1])
+            checkpoint = torch.load(cp_path, map_location='cpu')
+            actor_optimizer.load_state_dict(checkpoint['actor_optimizer'])
+            critic_1_optimizer.load_state_dict(checkpoint['critic_1_optimizer'])
+            critic_2_optimizer.load_state_dict(checkpoint['critic_2_optimizer'])
+            log_alpha_optimizer.load_state_dict(checkpoint['log_alpha_optimizer'])
 
     actor_optimizer, critic_1_optimizer, critic_2_optimizer, log_alpha_optimizer = accelerator.prepare(actor_optimizer, critic_1_optimizer, critic_2_optimizer, log_alpha_optimizer)
 
@@ -138,6 +164,18 @@ def run(settings):
     critic_1_lr_scheduler = optim.lr_scheduler.MultiStepLR(critic_1_optimizer, milestones=[100, 150], gamma=0.2)
     critic_2_lr_scheduler = optim.lr_scheduler.MultiStepLR(critic_2_optimizer, milestones=[100, 150], gamma=0.2)
     log_alpha_lr_scheduler = optim.lr_scheduler.MultiStepLR(log_alpha_optimizer, milestones=[100, 150], gamma=0.2)
+
+    if os.path.exists(checkpoint_root_path):
+        if len(os.path.join(checkpoint_root_path, actors_type[0])) != 0:
+            net_checkpoints_dir_path = os.path.join(checkpoint_root_path, actors_type[0])
+            files = os.listdir(net_checkpoints_dir_path)
+            files.sort()
+            cp_path = os.path.join(net_checkpoints_dir_path, files[-1])
+            checkpoint = torch.load(cp_path, map_location='cpu')
+            actor_lr_scheduler.last_epoch = checkpoint['epoch']
+            critic_1_lr_scheduler.last_epoch = checkpoint['epoch']
+            critic_2_lr_scheduler.last_epoch = checkpoint['epoch']
+            log_alpha_lr_scheduler.last_epoch = checkpoint['epoch']
 
     actor_lr_scheduler = accelerator.prepare(actor_lr_scheduler)
     critic_1_lr_scheduler = accelerator.prepare(critic_1_lr_scheduler)
@@ -166,4 +204,4 @@ def run(settings):
                         sample_size=sample_size, accelerator=accelerator,
                         loader_attributes=loader_attributes)
 
-    trainer.train(200, load_latest=True, fail_safe=True, buffer_size=buffer_size) # (epoch, )
+    trainer.train(200, load_latest=False, fail_safe=True, buffer_size=buffer_size) # (epoch, )

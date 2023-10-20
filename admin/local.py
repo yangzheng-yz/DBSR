@@ -1,6 +1,6 @@
 class EnvironmentSettings:
     def __init__(self):
-        self.workspace_dir = '/mnt/7T/Data/Medical-Public/zheng/downloaded_datasets/zheng_ccvl21/training_log'    # Base directory for saving network checkpoints.
+        self.workspace_dir = '/mnt/7T/zheng/DBSR_results/'    # Base directory for saving network checkpoints.
         self.tensorboard_dir = self.workspace_dir + '/tensorboard/'    # Directory for tensorboard files.
         self.pretrained_nets_dir = '/home/user/zheng/DBSR/admin/../pretrained_networks'    # Directory for pre-trained networks.
         self.save_data_path = ''    # Directory for saving network predictions for evaluation.
