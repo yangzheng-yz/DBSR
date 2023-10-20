@@ -1,5 +1,0 @@
-Training:  dbsr  debug_psnetv9
-train dataset length:  100
-val dataset length:  37
-WARNING: Keyword argument "backbone_pretrained" not found when loading network. It was ignored.
-basetrainer's device:  cuda:0

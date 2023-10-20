@@ -97,3 +97,5 @@ gdown https://drive.google.com/uc\?id\=1GyfJzqBx9st9Qdvy2fRizWvxCbNOerFe -O pret
 echo ""
 echo ""
 echo "****************** Installation complete! ******************"
+
+export PYTHONPATH="${PYTHONPATH}:/home/yutong/zheng/projects/DBSR"
