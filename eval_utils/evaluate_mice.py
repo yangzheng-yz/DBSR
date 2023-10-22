@@ -1,5 +1,5 @@
 """
-This version is for the dai's mice dataset.
+This version is for the dai's mice dataset. For trajectories.
 """
 import dataset as datasets
 from data import processing, sampler, DataLoader
@@ -24,6 +24,8 @@ import time
 from evaluation.common_utils.network_param import NetworkParam
 from models_dbsr.loss.image_quality_v2 import PSNR, SSIM, LPIPS
 from data.postprocessing_functions import SimplePostProcess
+from utils.loading import load_network
+import actors.dbsr_actors as dbsr_actors
 
 cfg = EasyDict()
 
@@ -113,13 +115,9 @@ def main():
     scores_all = {}
     
     """The second part is to load the trained checkpoints"""
-    assert cfg.ckpt_path is not None, "You must specify a pretrained weights to evaluate."
-    ckpt_root = cfg.ckpt_path[:-25]
+    assert cfg.sr_net_path is not None, "You must specify a sr_net weights to evaluate."
+    assert cfg.actor_net_path is not None, "You must specify a actor_net weights to evaluate."
     
-    ckpts = [os.path.join(ckpt_root, i) for i in os.listdir(ckpt_root) if int(i.split('_ep')[1].split('.')[0]) > 169]
-    # print(ckpts[0].split('_ep')[1].split('.')[0])
-    # time.sleep(1000)
-    ckpts.sort()
     """The fourth part is to perform prediction"""
     if not os.path.isdir(cfg.save_path):
         os.makedirs('{}'.format(cfg.save_path), exist_ok=True)
@@ -133,22 +131,16 @@ def main():
     #     os.remove(save_txt_path)
     # save_txt = open(save_txt_path, 'a')
     
-# for ckpt_path in ckpts:
-    # cfg.ckpt_path = ckpt_path # TODO: to recovery, delete this
-    n = NetworkParam(network_path='%s' % cfg.ckpt_path, # both .pth and .pth.tar can be loaded 
-                                    unique_name='%s' % cfg.ckpt_path.split('/')[-2])         # Unique name is used when saving results
-
-    net = n.load_net()
+    sr_net = load_network('/home/user/zheng/DBSR/pretrained_networks/best.pth.tar')
+    p_net  = dbsr_actors.ActorSAC(num_frames=cfg.burst_sz, hidden_size=5)
+    p_net.load_state_dict(torch.load("/mnt/7T/zheng/DBSR_results/checkpoints/dbsr/sac_burst4_1step4_multigpu/ActorSAC_0/ep0172.pth.tar"))
     device = 'cuda'
-    net.to(device).train(False)
+    sr_net.to(device).train(False)
+    p_net.to(device).train(False)
     """The third part is to define the transformation's type"""
     
     scores_all_mean = {}
-    selected_images_id = np.arange(0,len(Zurich_test),1) 
-        
-    image_processing_params = {'random_ccm': True, 'random_gains': True, 'smoothstep': True, 'gamma': True, 'add_noise': True}
-        
-    # transform_val = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True), tfm.RandomHorizontalFlip())
+    selected_images_id = np.arange(0,len(Zurich_test),1)         
     transform_val = tfm.Transform(tfm.ToTensor(normalize=True))
 
     permutations = [np.array([[0,0],[1,0],[2,0],[3,0],[3,3],[0,1]]),

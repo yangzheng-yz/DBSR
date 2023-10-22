@@ -245,18 +245,25 @@ class BaseAgentTrainer:
                             checkpoints_path.append(checkpoint_list[-1])
                         else:
                             raise Exception('No checkpoint found[%s]' % nets_type[idx])
+                else:
+                    checkpoint_path = os.path.expanduser(checkpoint)
             elif isinstance(checkpoint, list):
                 checkpoints_path = [os.path.expanduser(checkp) for checkp in checkpoint]
             else:
                 raise TypeError
 
             # Load network
-            checkpoints_dict = [torch.load(checkpoint_path) for checkpoint_path in checkpoints_path]
+            if isinstance(checkpoint_path, list):
+                checkpoints_dict = [torch.load(checkpoint_path) for checkpoint_path in checkpoints_path]
+            else:
+                checkpoints_dict = torch.load(checkpoint_path)
         else:
             checkpoints_dict = [None] * len(nets_type)
-            
-        checkpoints_dict = [self.accelerator.broadcast(checkpoint) for checkpoint in checkpoints_dict]
-
+        
+        if isinstance(checkpoints_dict, list):
+            checkpoints_dict = [self.accelerator.broadcast(checkpoint) for checkpoint in checkpoints_dict]
+        else:
+            checkpoints_dict = self.accelerator.broadcast(checkpoints_dict)
 
         for idx, net_type in enumerate(nets_type):
             assert net_type == checkpoints_dict[idx]['net_type'], 'Network [%s] is not of correct type.' % net_type

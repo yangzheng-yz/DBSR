@@ -26,8 +26,8 @@ class AgentSAC(BaseAgentTrainer):
                 discount_factor=0.99, sr_net=None, 
                 lr_scheduler=None, iterations=15, 
                 interpolation_type='bilinear', reward_type='psnr', save_results=False, saving_dir=None, one_step_length=1/4, base_length=1/4,
-                target_entropy=-1, tau=0.005, init_permutation=None, minimal_size=500, sample_size=4, accelerator=None,
-                loader_attributes=None, actors_attr=None):
+                target_entropy=-1, tau=0.005, init_permutation=None, minimal_size=50, sample_size=4, accelerator=None,
+                loader_attributes=None, actors_attr=None, gpus_num=8):
         """
         args:
             actor - The actor for training the network
@@ -41,6 +41,9 @@ class AgentSAC(BaseAgentTrainer):
             log_alpha_optimizer, settings, actor_lr_scheduler, critic_1_lr_scheduler, critic_2_lr_scheduler, log_alpha_lr_scheduler, log_alpha, actors_attr)
 
         self._set_default_settings()
+        
+        self.gpus_num = gpus_num
+        self.loss_iter_counter = 0
         
         self.loader_attributes = loader_attributes
         self.accelerator = accelerator
@@ -87,7 +90,7 @@ class AgentSAC(BaseAgentTrainer):
         self.final_psnr_sum = 0
         
         self.saving_dir = saving_dir
-        
+        self.base_length = base_length
         self.one_step_length_in_grid = float(one_step_length / base_length)
         # self.base_length = base_length
         self.tau = tau
@@ -238,11 +241,14 @@ class AgentSAC(BaseAgentTrainer):
 
     def save_img_and_metrics(self, initial_pred, final_pred, initial_psnr, final_psnr, meta_info, burst_rgb, gt, final_shifts, name):
         
-        self.final_permutations.append(final_shifts.cpu().numpy())
+        self.final_permutations.append(final_shifts.cpu().numpy() * self.base_length)
         
         saving_dir = self.saving_dir
         os.makedirs(saving_dir, exist_ok=True) 
-        
+        for key, value in meta_info.items():
+            if isinstance(value, torch.Tensor) and value.is_cuda:
+                meta_info[key] = value.cpu()
+
         process_fn = SimplePostProcess(return_np=True)
         # print("gt: ", gt.size())
         # print("burst_rgb[0]: ", burst_rgb[0].size())
@@ -443,7 +449,7 @@ class AgentSAC(BaseAgentTrainer):
                     f.close()
                     # save metrics
                     f=open("%s/metrics.txt" % self.saving_dir, 'a')
-                    print("%sth psnr intial: %s, final: %s, improvement: %s | Average psnr initial: %s, final: %s, improvement: %s" % \
+                    print("%s psnr intial: %s, final: %s, improvement: %s | Average psnr initial: %s, final: %s, improvement: %s" % \
                             (i, metric_initial.item(), metric_final.item(), (metric_final.item()-metric_initial.item()), \
                                 self.initial_psnr_sum/float(i), self.final_psnr_sum/float(i), \
                                     self.final_psnr_sum/float(i) - self.initial_psnr_sum/float(i)), file=f)
@@ -551,137 +557,6 @@ class AgentSAC(BaseAgentTrainer):
         #         print("  No sub-values")
         self.tensorboard_writer.write_epoch(self.stats, self.epoch)
 
-    def train_off_policy_agent(self, loaders, num_episodes, replay_buffer, minimal_size=500):
-
-        return_list = [] # only for training
-        epoch = self.epoch
-        for i in range(10):
-            with tqdm(total=int(num_episodes/10), desc='Iteration %d' % i) as pbar:
-                for i_episode in range(int(num_episodes/10)):
-                    for i_loader, loader in enumerate(loaders):
-                        # loader_iter = iter(loader)
-                        if epoch % self.loader_attributes[i_loader]['epoch_interval'] == 0:
-                            if self.loader_attributes[i_loader]['training']:
-                                for idx, _ in enumerate(self.actors):
-                                    self.actors[idx].train(self.loader_attributes[i_loader]['training'])
-                                torch.set_grad_enabled(self.loader_attributes[i_loader]['training'])
-                                for data in loader:
-                                    ######## preparation
-                                    preds = []
-                                    episode_return = 0
-                                    # data = next(loader_iter)
-                                    if self.move_data_to_gpu:
-                                        data = data.to(self.device)
-                                    self.epoch = int(num_episodes/10 * i + i_episode+1)
-                                    epoch = self.epoch
-                                    data['epoch'] = self.epoch
-                                    data['settings'] = self.settings
-                                    state = data['burst']
-                                    
-                                    done = 0
-                                    with torch.no_grad():
-                                        pred, _   = self.sr_net(state)
-                                    preds.append(pred.clone())
-                                    batch_size = data['frame_gt'].size(0)
-                                    permutations = torch.tensor(self.init_permutation).repeat(batch_size, 1, 1)
-
-                                    if self.reward_type == 'psnr':
-                                        reward_func = {'psnr': PSNR(boundary_ignore=40)}
-                                    elif self.reward_type == 'ssim':
-                                        reward_func = {'ssim': SSIM(boundary_ignore=40)}
-                                    else:
-                                        assert 0 == 1, "wrong reward type"
-                                    ######## preparation done 
-                                    
-                                    iteration = 0
-                                    while not done:
-                                        # action = agent.take_action(state)
-                                        # next_state, reward, done, _ = env.step(action)
-                                        
-                                        # substitute the above two lines with below line
-                                        probs = self.actors[0](state) # here the state should be one
-                                        dists = [Categorical(p) for p in probs.split(1, dim=1)]
-                                        next_state, action, permutations, done = self.step_environment(dists, data['frame_gt'].clone(), permutations.clone(), iteration)
-                                        with torch.no_grad():
-                                            # print("device of model: ", next(self.sr_net.parameters()).device)
-                                            # print("device of nextstate: ", next_state.size())
-                                            pred, _ = self.sr_net(next_state.clone())
-                                        preds.append(pred.clone())
-                                        reward = self._calculate_reward(data['frame_gt'], preds[-1], preds[-2], reward_func=reward_func, batch=True, tolerance=0)
-
-                                        replay_buffer.add(state.cpu().squeeze(0).clone(), action.cpu().squeeze(0).clone(), reward.cpu().squeeze(0).clone(), next_state.cpu().squeeze(0).clone(), done)
-                                        # print(f"Debug what is the size of state: {state.size()}")
-                                        # print(f"Debug what is the size of action: {action.size()}")
-                                        # print(f"Debug what is the size of reward: {reward.size()}")
-                                        # print(f"Debug what is the size of next_state: {next_state.size()}")
-                                        # print(f"Debug what is the size of done: {done}")
-                                        state = next_state.clone()
-                                        episode_return += reward * (self.discount_factor ** iteration)
-                                        if replay_buffer.size() > minimal_size:
-                                            b_s, b_a, b_r, b_ns, b_d = replay_buffer.sample(self.sample_size)
-                                            transition_dict = {'states': b_s, 'actions': b_a, 'next_states': b_ns, 'rewards': b_r, 'dones': b_d}
-                                            actor_loss, critic_1_loss, critic_2_loss, alpha_loss = self.update(transition_dict)
-                                            self._update_stats({'Loss/actor_loss': actor_loss, 'Loss/critic_1_loss': critic_1_loss, \
-                                                    'Loss/critic_2_loss': critic_2_loss, "Loss/alpha_loss": alpha_loss, \
-                                                    }, batch_size, self.loader_attributes[i_loader])
-                                        iteration += 1
-                                    metric_initial = reward_func[self.reward_type](preds[0].clone(), data['frame_gt'].clone())
-                                    metric_final = reward_func[self.reward_type](preds[-1].clone(), data['frame_gt'].clone())
-                                    # print(f"Debug what is episode_return: {episode_return}")
-                                    return_list.append(episode_return.cpu().numpy())
-                                    # if replay_buffer.size() > minimal_size:
-                                    self._update_stats({'Return': np.mean(return_list[-1]), "Improvement": ((metric_final.item()-metric_initial.item()))}, batch_size, loader)
-                                if (i_episode+1) % 10 == 0:
-                                    pbar.set_postfix({'episode': '%d' % (num_episodes/10 * i + i_episode+1)})
-                                pbar.update(1)
-                                self.save_checkpoint()
-
-                            else:
-                                print("I am validating!!!")
-                                for idx, _ in enumerate(self.actors):
-                                    self.actors[idx].train(self.loader_attributes[i_loader].training)
-                                torch.set_grad_enabled(self.loader_attributes[i_loader].training) 
-                                
-                                for idx, data in enumerate(loader):
-                                    if self.move_data_to_gpu:
-                                        data = data.to(self.device)
-                                    state = data['burst']
-                                    done = 0
-                                    with torch.no_grad():
-                                        pred, _   = self.sr_net(state)
-                                    initial_pred = pred.clone()
-                                    batch_size = data['frame_gt'].size(0)
-                                    permutations = torch.tensor(self.init_permutation).repeat(batch_size, 1, 1)
-
-                                    if self.reward_type == 'psnr':
-                                        reward_func = {'psnr': PSNR(boundary_ignore=40)}
-                                    elif self.reward_type == 'ssim':
-                                        reward_func = {'ssim': SSIM(boundary_ignore=40)}
-                                    else:
-                                        assert 0 == 1, "wrong reward type"
-                                    ######## preparation done 
-                                    iteration = 0
-                                    while not done:
-                                        dists = self.actors[0](state) # here the state should be one
-                                        next_state, action, permutations, done = self.step_environment(dists, data['frame_gt'].clone(), permutations.clone(), iter=iteration)
-                                        with torch.no_grad():
-                                            # print("device of model: ", next(self.sr_net.parameters()).device)
-                                            # print("device of nextstate: ", next_state.size())
-                                            pred, _ = self.sr_net(next_state.clone())
-                                        final_pred = pred.clone()
-                                        state = next_state.clone()
-                                        iteration += 1
-
-                                    metric_initial = reward_func[self.reward_type](initial_pred.clone(), data['frame_gt'].clone())
-                                    metric_final = reward_func[self.reward_type](final_pred.clone(), data['frame_gt'].clone())
-                                    print(f"Debug In Validation set, the {idx}th image's final permutation is {permutations.clone()}, final improvement is {(metric_final.item()-metric_initial.item())} \
-                                        Initial_pred is {metric_initial.item()} Fianl_pred is {metric_final.item()}")
-                                    self._update_stats({"Improvement": ((metric_final.item()-metric_initial.item())), "Inital_pred": metric_initial.item(), \
-                                        "Fianl_pred": metric_final.item()}, batch_size, self.loader_attributes[i_loader])
-                                    
-                        self._stats_new_epoch()
-                        self._write_tensorboard()
-        return return_list
     def calc_target(self, rewards, next_states, dones):
         next_probs = self.actors[0](next_states)
         # 根据概率直接计算log_probs
@@ -694,7 +569,7 @@ class AgentSAC(BaseAgentTrainer):
         # print(f"Debug log_probs: {log_probs[0].size()}")
         # Calculate entropy for each distribution
         entropy = [-torch.sum(p * lp, dim=-1, keepdim=False) for p, lp in zip(next_probs, next_log_probs)]
-        entropy = [torch.sum(e, dim=-1, keepdim=True) for e in entropy]
+        entropy = [torch.sum(e, dim=-1, keepdim=True) / (self.settings.burst_sz - 1) for e in entropy]
         entropy = torch.stack(entropy)
         # print(f"Debug entropy: {entropy}")
         # entropy = sum(entropy) # [batch_size, 1]
@@ -770,7 +645,7 @@ class AgentSAC(BaseAgentTrainer):
         # log_probs = torch.log(probs + 1e-8)
         # 直接根据概率计算熵
         entropy = [-torch.sum(p * lp, dim=-1, keepdim=False) for p, lp in zip(probs, log_probs)]
-        entropy = [torch.sum(e, dim=-1, keepdim=True) for e in entropy]
+        entropy = [torch.sum(e, dim=-1, keepdim=True) / (self.settings.burst_sz - 1) for e in entropy]
         entropy = torch.stack(entropy)
         q1_value = self.actors[1](states)
         q2_value = self.actors[2](states)
@@ -781,7 +656,7 @@ class AgentSAC(BaseAgentTrainer):
                             keepdim=False)  # 直接根据概率计算期望
         min_qvalue, _ = torch.min(min_qvalue, dim=1, keepdim=True)
         
-        actor_loss = torch.mean(-self.log_alpha.exp() * entropy - min_qvalue)
+        actor_loss = torch.mean(-self.log_alpha.exp() * entropy - min_qvalue) # TODO: why actor loss continue upup!!!!!!!!!!!!!!
         self.actor_optimizer.zero_grad()
         # actor_loss.backward()
         self.accelerator.backward(actor_loss)
@@ -823,6 +698,8 @@ class AgentSAC(BaseAgentTrainer):
                     pred, _   = self.sr_net(state)
                 preds.append(pred.clone())
                 batch_size = data['frame_gt'].size(0)
+                if self.accelerator.is_main_process:
+                    print(f"Data frame gt batch size {batch_size}")
                 permutations = torch.tensor(self.init_permutation, device=self.accelerator.device).repeat(batch_size, 1, 1)
 
                 if self.reward_type == 'psnr':
@@ -835,6 +712,9 @@ class AgentSAC(BaseAgentTrainer):
                 
                 iteration = 0
                 actor_loss_episode, critic_1_loss_episode, critic_2_loss_episode, alpha_loss_episode = 0, 0, 0, 0
+                if self.accelerator.is_main_process:
+                    initial_permute = permutations.clone()
+                    print(f"Initial permutea at loss_iter_counter {self.loss_iter_counter}: {initial_permute}")
                 while not done:
                     # action = agent.take_action(state)
                     # next_state, reward, done, _ = env.step(action)
@@ -843,6 +723,9 @@ class AgentSAC(BaseAgentTrainer):
                     probs = self.actors[0](state) # here the state should be one
                     dists = [Categorical(p) for p in probs.split(1, dim=1)]
                     next_state, action, permutations, done = self.step_environment(dists, data['frame_gt'].clone(), permutations.clone(), iteration)
+                    if self.accelerator.is_main_process:
+                        inter_permute = permutations.clone()
+                        print(f"Inter permutea at loss_iter_counter {self.loss_iter_counter} in timestep {iteration}: {inter_permute}")
                     with torch.no_grad():
                         # print("device of model: ", next(self.sr_net.parameters()).device)
                         # print("device of nextstate: ", next_state.size())
@@ -851,6 +734,13 @@ class AgentSAC(BaseAgentTrainer):
                     reward = self._calculate_reward(data['frame_gt'], preds[-1], preds[-2], reward_func=reward_func, batch=True, tolerance=0)
 
                     replay_buffer.add(state.cpu().clone(), action.cpu().clone(), reward.cpu().clone(), next_state.cpu().clone(), done)
+                    if self.accelerator.is_main_process:
+                        print(f"[Main GPU] Replay buffer size: {len(replay_buffer.buffer)}")
+                    else:
+                        # 假设有一种方法来获取当前GPU的ID，例如 `current_gpu_id`
+                        current_gpu_id = torch.cuda.current_device()
+                        print(f"[GPU-{current_gpu_id}] Replay buffer size: {len(replay_buffer.buffer)}")
+
                     # print(f"Debug what is the size of state: {state.size()}")
                     # print(f"Debug what is the size of action: {action.size()}")
                     # print(f"Debug what is the size of reward: {reward.size()}")
@@ -860,43 +750,63 @@ class AgentSAC(BaseAgentTrainer):
                     episode_return += reward * (self.discount_factor ** iteration)
                     if replay_buffer.size() > minimal_size:
                         b_s, b_a, b_r, b_ns, b_d = replay_buffer.sample(self.sample_size)
+                        current_gpu_id = torch.cuda.current_device()
+                        print(f"[GPU-{current_gpu_id}] Sampled data size: {len(b_s)}")
+
                         transition_dict = {'states': b_s, 'actions': b_a, 'next_states': b_ns, 'rewards': b_r, 'dones': b_d}
                         actor_loss, critic_1_loss, critic_2_loss, alpha_loss = self.update(transition_dict)
                         actor_loss_episode += actor_loss
                         critic_1_loss_episode += critic_1_loss
                         critic_2_loss_episode += critic_2_loss
                         alpha_loss_episode += alpha_loss
-                        self._update_stats({'Loss/actor_loss': actor_loss, 'Loss/critic_1_loss': critic_1_loss, \
-                                'Loss/critic_2_loss': critic_2_loss, "Loss/alpha_loss": alpha_loss, \
-                                }, batch_size, loader_attributes)
+                        # self._update_stats({'Loss/actor_loss': actor_loss, 'Loss/critic_1_loss': critic_1_loss, \
+                        #         'Loss/critic_2_loss': critic_2_loss, "Loss/alpha_loss": alpha_loss, \
+                        #         }, batch_size, loader_attributes)
                     iteration += 1
+                if self.accelerator.is_main_process:
+                    final_permute = permutations.clone()
+                    print(f"Final permutea at loss_iter_counter {self.loss_iter_counter}: {final_permute}")
                 actor_loss_episode = actor_loss_episode / iteration
                 critic_1_loss_episode = critic_1_loss_episode / iteration
                 critic_2_loss_episode = critic_2_loss_episode / iteration
                 alpha_loss_episode = alpha_loss_episode / iteration
+                self.writer.add_scalar('Training Loss/actor_loss', actor_loss_episode, self.loss_iter_counter)
+                self.writer.add_scalar('Training Loss/critic_1_loss', critic_1_loss_episode, self.loss_iter_counter)
+                self.writer.add_scalar('Training Loss/critic_2_loss', critic_2_loss_episode, self.loss_iter_counter)
+                self.writer.add_scalar('Training Loss/alpha_loss', alpha_loss_episode, self.loss_iter_counter)
                 metric_initial = reward_func[self.reward_type](preds[0].clone(), data['frame_gt'].clone())
                 metric_final = reward_func[self.reward_type](preds[-1].clone(), data['frame_gt'].clone())
                 total_loss += actor_loss_episode + critic_1_loss_episode + critic_2_loss_episode + alpha_loss_episode
                 total_return += episode_return.mean().item()
                 num_samples += 1 
                 improvement = metric_final.item() - metric_initial.item()
+                self.writer.add_scalar('Training Loss/improvement', improvement, self.loss_iter_counter)
+                self.writer.add_scalar('Training Loss/inital_psnr', metric_initial.item(), self.loss_iter_counter)
+                self.writer.add_scalar('Training Loss/final_psnr', metric_final.item(), self.loss_iter_counter)
                 total_improvement += improvement
-                pbar.set_postfix({'loss': total_loss / num_samples, 'return': total_return / num_samples, 'Improvement': improvement})
-                pbar.update(1)
+                self.loss_iter_counter += 1
+                if self.accelerator.is_main_process:
+                    pbar.set_postfix({'loss': total_loss / num_samples, 'return': total_return / num_samples, 'Improvement': improvement})
+                    pbar.update(1)
+                
         return total_loss / num_samples, total_return / num_samples, total_improvement / num_samples
 
     def validate_one_epoch(self, loader, loader_attributes):
         total_improvement   = 0.0
         num_samples         = 0
         with tqdm(total=len(loader), desc='Validation') as pbar:
-            for idx, data in enumerate(loader):
+            for idx, data in enumerate(loader, 1):
                 # if self.move_data_to_gpu:
-                #     data = data.to(self.device)
+                #     data = data.to(self.accelerator.device)
                 state = data['burst']
                 done = 0
                 with torch.no_grad():
                     pred, _   = self.sr_net(state)
+                if self.save_results:
+                    initial_pred_meta_info = data['meta_info']
+                    burst_rgb = data['burst_rgb'].clone()
                 initial_pred = pred.clone()
+                final_pred  =pred.clone()
                 batch_size = data['frame_gt'].size(0)
                 permutations = torch.tensor(self.init_permutation, device=self.accelerator.device).repeat(batch_size, 1, 1)
                 if self.reward_type == 'psnr':
@@ -924,11 +834,28 @@ class AgentSAC(BaseAgentTrainer):
                 improvement = metric_final.item() - metric_initial.item()
                 total_improvement += improvement
                 num_samples += 1
-                pbar.set_postfix({'improvement': improvement})
-                pbar.update(1)
+                if self.accelerator.is_main_process:
+                    pbar.set_postfix({'improvement': improvement})
+                    pbar.update(1)
+                if self.save_results:
+                    # save vis results
+                    self.save_img_and_metrics(initial_pred=initial_pred.clone(), final_pred=final_pred.clone(), \
+                        initial_psnr=metric_initial.item(), final_psnr=metric_final.item(), meta_info=initial_pred_meta_info, \
+                            burst_rgb=burst_rgb, gt=data['frame_gt'].clone(), final_shifts=permutations.clone(), name=data['image_name'])
+                    # save trajectories
+                    f=open("%s/traj.pkl" % self.saving_dir, 'wb')
+                    pickle.dump(self.final_permutations, f)
+                    f.close()
+                    # save metrics
+                    f=open("%s/metrics.txt" % self.saving_dir, 'a')
+                    print("%sth psnr intial: %s, final: %s, improvement: %s | Average psnr initial: %s, final: %s, improvement: %s" % \
+                            (data['image_name'], metric_initial.item(), metric_final.item(), (metric_final.item()-metric_initial.item()), \
+                                self.initial_psnr_sum/idx, self.final_psnr_sum/idx, \
+                                    self.final_psnr_sum/idx - self.initial_psnr_sum/idx), file=f)
+                    f.close()
         return total_improvement / num_samples      
     
-    def train_off_policy_agent(self, loaders, max_epochs, replay_buffer, minimal_size=500):
+    def train_off_policy_agent(self, loaders, max_epochs, replay_buffer, minimal_size=50):
         return_list = []
         for epoch in range(max_epochs):
             for i_loader, loader in enumerate(loaders):
@@ -937,16 +864,19 @@ class AgentSAC(BaseAgentTrainer):
                         avg_loss, avg_return, avg_improvement = self.train_one_epoch(loader, replay_buffer, minimal_size, epoch=epoch, loader_attributes=self.loader_attributes[i_loader])
                         # Optionally log or print avg_loss and avg_return
                         
-                        if self.accelerator.is_main_process:
-                            print(f"Starting saving checkpoint!!!!!!")
-                            self.save_checkpoint()
-                            print(f"Completed!!!!!!!!!!")
                         self.writer.add_scalar('Training Loss', avg_loss, self.epoch)
                         self.writer.add_scalar('Training Return', avg_return, self.epoch)
                         self.writer.add_scalar('Training Improvement', avg_improvement, self.epoch)
                     else:
                         avg_improvement = self.validate_one_epoch(loader, loader_attributes=self.loader_attributes[i_loader])
+                        if self.save_results:
+                            print("This is validation mode! Done.")
+                            exit()
                         self.writer.add_scalar('Testing Improvement', avg_improvement, self.epoch)
+                        if self.accelerator.is_main_process:
+                            print(f"Starting saving checkpoint!!!!!!")
+                            self.save_checkpoint()
+                            print(f"Completed!!!!!!!!!!")
                         # Optionally log or print avg_improvement
                     self._stats_new_epoch()
                     # self._write_tensorboard()

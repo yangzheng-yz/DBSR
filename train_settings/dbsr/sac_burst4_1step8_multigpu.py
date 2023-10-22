@@ -87,13 +87,13 @@ def run(settings):
 
     # Train sampler and loader
     dataset_train = sampler.RandomImage([zurich_raw2rgb_train], [1],
-                                        samples_per_epoch=settings.batch_size * 30, processing=data_processing_train)
+                                        samples_per_epoch=settings.batch_size * 100, processing=data_processing_train)
     dataset_val = sampler.IndexedImage(zurich_raw2rgb_val, processing=data_processing_val)
 
     loader_train = DataLoader('train', dataset_train, training=True, num_workers=settings.num_workers,
                               stack_dim=0, pin_memory=True, batch_size=settings.batch_size)
     loader_val = DataLoader('val', dataset_val, training=False, num_workers=settings.num_workers,
-                            stack_dim=0, pin_memory=True, batch_size=settings.batch_size, epoch_interval=1) # default is also 1
+                            stack_dim=0, pin_memory=True, batch_size=settings.batch_size, epoch_interval=2) # default is also 1
     if accelerator.is_main_process:
         print("train dataset length: ", len(loader_train))
         print("val dataset length: ", len(loader_val)) 
@@ -145,16 +145,16 @@ def run(settings):
     actors[2] = accelerator.prepare(actors[2])
     actors[3] = accelerator.prepare(actors[3])
     actors[4] = accelerator.prepare(actors[4])
-    log_alpha = torch.tensor(np.log(0.01), dtype=torch.float)
+    log_alpha = torch.tensor(np.log(1), dtype=torch.float) # TODO: hyperparameter...
     log_alpha.requires_grad = True
     log_alpha = accelerator.prepare(log_alpha)
 
     ##############DEFINE OPTIMIZER##########
-    actor_optimizer = optim.Adam(p_net.parameters(), lr=1e-3)
+    actor_optimizer = optim.Adam(p_net.parameters(), lr=1e-4)
     # torch.save(actor_optimizer, './test.pth.tar')
-    critic_1_optimizer = optim.Adam(q_net1.parameters(), lr=1e-3)
-    critic_2_optimizer = optim.Adam(q_net2.parameters(), lr=1e-3)
-    log_alpha_optimizer = optim.Adam([log_alpha], lr=1e-3)
+    critic_1_optimizer = optim.Adam(q_net1.parameters(), lr=3e-4)
+    critic_2_optimizer = optim.Adam(q_net2.parameters(), lr=3e-4)
+    log_alpha_optimizer = optim.Adam([log_alpha], lr=1e-4)
 
     if os.path.exists(checkpoint_root_path) and accelerator.is_main_process:
         if os.path.exists(checkpoint_sample_path):
@@ -212,10 +212,10 @@ def run(settings):
                         critic_2_lr_scheduler=critic_2_lr_scheduler, 
                         log_alpha_lr_scheduler=log_alpha_lr_scheduler,
                         log_alpha=log_alpha, 
-                        sr_net=sr_net, iterations=10, reward_type='psnr',
-                        discount_factor=0.98, init_permutation=permutation, one_step_length=one_step_length, base_length=base_length,
+                        sr_net=sr_net, iterations=5, reward_type='psnr',
+                        discount_factor=0.99, init_permutation=permutation, one_step_length=one_step_length, base_length=base_length,
                         sample_size=sample_size, accelerator=accelerator,
                         loader_attributes=loader_attributes,
-                        actors_attr=actors_attr)
+                        actors_attr=actors_attr, target_entropy=-5, minimal_size=200, gpus_num=8)
 
-    trainer.train(200, load_latest=False, fail_safe=True, buffer_size=buffer_size) # (epoch, )
+    trainer.train(201, load_latest=False, fail_safe=True, buffer_size=buffer_size) # (epoch, )
