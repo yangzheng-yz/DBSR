@@ -25,13 +25,15 @@ def run(settings):
 
     ##############SETTINGS#####################
     settings.description = 'adjust 4 with pixel step 1/8 LR pixel, discount_factor: 0.99, one_step_length: 1 / 8, iterations: 10, SAC'
-    settings.batch_size = 72
-    sample_size = 72
+    settings.batch_size = 1
+    sample_size = 16
     settings.num_workers = 32
     settings.multi_gpu = False
     settings.print_interval = 1
-
+    used_weights_for_validate_traj = True
+    weigths_path = "/mnt/7T/zheng/DBSR_results/checkpoints/dbsr/sac_burst4_1step8_multigpu_v1/ActorSAC_0/ep0200.pth.tar"
     settings.crop_sz = (512, 640)
+    # settings.crop_sz = (512, 640)
     settings.burst_sz = 4
     settings.downsample_factor = 4
     one_step_length = 1 / 8
@@ -83,7 +85,7 @@ def run(settings):
                                                               burst_transformation_params=burst_transformation_params_val,
                                                               transform=transform_val,
                                                               image_processing_params=image_processing_params_val,
-                                                              random_crop=False)
+                                                              random_crop=False, return_rgb_busrt=True)
 
     # Train sampler and loader
     dataset_train = sampler.RandomImage([zurich_raw2rgb_train], [1],
@@ -93,7 +95,7 @@ def run(settings):
     loader_train = DataLoader('train', dataset_train, training=True, num_workers=settings.num_workers,
                               stack_dim=0, pin_memory=True, batch_size=settings.batch_size)
     loader_val = DataLoader('val', dataset_val, training=False, num_workers=settings.num_workers,
-                            stack_dim=0, pin_memory=True, batch_size=settings.batch_size, epoch_interval=2) # default is also 1
+                            stack_dim=0, pin_memory=True, batch_size=settings.batch_size, epoch_interval=1) # default is also 1
     if accelerator.is_main_process:
         print("train dataset length: ", len(loader_train))
         print("val dataset length: ", len(loader_val)) 
@@ -131,7 +133,10 @@ def run(settings):
                     # print(state_dict)
                     actors[idx].load_state_dict(state_dict)
                     print(f"Load successfully!")
-                    
+    elif used_weights_for_validate_traj:
+        checkpoint = torch.load(weigths_path, map_location='cpu')
+        state_dict = checkpoint['net']
+        actors[0].load_state_dict(state_dict)
     else:
         os.makedirs(checkpoint_root_path, exist_ok=True)
 
@@ -145,8 +150,8 @@ def run(settings):
     actors[2] = accelerator.prepare(actors[2])
     actors[3] = accelerator.prepare(actors[3])
     actors[4] = accelerator.prepare(actors[4])
-    log_alpha = torch.tensor(np.log(1), dtype=torch.float) # TODO: hyperparameter...
-    log_alpha.requires_grad = True
+    log_alpha = torch.tensor(np.log(1), dtype=torch.float)
+    log_alpha.requires_grad = False
     log_alpha = accelerator.prepare(log_alpha)
 
     ##############DEFINE OPTIMIZER##########
@@ -176,7 +181,7 @@ def run(settings):
     critic_1_lr_scheduler = optim.lr_scheduler.MultiStepLR(critic_1_optimizer, milestones=[100, 150], gamma=0.2)
     critic_2_lr_scheduler = optim.lr_scheduler.MultiStepLR(critic_2_optimizer, milestones=[100, 150], gamma=0.2)
     log_alpha_lr_scheduler = optim.lr_scheduler.MultiStepLR(log_alpha_optimizer, milestones=[100, 150], gamma=0.2)
-    inital_epoch = 0
+
     if os.path.exists(checkpoint_root_path) and accelerator.is_main_process:
         if os.path.exists(checkpoint_sample_path):
             if len(os.listdir(checkpoint_sample_path)) != 0:
@@ -189,23 +194,21 @@ def run(settings):
                 critic_1_lr_scheduler.last_epoch = checkpoint['epoch']
                 critic_2_lr_scheduler.last_epoch = checkpoint['epoch']
                 log_alpha_lr_scheduler.last_epoch = checkpoint['epoch']
-    inital_epoch = actor_lr_scheduler
-    # print("Initial epoch is %s" % inital_epoch)
+
     actor_lr_scheduler = accelerator.prepare(actor_lr_scheduler)
     critic_1_lr_scheduler = accelerator.prepare(critic_1_lr_scheduler)
     critic_2_lr_scheduler = accelerator.prepare(critic_2_lr_scheduler)
     log_alpha_lr_scheduler = accelerator.prepare(log_alpha_lr_scheduler)
 
     ###########DEFINE LOADER################
-    loader_attributes = [{'training': loader_train.training, 'name': loader_train.name, 'epoch_interval': loader_train.epoch_interval, \
-        'length': loader_train.__len__()},{'training': loader_val.training, 'name': loader_val.name, 'epoch_interval': loader_val.epoch_interval, \
+    loader_attributes = [{'training': loader_val.training, 'name': loader_val.name, 'epoch_interval': loader_val.epoch_interval, \
         'length': loader_val.__len__()}]
     loader_train = accelerator.prepare(loader_train)
     loader_val = accelerator.prepare(loader_val)
 
     ############DEFINE TRAINER###############
     trainer = AgentSAC(actors, 
-                        [loader_train, loader_val], 
+                        [loader_val], 
                         actor_optimizer, critic_1_optimizer, critic_2_optimizer, log_alpha_optimizer,
                         settings, 
                         actor_lr_scheduler=actor_lr_scheduler, 
@@ -217,6 +220,7 @@ def run(settings):
                         discount_factor=0.99, init_permutation=permutation, one_step_length=one_step_length, base_length=base_length,
                         sample_size=sample_size, accelerator=accelerator,
                         loader_attributes=loader_attributes,
-                        actors_attr=actors_attr, target_entropy=-5, minimal_size=200, gpus_num=8, inital_epoch=inital_epoch)
+                        actors_attr=actors_attr, target_entropy=-5, minimal_size=200, gpus_num=8,
+                        save_results=True, saving_dir="/mnt/7T/zheng/DBSR_results/loggings/b4_1-8_20231022")
 
-    trainer.train(201, load_latest=False, fail_safe=True, buffer_size=buffer_size) # (epoch, )
+    trainer.train(200, load_latest=False, fail_safe=True, buffer_size=buffer_size) # (epoch, )

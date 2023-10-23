@@ -9,7 +9,7 @@ class BaseTrainer:
     """Base trainer class. Contains functions for training and saving/loading chackpoints.
     Trainer classes should inherit from this one and overload the train_epoch function."""
 
-    def __init__(self, actor, loaders, optimizer, settings, lr_scheduler=None):
+    def __init__(self, actor, loaders, optimizer, settings, lr_scheduler=None, accelerator=None):
         """
         args:
             actor - The actor for training the network
@@ -23,6 +23,7 @@ class BaseTrainer:
         self.optimizer = optimizer
         self.lr_scheduler = lr_scheduler
         self.loaders = loaders
+        self.accelerator = accelerator
 
         self.update_settings(settings)
 
@@ -33,9 +34,9 @@ class BaseTrainer:
         if self.device is None:
             self.device = torch.device("cuda:0" if torch.cuda.is_available() and settings.use_gpu else "cpu")
 
-        print("basetrainer's device: ", self.device)
+        # print("basetrainer's device: ", self.accelerator.device)
         
-        self.actor.to(self.device)
+        # self.actor.to(self.accelerator.device)
 
     def update_settings(self, settings=None):
         """Updates the trainer settings. Must be called to update internal settings."""
@@ -63,7 +64,8 @@ class BaseTrainer:
         for i in range(num_tries):
             try:
                 if load_latest:
-                    self.load_checkpoint()
+                    if self.accelerator.is_main_process:
+                        self.load_checkpoint()
 
                 for epoch in range(self.epoch+1, max_epochs+1):
                     self.epoch = epoch
@@ -74,7 +76,8 @@ class BaseTrainer:
                         self.lr_scheduler.step()
 
                     if self._checkpoint_dir:
-                        self.save_checkpoint()
+                        if self.accelerator.is_main_process:
+                            self.save_checkpoint()
             except:
                 print('Training crashed at epoch {}'.format(epoch))
                 if fail_safe:
@@ -94,7 +97,9 @@ class BaseTrainer:
     def save_checkpoint(self):
         """Saves a checkpoint of the network and other variables."""
 
-        net = self.actor.net.module if multigpu.is_multi_gpu(self.actor.net) else self.actor.net
+        if not self.accelerator.is_main_process:
+            return 
+        net = self.actor.net
 
         actor_type = type(self.actor).__name__
         net_type = type(net).__name__

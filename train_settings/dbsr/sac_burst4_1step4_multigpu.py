@@ -16,7 +16,24 @@ import pickle as pkl
 from actors.dbsr_actors import qValueNetwork
 from accelerate import Accelerator, DistributedType
 
+def set_seed(seed_value=42):
+    """Set seed for reproducibility."""
+    import random
+    import numpy as np
+    import torch
+    
+    random.seed(seed_value)
+    np.random.seed(seed_value)
+    torch.manual_seed(seed_value)
+    
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed_value)
+        torch.cuda.manual_seed_all(seed_value)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+
 def run(settings):
+    set_seed(42)
     fp16 = False
     accelerator = Accelerator(
             split_batches=True,

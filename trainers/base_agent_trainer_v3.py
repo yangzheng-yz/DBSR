@@ -11,7 +11,7 @@ class BaseAgentTrainer:
     """Base trainer class. Contains functions for training and saving/loading chackpoints.
     Trainer classes should inherit from this one and overload the train_epoch function."""
 
-    def __init__(self, actors, loaders, actor_optimizer, critic_1_optimizer, critic_2_optimizer, log_alpha_optimizer, settings, actor_lr_scheduler=None, critic_1_lr_scheduler=None, critic_2_lr_scheduler=None, log_alpha_lr_scheduler=None, log_alpha=0, actors_attr=None):
+    def __init__(self, actors, loaders, actor_optimizer, critic_1_optimizer, critic_2_optimizer, log_alpha_optimizer, settings, actor_lr_scheduler=None, critic_1_lr_scheduler=None, critic_2_lr_scheduler=None, log_alpha_lr_scheduler=None, log_alpha=0, actors_attr=None, inital_epoch=0):
         """
         args:
             actor - The actor for training the network
@@ -39,7 +39,7 @@ class BaseAgentTrainer:
 
         self.update_settings(settings)
 
-        self.epoch = 0
+        self.epoch = inital_epoch
         self.stats = {}
 
         # self.device = getattr(settings, 'device', None)

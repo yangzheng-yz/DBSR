@@ -27,7 +27,8 @@ class AgentSAC(BaseAgentTrainer):
                 lr_scheduler=None, iterations=15, 
                 interpolation_type='bilinear', reward_type='psnr', save_results=False, saving_dir=None, one_step_length=1/4, base_length=1/4,
                 target_entropy=-1, tau=0.005, init_permutation=None, minimal_size=50, sample_size=4, accelerator=None,
-                loader_attributes=None, actors_attr=None, gpus_num=8):
+                loader_attributes=None, actors_attr=None, gpus_num=8,
+                inital_epoch=0):
         """
         args:
             actor - The actor for training the network
@@ -38,7 +39,7 @@ class AgentSAC(BaseAgentTrainer):
             lr_scheduler - Learning rate scheduler
         """
         super().__init__(actors, loaders, actor_optimizer, critic_1_optimizer, critic_2_optimizer, \
-            log_alpha_optimizer, settings, actor_lr_scheduler, critic_1_lr_scheduler, critic_2_lr_scheduler, log_alpha_lr_scheduler, log_alpha, actors_attr)
+            log_alpha_optimizer, settings, actor_lr_scheduler, critic_1_lr_scheduler, critic_2_lr_scheduler, log_alpha_lr_scheduler, log_alpha, actors_attr, inital_epoch)
 
         self._set_default_settings()
         
@@ -85,6 +86,8 @@ class AgentSAC(BaseAgentTrainer):
         self.save_results = save_results
         
         self.final_permutations = []
+        self.final_permutations_int_length = []
+        self.one_step_length = one_step_length
         
         self.initial_psnr_sum = 0
         self.final_psnr_sum = 0
@@ -241,7 +244,8 @@ class AgentSAC(BaseAgentTrainer):
 
     def save_img_and_metrics(self, initial_pred, final_pred, initial_psnr, final_psnr, meta_info, burst_rgb, gt, final_shifts, name):
         
-        self.final_permutations.append(final_shifts.cpu().numpy() * self.base_length)
+        self.final_permutations_int_length.append((final_shifts.cpu().numpy() * (1 / self.one_step_length_in_grid)).astype(np.int32))
+        self.final_permutations.append(final_shifts.cpu().numpy())
         
         saving_dir = self.saving_dir
         os.makedirs(saving_dir, exist_ok=True) 
@@ -446,6 +450,9 @@ class AgentSAC(BaseAgentTrainer):
                     # save trajectories
                     f=open("%s/traj.pkl" % self.saving_dir, 'wb')
                     pickle.dump(self.final_permutations, f)
+                    f.close()
+                    f=open("%s/traj_int_length_%s.pkl" % (self.saving_dir, self.one_step_length), 'wb')
+                    pickle.dump(self.final_permutations_int_length, f)
                     f.close()
                     # save metrics
                     f=open("%s/metrics.txt" % self.saving_dir, 'a')
@@ -846,6 +853,9 @@ class AgentSAC(BaseAgentTrainer):
                     f=open("%s/traj.pkl" % self.saving_dir, 'wb')
                     pickle.dump(self.final_permutations, f)
                     f.close()
+                    f=open("%s/traj_int_length_%s.pkl" % (self.saving_dir, self.one_step_length), 'wb')
+                    pickle.dump(self.final_permutations_int_length, f)
+                    f.close()
                     # save metrics
                     f=open("%s/metrics.txt" % self.saving_dir, 'a')
                     print("%sth psnr intial: %s, final: %s, improvement: %s | Average psnr initial: %s, final: %s, improvement: %s" % \
@@ -858,6 +868,7 @@ class AgentSAC(BaseAgentTrainer):
     def train_off_policy_agent(self, loaders, max_epochs, replay_buffer, minimal_size=50):
         return_list = []
         for epoch in range(max_epochs):
+            print("Current Training/Validating Epoch is %s" % self.epoch)
             for i_loader, loader in enumerate(loaders):
                 if self.epoch % self.loader_attributes[i_loader]['epoch_interval'] == 0:
                     if self.loader_attributes[i_loader]['training']:

@@ -23,9 +23,11 @@ import data.transforms as tfm
 from admin.multigpu import MultiGPU
 from models_dbsr.loss.image_quality_v2 import PSNR, PixelWiseError
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3,4,5,6,7"
 import numpy as np
 import pickle as pkl
+from accelerate import Accelerator
+import torch
 
 def set_seed(seed_value=42):
     """Set seed for reproducibility."""
@@ -46,9 +48,15 @@ def set_seed(seed_value=42):
         
 def run(settings):
     set_seed(42)
+    fp16 = False
+    accelerator = Accelerator(
+            split_batches=True,
+            mixed_precision='fp16' if fp16 else 'no',
+        )
+    set_seed(42)
     settings.description = 'Default settings for training DBSR models on synthetic burst dataset, with random pixel shift, trans(24), rot(1.0), burst size(8), use database function'
-    settings.batch_size = 3
-    settings.num_workers = 8
+    settings.batch_size = 6
+    settings.num_workers = 6
     settings.multi_gpu = False
     settings.print_interval = 1
 
@@ -78,7 +86,7 @@ def run(settings):
     
     settings.burst_reference_aligned = True
     settings.image_processing_params = {'random_ccm': True, 'random_gains': True, 'smoothstep': True, 'gamma': True, 'add_noise': True}
-    dir_path = "/home/yutong/zheng/projects/dbsr_rl/DBSR/util_scripts"
+    dir_path = "/home/user/zheng//DBSR/util_scripts"
     with open(os.path.join(dir_path, 'mice_val_meta_infos.pkl'), 'rb') as f:
         meta_infos_val = pkl.load(f)
     image_processing_params_val = {'random_ccm': True, 'random_gains': True, 'smoothstep': True, 'gamma': True, 'add_noise': True, \
@@ -102,12 +110,7 @@ def run(settings):
                                                               transform=transform_val,
                                                               image_processing_params=image_processing_params_val,
                                                               random_crop=False)
-    # data_processing_val_2 = processing.SyntheticBurstDatabaseProcessing(settings.crop_sz, settings.burst_sz,
-    #                                                           1.0,
-    #                                                           burst_transformation_params=burst_transformation_params_val,
-    #                                                           transform=transform_val,
-    #                                                           image_processing_params=image_processing_params_val,
-    #                                                           random_crop=False)
+
 
     # Train sampler and loader
     dataset_train = sampler.RandomImage([zurich_raw2rgb_train], [1],
@@ -120,7 +123,9 @@ def run(settings):
                             stack_dim=0, batch_size=settings.batch_size, epoch_interval=5)
     # loader_val_2 = DataLoader('val_2', dataset_val_2, training=False, num_workers=settings.num_workers,
     #                         stack_dim=0, batch_size=1, epoch_interval=10)
-
+    if accelerator.is_main_process:
+        print("train dataset length: ", len(loader_train))
+        print("val dataset length: ", len(loader_val)) 
     net = deeprep_nets.deeprep_sr_iccv21(num_iter=3, enc_dim=64, enc_num_res_blocks=5, enc_out_dim=256,
                                          dec_dim_pre=64, dec_dim_post=32, dec_num_pre_res_blocks=5,
                                          dec_num_post_res_blocks=5,
@@ -129,19 +134,62 @@ def run(settings):
                                          wp_ref_offset_noise=0.00)
 
     # Wrap the network for multi GPU training
-    if settings.multi_gpu:
-        net = MultiGPU(net, dim=0)
+    # if settings.multi_gpu:
+    #     net = MultiGPU(net, dim=0)
 
     objective = {'rgb': PixelWiseError(metric='l1', boundary_ignore=40), 'psnr': PSNR(boundary_ignore=40)}
 
     loss_weight = {'rgb': 1.0}
 
-    actor = dbsr_actors.DBSRSyntheticActor(net=net, objective=objective, loss_weight=loss_weight)
+    actors = [net]
+    actors_attr = [f"{type(actor).__name__}" for actor in enumerate(actors)]
+    #############LOAD LATEST CHECKPOINT###############
+    actors_type = actors_attr
+    checkpoint_root_path = os.path.join(settings.env.workspace_dir, 'checkpoints', settings.project_path)
+    checkpoint = None
+    if os.path.exists(checkpoint_root_path) and accelerator.is_main_process:
+        if len(os.listdir(checkpoint_root_path)) != 0:
+                files = os.listdir(checkpoint_root_path)
+                files.sort()
+                cp_path = os.path.join(checkpoint_root_path, files[-1])
+                checkpoint = torch.load(cp_path, map_location='cpu')
+                state_dict = checkpoint['net']
+                print(f"Loading latest {files[-1]} from {cp_path}")
+                # print(state_dict)
+                net.load_state_dict(state_dict)
+                print(f"Load successfully!")
+                    
+    else:
+        os.makedirs(checkpoint_root_path, exist_ok=True)
 
-    optimizer = optim.Adam([{'params': actor.net.parameters(), 'lr': 1e-4}],
+    # net = accelerator.prepare(net)
+    loader_attributes = [{'training': loader_train.training, 'name': loader_train.name, 'epoch_interval': loader_train.epoch_interval, \
+        'length': loader_train.__len__()},{'training': loader_val.training, 'name': loader_val.name, 'epoch_interval': loader_val.epoch_interval, \
+        'length': loader_val.__len__()}]
+    loader_train = accelerator.prepare(loader_train)
+    loader_val = accelerator.prepare(loader_val)
+
+
+    for param in net.alignment_net.parameters():
+        param.requires_grad = False
+
+
+    actor = dbsr_actors.DBSRSyntheticActor(net=net, objective=objective, loss_weight=loss_weight, accelerator=accelerator)
+
+    optimizer = optim.Adam([{'params': filter(lambda p: p.requires_grad, actor.net.parameters()), 'lr': 1e-4}],
                            lr=2e-4)
+    if checkpoint is not None:
+        optimizer.load_state_dict(checkpoint['optimizer'])
+    optimizer = accelerator.prepare(optimizer)
 
     lr_scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[100, 150], gamma=0.2)
-    trainer = SimpleTrainer(actor, [loader_train, loader_val], optimizer, settings, lr_scheduler)
-
-    trainer.train(200, load_latest=True, fail_safe=True)
+    if checkpoint is not None:
+        lr_scheduler.last_epoch = checkpoint['epoch']
+    lr_scheduler = accelerator.prepare(lr_scheduler)
+    
+    trainer = SimpleTrainer(actor, [loader_train, loader_val], optimizer, settings, lr_scheduler, accelerator=accelerator, loader_attributes=loader_attributes)
+    if checkpoint is not None:
+        trainer.epoch = checkpoint['epoch']
+     
+    
+    trainer.train(200, load_latest=False, fail_safe=True)

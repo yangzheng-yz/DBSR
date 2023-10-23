@@ -597,11 +597,13 @@ class DBSR_PSNetActor(BaseActor):
         return actions_pdf
 class DBSRSyntheticActor(BaseActor):
     """Actor for training DBSR model on synthetic bursts """
-    def __init__(self, net, objective, loss_weight=None):
+    def __init__(self, net, objective, loss_weight=None, accelerator=None):
         super().__init__(net, objective)
         if loss_weight is None:
             loss_weight = {'rgb': 1.0}
         self.loss_weight = loss_weight
+        self.accelerator = accelerator
+        self.net = self.accelerator.prepare(self.net)
 
     def __call__(self, data):
         # Run network

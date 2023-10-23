@@ -11,7 +11,7 @@ import data.transforms as tfm
 from admin.multigpu import MultiGPU
 import numpy as np
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3,4,5,6,7"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 import pickle as pkl
 from actors.dbsr_actors import qValueNetwork
 from accelerate import Accelerator, DistributedType
@@ -31,7 +31,7 @@ def run(settings):
     settings.multi_gpu = False
     settings.print_interval = 1
     used_weights_for_validate_traj = True
-    weigths_path = "/mnt/7T/zheng/DBSR_results/checkpoints/dbsr/sac_burst4_1step4_multigpu/ActorSAC_0/ep0173.pth.tar"
+    weigths_path = "/mnt/7T/zheng/DBSR_results/checkpoints/dbsr/sac_burst4_1step4_multigpu/ActorSAC_0/ep0200.pth.tar"
     settings.crop_sz = (512, 640)
     # settings.crop_sz = (512, 640)
     settings.burst_sz = 4
@@ -221,6 +221,6 @@ def run(settings):
                         sample_size=sample_size, accelerator=accelerator,
                         loader_attributes=loader_attributes,
                         actors_attr=actors_attr, target_entropy=-5, minimal_size=200, gpus_num=8,
-                        save_results=True, saving_dir="/mnt/7T/zheng/DBSR_results/loggings/b4_1-8_20231022")
+                        save_results=True, saving_dir="/mnt/7T/zheng/DBSR_results/loggings/b4_1-4_20231022")
 
     trainer.train(200, load_latest=False, fail_safe=True, buffer_size=buffer_size) # (epoch, )

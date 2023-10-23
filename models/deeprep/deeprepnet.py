@@ -82,6 +82,7 @@ def deeprep_sr_iccv21(num_iter, enc_dim=32, enc_num_res_blocks=3, enc_out_dim=64
                       wp_ref_offset_noise=0.02,
                       use_feature_regularization=False,
                       init_feat_reg_w=1.0, gauss_blur_sd=1,
+                      accelerator=None
                       ):
     lr_encoder = encoders.ResEncoder(input_channels=4, init_dim=enc_dim, num_res_blocks=enc_num_res_blocks,
                                      out_dim=enc_out_dim)

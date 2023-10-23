@@ -27,7 +27,7 @@ import data.synthetic_burst_generation as syn_burst_generation
 
 
 class SimpleTrainer(BaseTrainer):
-    def __init__(self, actor, loaders, optimizer, settings, lr_scheduler=None, loader_attributes=None, accelerator=None):
+    def __init__(self, actor, loaders, optimizer, settings, lr_scheduler=None):
         """
         args:
             actor - The actor for training the network
@@ -37,18 +37,16 @@ class SimpleTrainer(BaseTrainer):
             settings - Training settings
             lr_scheduler - Learning rate scheduler
         """
-        super().__init__(actor, loaders, optimizer, settings, lr_scheduler, accelerator)
+        super().__init__(actor, loaders, optimizer, settings, lr_scheduler)
 
         self._set_default_settings()
 
-        self.loader_attributes = loader_attributes
-        self.accelerator = accelerator
         # Initialize statistics variables
-        self.stats = OrderedDict({self.loader_attributes[idx]['name']: None for idx, _ in enumerate(self.loaders)})
+        self.stats = OrderedDict({loader.name: None for loader in self.loaders})
 
         # Initialize tensorboard
         tensorboard_writer_dir = os.path.join(self.settings.env.tensorboard_dir, self.settings.project_path)
-        self.tensorboard_writer = TensorboardWriter(tensorboard_writer_dir, [self.loader_attributes[idx]['name'] for idx, l in enumerate(loaders)])
+        self.tensorboard_writer = TensorboardWriter(tensorboard_writer_dir, [l.name for l in loaders])
 
         self.move_data_to_gpu = getattr(settings, 'move_data_to_gpu', True)
         
@@ -96,11 +94,11 @@ class SimpleTrainer(BaseTrainer):
     #     # Now rename to actual checkpoint. os.rename seems to be atomic if files are on same filesystem. Not 100% sure
     #     os.rename(tmp_file_path, file_path)
 
-    def cycle_dataset(self, loader, loader_attribute):
+    def cycle_dataset(self, loader):
         """Do a cycle of training or validation."""
 
-        self.actor.train(loader_attribute['training'])
-        torch.set_grad_enabled(loader_attribute['training'])
+        self.actor.train(loader.training)
+        torch.set_grad_enabled(loader.training)
 
         # if not loader.training:
         #     average_psnr = 0
@@ -109,9 +107,9 @@ class SimpleTrainer(BaseTrainer):
 
         for i, data in enumerate(loader, 1):
             # get inputs
-            # if self.move_data_to_gpu:
-            #     # print("!!!!!!!!!!!!!!!!!!!!data's device: ", self.device)
-            #     data = data.to(self.accelerator.device)
+            if self.move_data_to_gpu:
+                # print("!!!!!!!!!!!!!!!!!!!!data's device: ", self.device)
+                data = data.to(self.device)
             # print("ADSSDSDSDSDS: ", data['burst'].size()) # (batch_size, burst_size, channels, height, width)
             # print("!!!!!!gt size: ", data['frame_gt'].size()) # (batch_size, channels, height, width)
             
@@ -125,7 +123,7 @@ class SimpleTrainer(BaseTrainer):
             #     average_psnr += stats['Stat/psnr']
             # print("!!!!!!!!!!!loss: ", loss)
             # backward pass and update weights
-            if loader_attribute['training']:
+            if loader.training:
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
@@ -133,12 +131,11 @@ class SimpleTrainer(BaseTrainer):
             # update statistics
             # batch_size = data['train_images'].shape[loader.stack_dim]
             batch_size = self.settings.batch_size
-            if self.accelerator.is_main_process:
-                self._update_stats(stats, batch_size, loader_attribute)
+            self._update_stats(stats, batch_size, loader)
 
-                # print statistics
-                self._print_stats(i, loader_attribute, batch_size)
-                
+            # print statistics
+            self._print_stats(i, loader, batch_size)
+            
         # if not loader.training:
         #     average_psnr = average_psnr / len(loader)
         #     if average_psnr > self.current_test_psnr:
@@ -149,52 +146,52 @@ class SimpleTrainer(BaseTrainer):
 
     def train_epoch(self):
         """Do one epoch for each loader."""
-        for idx, loader in enumerate(self.loaders):
-            if self.epoch % self.loader_attributes[idx]['epoch_interval'] == 0:
-                self.cycle_dataset(loader, self.loader_attributes[idx])
-        if self.accelerator.is_main_process:
-            self._stats_new_epoch()
-            self._write_tensorboard()
+        for loader in self.loaders:
+            if self.epoch % loader.epoch_interval == 0:
+                self.cycle_dataset(loader)
+
+        self._stats_new_epoch()
+        self._write_tensorboard()
 
     def _init_timing(self):
         self.num_frames = 0
         self.start_time = time.time()
         self.prev_time = self.start_time
 
-    def _update_stats(self, new_stats: OrderedDict, batch_size, loader_attributes):
+    def _update_stats(self, new_stats: OrderedDict, batch_size, loader):
         # Initialize stats if not initialized yet
-        if loader_attributes['name'] not in self.stats.keys() or self.stats[loader_attributes['name']] is None:
-            self.stats[loader_attributes['name']] = OrderedDict({name: AverageMeter() for name in new_stats.keys()})
+        if loader.name not in self.stats.keys() or self.stats[loader.name] is None:
+            self.stats[loader.name] = OrderedDict({name: AverageMeter() for name in new_stats.keys()})
 
         for name, val in new_stats.items():
-            if name not in self.stats[loader_attributes['name']].keys():
-                self.stats[loader_attributes['name']][name] = AverageMeter()
-            self.stats[loader_attributes['name']][name].update(val, batch_size)
+            if name not in self.stats[loader.name].keys():
+                self.stats[loader.name][name] = AverageMeter()
+            self.stats[loader.name][name].update(val, batch_size)
 
-    def _print_stats(self, i, loader_attribute, batch_size):
+    def _print_stats(self, i, loader, batch_size):
         self.num_frames += batch_size
         current_time = time.time()
         batch_fps = batch_size / (current_time - self.prev_time)
         average_fps = self.num_frames / (current_time - self.start_time)
         self.prev_time = current_time
-        if i % self.settings.print_interval == 0 or i == loader_attribute['length']:
-            print_str = '[%s: %d, %d / %d] ' % (loader_attribute['name'], self.epoch, i, loader_attribute['length'])
+        if i % self.settings.print_interval == 0 or i == loader.__len__():
+            print_str = '[%s: %d, %d / %d] ' % (loader.name, self.epoch, i, loader.__len__())
             print_str += 'FPS: %.1f (%.1f)  ,  ' % (average_fps, batch_fps)
-            for name, val in self.stats[loader_attribute['name']].items():
+            for name, val in self.stats[loader.name].items():
                 if (self.settings.print_stats is None or name in self.settings.print_stats) and hasattr(val, 'avg'):
                     print_str += '%s: %.5f  ,  ' % (name, val.avg)
             print(print_str[:-5])
 
     def _stats_new_epoch(self):
         # Record learning rate
-        for idx, loader in enumerate(self.loaders):
-            if self.loader_attributes[idx]['training']:
+        for loader in self.loaders:
+            if loader.training:
                 lr_list = self.lr_scheduler.get_lr()
                 for i, lr in enumerate(lr_list):
                     var_name = 'LearningRate/group{}'.format(i)
-                    if var_name not in self.stats[self.loader_attributes[idx]['name']].keys():
-                        self.stats[self.loader_attributes[idx]['name']][var_name] = StatValue()
-                    self.stats[self.loader_attributes[idx]['name']][var_name].update(lr)
+                    if var_name not in self.stats[loader.name].keys():
+                        self.stats[loader.name][var_name] = StatValue()
+                    self.stats[loader.name][var_name].update(lr)
 
         for loader_stats in self.stats.values():
             if loader_stats is None:
@@ -242,7 +239,7 @@ class SimpleTrainer_v2(BaseTrainer):
         
         assert sr_net is not None, "You must specify a pretrained SR model to calculate reward"
         self.sr_net = sr_net
-        # self.sr_net = self.sr_net.to(self.accelerator.device)
+        self.sr_net = self.sr_net.to(self.device)
         
         self.interpolation_type = interpolation_type
         
@@ -482,8 +479,8 @@ class SimpleTrainer_v2(BaseTrainer):
         """Do a cycle of training or validation."""
 
         self.actor.train(loader.training)
-        # torch.set_grad_enabled(loader.training)
-        # torch.autograd.set_detect_anomaly(True)
+        torch.set_grad_enabled(loader.training)
+        torch.autograd.set_detect_anomaly(True)
 
         self._init_timing()
 
@@ -493,8 +490,8 @@ class SimpleTrainer_v2(BaseTrainer):
             # print("data type: ", data.keys())
             # time.sleep(1000)
             # get inputs
-            # if self.move_data_to_gpu:
-            #     data = data.to(self.accelerator.device)
+            if self.move_data_to_gpu:
+                data = data.to(self.device)
                 # data = {k: v.to(self.device) for k, v in data.items()}
             # print("After data load Memory Allocated:", torch.cuda.memory_allocated() / (1024 ** 2), "MB")
             # print("Memory Cached:", torch.cuda.memory_cached() / (1024 ** 2), "MB")
@@ -546,8 +543,8 @@ class SimpleTrainer_v2(BaseTrainer):
                 # print("!@#length preds: ", len(preds))
                 # time.sleep(1000)
                 reward = self._calculate_reward(data['frame_gt'], preds[-1], preds[-2], reward_func=reward_func)
-                # print("outside last: ", reward_func[self.reward_type](preds[-2], data['frame_gt']))
-                # print("outside current: ", reward_func[self.reward_type](preds[-1], data['frame_gt']))
+                print("outside last: ", reward_func[self.reward_type](preds[-2], data['frame_gt']))
+                print("outside current: ", reward_func[self.reward_type](preds[-1], data['frame_gt']))
                 rewards.append(reward)
 
                 # calculate log probabilities of the sampled actions
@@ -582,11 +579,10 @@ class SimpleTrainer_v2(BaseTrainer):
 
             # update statistics
             batch_size = self.settings.batch_size
-            if self.accelerator.is_main_process:
-                self._update_stats({'Loss/total': loss_iter.item(), ('%s/initial' % self.reward_type): metric_initial.item(), ('%s/final' % self.reward_type): metric_final.item(), "Improvement": metric_final.item()-metric_initial.item()}, batch_size, loader)
+            self._update_stats({'Loss/total': loss_iter.item(), ('%s/initial' % self.reward_type): metric_initial.item(), ('%s/final' % self.reward_type): metric_final.item(), "Improvement": metric_final.item()-metric_initial.item()}, batch_size, loader)
 
-                # print statistics
-                self._print_stats(i, loader, batch_size)
+            # print statistics
+            self._print_stats(i, loader, batch_size)
             # print("After backward pass Memory Allocated:", torch.cuda.memory_allocated() / (1024 ** 2), "MB")
 
             # del data
@@ -624,15 +620,15 @@ class SimpleTrainer_v2(BaseTrainer):
         self.start_time = time.time()
         self.prev_time = self.start_time
 
-    def _update_stats(self, new_stats: OrderedDict, batch_size, loader_attribute):
+    def _update_stats(self, new_stats: OrderedDict, batch_size, loader):
         # Initialize stats if not initialized yet
-        if loader_attribute['name'] not in self.stats.keys() or self.stats[loader_attribute['name']] is None:
-            self.stats[loader_attribute['name']] = OrderedDict({name: AverageMeter() for name in new_stats.keys()})
+        if loader.name not in self.stats.keys() or self.stats[loader.name] is None:
+            self.stats[loader.name] = OrderedDict({name: AverageMeter() for name in new_stats.keys()})
 
         for name, val in new_stats.items():
-            if name not in self.stats[loader_attribute['name']].keys():
-                self.stats[loader_attribute['name']][name] = AverageMeter()
-            self.stats[loader_attribute['name']][name].update(val, batch_size)
+            if name not in self.stats[loader.name].keys():
+                self.stats[loader.name][name] = AverageMeter()
+            self.stats[loader.name][name].update(val, batch_size)
 
     def _print_stats(self, i, loader, batch_size):
         self.num_frames += batch_size
