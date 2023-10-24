@@ -99,7 +99,7 @@ class BaseTrainer:
 
         if not self.accelerator.is_main_process:
             return 
-        net = self.actor.net
+        net = self.accelerator.unwrap_model(self.actor.net)
 
         actor_type = type(self.actor).__name__
         net_type = type(net).__name__

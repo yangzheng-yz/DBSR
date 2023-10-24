@@ -18,7 +18,7 @@ from skimage.metrics import structural_similarity as ssim
 from skimage import io, img_as_float
 from sys import argv
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "6"
 import time
 
 from evaluation.common_utils.network_param import NetworkParam
@@ -88,7 +88,7 @@ def main():
     cfg = parse_config()
     """The first part is to prepare the dataset and define the evaluation metrics"""
     assert cfg.dataset_path is not None, "You must specify the dataset path"
-    Zurich_test = datasets.MixedMiceNIR_Dai(root=cfg.dataset_path, split='val')   
+    Zurich_test = datasets.MixedMiceNIR_Dai(root=cfg.dataset_path, split=cfg.split)   
     
     metrics = ('psnr', 'ssim')
     device = 'cuda'
@@ -114,12 +114,12 @@ def main():
     
     """The second part is to load the trained checkpoints"""
     assert cfg.ckpt_path is not None, "You must specify a pretrained weights to evaluate."
-    ckpt_root = cfg.ckpt_path[:-25]
+    # ckpt_root = cfg.ckpt_path[:-25]
     
-    ckpts = [os.path.join(ckpt_root, i) for i in os.listdir(ckpt_root) if int(i.split('_ep')[1].split('.')[0]) > 169]
-    # print(ckpts[0].split('_ep')[1].split('.')[0])
-    # time.sleep(1000)
-    ckpts.sort()
+    # ckpts = [os.path.join(ckpt_root, i) for i in os.listdir(ckpt_root) if int(i.split('_ep')[1].split('.')[0]) > 169]
+    # # print(ckpts[0].split('_ep')[1].split('.')[0])
+    # # time.sleep(1000)
+    # ckpts.sort()
     """The fourth part is to perform prediction"""
     if not os.path.isdir(cfg.save_path):
         os.makedirs('{}'.format(cfg.save_path), exist_ok=True)
@@ -149,18 +149,27 @@ def main():
     image_processing_params = {'random_ccm': True, 'random_gains': True, 'smoothstep': True, 'gamma': True, 'add_noise': True}
         
     # transform_val = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True), tfm.RandomHorizontalFlip())
-    transform_val = tfm.Transform(tfm.ToTensor(normalize=True))
+    transform_val = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True))
 
-    permutations = [np.array([[0,0],[1,0],[2,0],[3,0],[3,3],[0,1]]),
-                    np.array([[0,0],[1,0],[2,0],[3,0],[3,3],[0,1],[3,1]]),
-                    np.array([[0,0],[1,0],[2,0],[3,0],[3,3],[0,1],[3,1],[0,3]]),
-                    np.array([[0,0],[0,1],[0,2],[1,0],[1,1],[1,2],[2,0],[2,1],[2,2]]),
-                    np.array([[0,0],[4/3,0],[8/3,0],[8/3,4/3],[4/3,4/3],[0,4/3],[0,8/3],[4/3,8/3],[8/3,8/3]]),
-                    np.array([[0,0],[0,2],[0,3],[1,0],[2,1],[1,3],[3,0],[3,1],[3,3]]),
-                    np.array([[0,0],[0,1],[0,3],[1,0],[3,1],[3,3],[3,0]]),
-                    np.array([[0,0],[0,1],[0,3],[2,0],[1,3],[3,2],[3,0],[3,1]])]
+    permutations = [np.array([[0,0],[0,3.],[3.,2.],[3.,0]]),
+                    np.array([[0,0],[0,3],[3,3],[2,0]]),
+                    np.array([[0,0],[0,3],[3,2],[1,0]]),
+                    np.array([[0,0],[0,3],[3,3],[3,0]]),
+                    np.array([[0,0],[0,3],[3,2],[2,0]]),
+                    np.array([[0,0],[0,2],[2,3],[3,0]]),
+                    np.array([[0,0],[0,3],[2,3],[3,0]]),
+                    np.array([[0,0],[0,5.0/2.0],[2,3],[3,0]]),
+                    np.array([[0,0],[0,3],[3.0/2.0,3],[3,0]]),
+                    np.array([[0,0],[0,2],[3.0/2.0,3],[3,0]]),
+                    np.array([[0,0],[0,3],[3,2],[4.0/3.0,0]]),
+                    np.array([[0,0],[0,3],[3,5.0/3.0],[2,0]]),
+                    np.array([[0,0],[0,3],[3,2],[2,0]]),
+                    np.array([[0,0],[0,3],[3,2],[8.0/3.0,0]]),
+                    np.array([[0,0],[1.0/3.0,3],[3,5.0/3.0],[4.0/3.0,0]]),
+                    np.array([[0,0],[0,2],[2,2],[2,0]]),
+                    np.array([[0,0],[4.0/3.0,0],[8.0/3.0,0],[8.0/3.0,4.0/3.0],[4.0/3.0,4.0/3.0],[0,4.0/3.0],[0,8.0/3.0],[4.0/3.0,8.0/3.0],[8.0/3.0,8.0/3.0]])]
 
-    dir_path = "/home/yutong/zheng/projects/dbsr_rl/DBSR/util_scripts"
+    dir_path = "/home/user/zheng/DBSR/util_scripts"
     meta_infos_found = False
     if os.path.exists(os.path.join(dir_path, 'mice_%s_meta_infos.pkl' % cfg.split)):
         with open(os.path.join(dir_path, 'mice_%s_meta_infos.pkl' % cfg.split), 'rb') as f:
@@ -182,9 +191,9 @@ def main():
                                         'max_scale': 0.0,
                                         # 'border_crop': 24, #24,
                                         'random_pixelshift': cfg.random_pixelshift,
-                                        'specified_translation': permutations[cfg.permu_nb]}
+                                        'specified_translation': permutations[int(cfg.permu_nb)]}
     
-    data_processing_val = processing.SyntheticBurstDatabaseProcessing((cfg.crop_sz_h, cfg.crop_sz_w), cfg.burst_sz,
+    data_processing_val = processing.SyntheticBurstDatabaseProcessing((512, 640), cfg.burst_sz,
                                                                         cfg.downsample_factor,
                                                                         burst_transformation_params=burst_transformation_params_val,
                                                                         transform=transform_val,
@@ -203,6 +212,21 @@ def main():
 
         burst = data['burst']
         gt = data['frame_gt']
+
+        # HR = HR_batch[i].clone().cpu()
+        # # print("image type: ", image.device)
+        # # time.sleep(1000)
+        # burst_transformation_params = {'max_translation': 24.0,
+        #                             'max_rotation': 1.0,
+        #                             'max_shear': 0.0,
+        #                             'max_scale': 0.0,
+        #                             'random_pixelshift': False,
+        #                             'specified_translation': permutations_batch[i]}
+        # image_burst_rgb, _ = syn_burst_generation.single2lrburstdatabase(HR, burst_size=burst_size,
+        #                                             downsample_factor=self.downsample_factor,
+        #                                             transformation_params=burst_transformation_params,
+        #                                             interpolation_type=self.interpolation_type)
+        # image_burst = rgb2raw.mosaic(image_burst_rgb.clone())
 
         if meta_infos_found:
             meta_info = meta_infos_val[data['image_name']]
@@ -226,8 +250,8 @@ def main():
         burst = burst.to(device).unsqueeze(0)
         gt = gt.to(device)
 
-        if n.burst_sz is not None:
-            burst = burst[:, :n.burst_sz]
+        # if n.burst_sz is not None:
+        #     burst = burst[:, :n.burst_sz]
 
 
         with torch.no_grad():

@@ -174,19 +174,19 @@ class AgentSAC(BaseAgentTrainer):
 
         return updated_permutations_tensor, updated_actions_tensor.to(device)
 
-    def step_environment(self, dists, HR_batch, permutations, iter):
+    def step_environment(self, dists, HR_batch, permutations, iter, add_noise=True, meta_info=None):
 
         actions = torch.stack([dist.sample() for dist in dists], dim=1)
         # print("actions: ", actions)
         permutations, actions  = self.update_permutations_and_actions(actions, permutations)
         
-        next_state = self.apply_actions_to_env(HR_batch, permutations)
+        next_state = self.apply_actions_to_env(HR_batch, permutations, add_noise=add_noise, meta_info=meta_info)
         done = 0
         if iter == self.iterations:
             done = 1
         return next_state, actions, permutations, done
 
-    def apply_actions_to_env(self, HR_batch, permutations_batch):
+    def apply_actions_to_env(self, HR_batch, permutations_batch, add_noise=True, meta_info=None):
         """Apply actions to a batch of images."""
         device = HR_batch.device
         # images = images.cpu()
@@ -209,7 +209,17 @@ class AgentSAC(BaseAgentTrainer):
                                                         downsample_factor=self.downsample_factor,
                                                         transformation_params=burst_transformation_params,
                                                         interpolation_type=self.interpolation_type)
+            
             image_burst = rgb2raw.mosaic(image_burst_rgb.clone())
+            # Add noise
+            if add_noise:
+                shot_noise_level = meta_info['shot_noise_level'][i].cpu()
+                read_noise_level = meta_info['read_noise_level'][i].cpu()
+                image_burst = rgb2raw.add_noise(image_burst, shot_noise_level, read_noise_level)
+
+            # Clip saturated pixels.
+            image_burst = image_burst.clamp(0.0, 1.0)
+            
             transformed_images.append(image_burst)
         transformed_images_stacked = torch.stack(transformed_images).to(device)
         
@@ -695,10 +705,13 @@ class AgentSAC(BaseAgentTrainer):
                 # data = next(loader_iter)
                 # if self.move_data_to_gpu:
                 #     data = data.to(self.device)
+                # if self.accelerator.is_main_process:
+                #     print(f"meta info: {data['meta_info']}")
                 self.epoch = epoch
                 data['epoch'] = self.epoch
                 data['settings'] = self.settings
                 state = data['burst']
+                meta_info = data['meta_info']
                 
                 done = 0
                 with torch.no_grad():
@@ -729,7 +742,7 @@ class AgentSAC(BaseAgentTrainer):
                     # substitute the above two lines with below line
                     probs = self.actors[0](state) # here the state should be one
                     dists = [Categorical(p) for p in probs.split(1, dim=1)]
-                    next_state, action, permutations, done = self.step_environment(dists, data['frame_gt'].clone(), permutations.clone(), iteration)
+                    next_state, action, permutations, done = self.step_environment(dists, data['frame_gt'].clone(), permutations.clone(), iteration, add_noise=True, meta_info=meta_info)
                     if self.accelerator.is_main_process:
                         inter_permute = permutations.clone()
                         print(f"Inter permutea at loss_iter_counter {self.loss_iter_counter} in timestep {iteration}: {inter_permute}")
@@ -739,8 +752,8 @@ class AgentSAC(BaseAgentTrainer):
                         pred, _ = self.sr_net(next_state.clone())
                     preds.append(pred.clone())
                     reward = self._calculate_reward(data['frame_gt'], preds[-1], preds[-2], reward_func=reward_func, batch=True, tolerance=0)
-
-                    replay_buffer.add(state.cpu().clone(), action.cpu().clone(), reward.cpu().clone(), next_state.cpu().clone(), done)
+                    if iteration <= 5 or done:
+                        replay_buffer.add(state.cpu().clone(), action.cpu().clone(), reward.cpu().clone(), next_state.cpu().clone(), done)
                     if self.accelerator.is_main_process:
                         print(f"[Main GPU] Replay buffer size: {len(replay_buffer.buffer)}")
                     else:
@@ -822,12 +835,13 @@ class AgentSAC(BaseAgentTrainer):
                     reward_func = {'ssim': SSIM(boundary_ignore=40)}
                 else:
                     assert 0 == 1, "wrong reward type"
+                meta_info = data['meta_info']
                 ######## preparation done 
                 iteration = 0
                 while not done:
                     probs = self.actors[0](state) # here the state should be one
                     dists = [Categorical(p) for p in probs.split(1, dim=1)]
-                    next_state, action, permutations, done = self.step_environment(dists, data['frame_gt'].clone(), permutations.clone(), iter=iteration)
+                    next_state, action, permutations, done = self.step_environment(dists, data['frame_gt'].clone(), permutations.clone(), iter=iteration, add_noise=True, meta_info=meta_info)
                     with torch.no_grad():
                         # print("device of model: ", next(self.sr_net.parameters()).device)
                         # print("device of nextstate: ", next_state.size())

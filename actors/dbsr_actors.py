@@ -622,6 +622,8 @@ class DBSRSyntheticActor(BaseActor):
             loss_rgb += loss_percept
 
         if 'psnr' in self.objective.keys():
+            # print(f"what is pred {pred.size()}")
+            # print(f"what is data['frame_gt'] {data['frame_gt'].size()}")
             psnr = self.objective['psnr'](pred.clone().detach(), data['frame_gt'])
 
         loss = loss_rgb
@@ -636,6 +638,7 @@ class DBSRSyntheticActor(BaseActor):
                     'Loss/raw/rgb': loss_rgb_raw.item()}
 
         if 'psnr' in self.objective.keys():
+            
             stats['Stat/psnr'] = psnr.item()
 
         return loss, stats

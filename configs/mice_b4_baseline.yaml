@@ -1,0 +1,20 @@
+random_ccm: True
+random_gains: True
+smoothstep: True
+gamma: True
+add_noise: False
+return_rgb_burst: True
+permu_nb: -2 # 0 1 2 3 4 
+crop_sz_h: 512
+crop_sz_w: 640
+burst_sz: 4
+downsample_factor: 4
+random_pixelshift: False
+calculate_loss: True
+
+ckpt_path: /home/user/zheng/DBSR/pretrained_networks/best.pth.tar
+dataset_path: /mnt/7T/Data/Medical-Public/NIRII_denoising
+save_path: /mnt/7T/zheng/DBSR_results/loggings/b4_baseline_valset
+specify_image_id: -1 # -1
+save_results: True
+split: val

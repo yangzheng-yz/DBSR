@@ -11,7 +11,7 @@ import data.transforms as tfm
 from admin.multigpu import MultiGPU
 import numpy as np
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "6"
 import pickle as pkl
 from actors.dbsr_actors import qValueNetwork
 from accelerate import Accelerator, DistributedType
@@ -42,6 +42,7 @@ def run(settings):
     
 
     permutation = np.array([[0.,0.],[0.,2.],[2.,2.],[2.,0.]])
+    permutation = np.array([[0.,0.],[0.,3.],[3.,2.],[3.,0.]])
     
     settings.burst_transformation_params = {'max_translation': 3.0,
                                         'max_rotation': 0.0,
@@ -62,14 +63,14 @@ def run(settings):
     settings.burst_reference_aligned = True
     settings.image_processing_params = {'random_ccm': True, 'random_gains': True, 'smoothstep': True, 'gamma': True, 'add_noise': True}
     dir_path = "/home/user/zheng/DBSR/util_scripts"
-    with open(os.path.join(dir_path, 'mice_val_meta_infos.pkl'), 'rb') as f:
+    with open(os.path.join(dir_path, 'mice_test_meta_infos.pkl'), 'rb') as f:
         meta_infos_val = pkl.load(f)
     image_processing_params_val = {'random_ccm': True, 'random_gains': True, 'smoothstep': True, 'gamma': True, 'add_noise': True, \
                                         'predefined_params': meta_infos_val}
 
     ################DEFINE DATALOADER################
     zurich_raw2rgb_train = datasets.MixedMiceNIR_Dai(split='train')
-    zurich_raw2rgb_val = datasets.MixedMiceNIR_Dai(split='val')  
+    zurich_raw2rgb_val = datasets.MixedMiceNIR_Dai(split='test')  
 
     transform_train = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True), tfm.RandomHorizontalFlip())
     transform_val = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True))

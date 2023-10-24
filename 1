@@ -1,0 +1,487 @@
+/home/user/zheng/DBSR/data/processing_utils.py:83: UserWarning: __floordiv__ is deprecated, and its behavior will change in a future version of pytorch. It currently rounds toward 0 (like the 'trunc' function NOT 'floor'). This results in incorrect rounding for negative values. To keep the current behavior, use torch.div(a, b, rounding_mode='trunc'), or for actual floor division, use torch.div(a, b, rounding_mode='floor').
+  r1 = ((shape[-2] - crop_sz[-2]) // 2).int()
+/home/user/zheng/DBSR/data/processing_utils.py:84: UserWarning: __floordiv__ is deprecated, and its behavior will change in a future version of pytorch. It currently rounds toward 0 (like the 'trunc' function NOT 'floor'). This results in incorrect rounding for negative values. To keep the current behavior, use torch.div(a, b, rounding_mode='trunc'), or for actual floor division, use torch.div(a, b, rounding_mode='floor').
+  c1 = ((shape[-1] - crop_sz[-1]) // 2).int()
+/home/user/miniconda3/envs/z/lib/python3.8/site-packages/torch/functional.py:478: UserWarning: torch.meshgrid: in an upcoming release, it will be required to pass the indexing argument. (Triggered internally at  /opt/conda/conda-bld/pytorch_1659484810403/work/aten/src/ATen/native/TensorShape.cpp:2894.)
+  return _VF.meshgrid(tensors, **kwargs)  # type: ignore[attr-defined]
+/home/user/miniconda3/envs/z/lib/python3.8/site-packages/torch/nn/functional.py:4215: UserWarning: Default grid_sample and affine_grid behavior has changed to align_corners=False since 1.3.0. Please specify align_corners=True if the old behavior is desired. See the documentation of grid_sample for details.
+  warnings.warn(
+Cannot load SpatialCorrelationSampler module
+WARNING: Keyword argument "backbone_pretrained" not found when loading network. It was ignored.
+ *Using the predefined ISP parameters in /home/user/zheng/DBSR/util_scripts/mice_val_meta_infos.pkl
+/home/user/zheng/DBSR/data/processing_utils.py:83: UserWarning: __floordiv__ is deprecated, and its behavior will change in a future version of pytorch. It currently rounds toward 0 (like the 'trunc' function NOT 'floor'). This results in incorrect rounding for negative values. To keep the current behavior, use torch.div(a, b, rounding_mode='trunc'), or for actual floor division, use torch.div(a, b, rounding_mode='floor').
+  r1 = ((shape[-2] - crop_sz[-2]) // 2).int()
+/home/user/zheng/DBSR/data/processing_utils.py:84: UserWarning: __floordiv__ is deprecated, and its behavior will change in a future version of pytorch. It currently rounds toward 0 (like the 'trunc' function NOT 'floor'). This results in incorrect rounding for negative values. To keep the current behavior, use torch.div(a, b, rounding_mode='trunc'), or for actual floor division, use torch.div(a, b, rounding_mode='floor').
+  c1 = ((shape[-1] - crop_sz[-1]) // 2).int()
+/home/user/miniconda3/envs/z/lib/python3.8/site-packages/torch/functional.py:478: UserWarning: torch.meshgrid: in an upcoming release, it will be required to pass the indexing argument. (Triggered internally at  /opt/conda/conda-bld/pytorch_1659484810403/work/aten/src/ATen/native/TensorShape.cpp:2894.)
+  return _VF.meshgrid(tensors, **kwargs)  # type: ignore[attr-defined]
+/home/user/miniconda3/envs/z/lib/python3.8/site-packages/torch/nn/functional.py:4215: UserWarning: Default grid_sample and affine_grid behavior has changed to align_corners=False since 1.3.0. Please specify align_corners=True if the old behavior is desired. See the documentation of grid_sample for details.
+  warnings.warn(
+Cannot load SpatialCorrelationSampler module
+WARNING: Keyword argument "backbone_pretrained" not found when loading network. It was ignored.
+ *Using the predefined ISP parameters in /home/user/zheng/DBSR/util_scripts/mice_val_meta_infos.pkl
+/home/user/zheng/DBSR/data/processing_utils.py:83: UserWarning: __floordiv__ is deprecated, and its behavior will change in a future version of pytorch. It currently rounds toward 0 (like the 'trunc' function NOT 'floor'). This results in incorrect rounding for negative values. To keep the current behavior, use torch.div(a, b, rounding_mode='trunc'), or for actual floor division, use torch.div(a, b, rounding_mode='floor').
+  r1 = ((shape[-2] - crop_sz[-2]) // 2).int()
+/home/user/zheng/DBSR/data/processing_utils.py:84: UserWarning: __floordiv__ is deprecated, and its behavior will change in a future version of pytorch. It currently rounds toward 0 (like the 'trunc' function NOT 'floor'). This results in incorrect rounding for negative values. To keep the current behavior, use torch.div(a, b, rounding_mode='trunc'), or for actual floor division, use torch.div(a, b, rounding_mode='floor').
+  c1 = ((shape[-1] - crop_sz[-1]) // 2).int()
+/home/user/miniconda3/envs/z/lib/python3.8/site-packages/torch/functional.py:478: UserWarning: torch.meshgrid: in an upcoming release, it will be required to pass the indexing argument. (Triggered internally at  /opt/conda/conda-bld/pytorch_1659484810403/work/aten/src/ATen/native/TensorShape.cpp:2894.)
+  return _VF.meshgrid(tensors, **kwargs)  # type: ignore[attr-defined]
+/home/user/miniconda3/envs/z/lib/python3.8/site-packages/torch/nn/functional.py:4215: UserWarning: Default grid_sample and affine_grid behavior has changed to align_corners=False since 1.3.0. Please specify align_corners=True if the old behavior is desired. See the documentation of grid_sample for details.
+  warnings.warn(
+Traceback (most recent call last):
+  File "/home/user/miniconda3/envs/z/lib/python3.8/runpy.py", line 194, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/home/user/miniconda3/envs/z/lib/python3.8/runpy.py", line 87, in _run_code
+    exec(code, run_globals)
+  File "/home/user/zheng/DBSR/eval_utils/evaluate_pixel-shift_v6.py", line 325, in <module>
+    main()
+  File "/home/user/zheng/DBSR/eval_utils/evaluate_pixel-shift_v6.py", line 211, in main
+    for idx, (data) in enumerate(dataset_val):
+  File "/home/user/zheng/DBSR/data/sampler.py", line 49, in __getitem__
+    return self.processing(data)
+  File "/home/user/zheng/DBSR/data/processing.py", line 197, in __call__
+    burst, frame_gt, burst_rgb, flow_vector, meta_info = syn_burst_generation.rgb2rawburstdatabase(frame_crop,
+  File "/home/user/zheng/DBSR/data/synthetic_burst_generation.py", line 186, in rgb2rawburstdatabase
+    image_burst_rgb, flow_vectors = single2lrburstdatabase(image, burst_size=burst_size,
+  File "/home/user/zheng/DBSR/data/synthetic_burst_generation.py", line 511, in single2lrburstdatabase
+    sample_grid = torch.stack((cvs, rvs, torch.ones_like(cvs)), dim=-1).float()
+KeyboardInterrupt
+Cannot load SpatialCorrelationSampler module
+WARNING: Keyword argument "backbone_pretrained" not found when loading network. It was ignored.
+ *Using the predefined ISP parameters in /home/user/zheng/DBSR/util_scripts/mice_val_meta_infos.pkl
+Could not import runpy module
+Traceback (most recent call last):
+  File "/home/user/miniconda3/envs/z/lib/python3.8/runpy.py", line 19, in <module>
+    from pkgutil import read_code, get_importer
+  File "/home/user/miniconda3/envs/z/lib/python3.8/pkgutil.py", line 137, in <module>
+    def iter_importer_modules(importer, prefix=''):
+  File "/home/user/miniconda3/envs/z/lib/python3.8/functools.py", line 808, in singledispatch
+    import types, weakref
+  File "/home/user/miniconda3/envs/z/lib/python3.8/weakref.py", line 90, in <module>
+    class WeakValueDictionary(_collections_abc.MutableMapping):
+  File "/home/user/miniconda3/envs/z/lib/python3.8/abc.py", line 85, in __new__
+    cls = super().__new__(mcls, name, bases, namespace, **kwargs)
+KeyboardInterrupt
+Traceback (most recent call last):
+  File "/home/user/miniconda3/envs/z/lib/python3.8/runpy.py", line 194, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/home/user/miniconda3/envs/z/lib/python3.8/runpy.py", line 87, in _run_code
+    exec(code, run_globals)
+  File "/home/user/zheng/DBSR/eval_utils/evaluate_pixel-shift_v6.py", line 4, in <module>
+    import dataset as datasets
+  File "/home/user/zheng/DBSR/dataset/__init__.py", line 1, in <module>
+    from .imagefolder import ImageFolder
+  File "/home/user/zheng/DBSR/dataset/imagefolder.py", line 16, in <module>
+    from dataset.base_image_dataset import BaseImageDataset
+  File "/home/user/zheng/DBSR/dataset/base_image_dataset.py", line 15, in <module>
+    import torch.utils.data
+  File "/home/user/miniconda3/envs/z/lib/python3.8/site-packages/torch/__init__.py", line 15, in <module>
+    import textwrap
+  File "<frozen importlib._bootstrap>", line 991, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 971, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 914, in _find_spec
+  File "<frozen importlib._bootstrap_external>", line 1342, in find_spec
+  File "<frozen importlib._bootstrap_external>", line 1314, in _get_spec
+  File "<frozen importlib._bootstrap_external>", line 1467, in find_spec
+  File "<frozen importlib._bootstrap>", line 222, in _verbose_message
+KeyboardInterrupt
+Fatal Python error: init_import_size: Failed to import the site module
+Python runtime state: initialized
+Traceback (most recent call last):
+  File "/home/user/miniconda3/envs/z/lib/python3.8/site.py", line 580, in <module>
+    main()
+  File "/home/user/miniconda3/envs/z/lib/python3.8/site.py", line 567, in main
+    known_paths = addsitepackages(known_paths)
+  File "/home/user/miniconda3/envs/z/lib/python3.8/site.py", line 350, in addsitepackages
+    addsitedir(sitedir, known_paths)
+  File "/home/user/miniconda3/envs/z/lib/python3.8/site.py", line 208, in addsitedir
+    addpackage(sitedir, name, known_paths)
+  File "/home/user/miniconda3/envs/z/lib/python3.8/site.py", line 169, in addpackage
+    exec(line)
+  File "<string>", line 1, in <module>
+  File "/home/user/miniconda3/envs/z/lib/python3.8/importlib/util.py", line 14, in <module>
+    from contextlib import contextmanager
+  File "/home/user/miniconda3/envs/z/lib/python3.8/contextlib.py", line 6, in <module>
+    from functools import wraps
+  File "<frozen importlib._bootstrap>", line 991, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 975, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 671, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 779, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 911, in get_code
+  File "<frozen importlib._bootstrap_external>", line 580, in _compile_bytecode
+KeyboardInterrupt
+Traceback (most recent call last):
+  File "/home/user/miniconda3/envs/z/lib/python3.8/runpy.py", line 194, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/home/user/miniconda3/envs/z/lib/python3.8/runpy.py", line 87, in _run_code
+    exec(code, run_globals)
+  File "/home/user/zheng/DBSR/eval_utils/evaluate_pixel-shift_v6.py", line 4, in <module>
+    import dataset as datasets
+  File "/home/user/zheng/DBSR/dataset/__init__.py", line 1, in <module>
+    from .imagefolder import ImageFolder
+  File "/home/user/zheng/DBSR/dataset/imagefolder.py", line 16, in <module>
+    from dataset.base_image_dataset import BaseImageDataset
+  File "/home/user/zheng/DBSR/dataset/base_image_dataset.py", line 15, in <module>
+    import torch.utils.data
+  File "/home/user/miniconda3/envs/z/lib/python3.8/site-packages/torch/__init__.py", line 201, in <module>
+    _load_global_deps()
+  File "/home/user/miniconda3/envs/z/lib/python3.8/site-packages/torch/__init__.py", line 154, in _load_global_deps
+    ctypes.CDLL(lib_path, mode=ctypes.RTLD_GLOBAL)
+  File "/home/user/miniconda3/envs/z/lib/python3.8/ctypes/__init__.py", line 381, in __init__
+    self._handle = _dlopen(self._name, mode)
+KeyboardInterrupt
+Traceback (most recent call last):
+  File "/home/user/miniconda3/envs/z/lib/python3.8/runpy.py", line 194, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/home/user/miniconda3/envs/z/lib/python3.8/runpy.py", line 87, in _run_code
+    exec(code, run_globals)
+  File "/home/user/zheng/DBSR/eval_utils/evaluate_pixel-shift_v6.py", line 4, in <module>
+    import dataset as datasets
+  File "/home/user/zheng/DBSR/dataset/__init__.py", line 1, in <module>
+    from .imagefolder import ImageFolder
+  File "/home/user/zheng/DBSR/dataset/imagefolder.py", line 16, in <module>
+    from dataset.base_image_dataset import BaseImageDataset
+  File "/home/user/zheng/DBSR/dataset/base_image_dataset.py", line 15, in <module>
+    import torch.utils.data
+  File "/home/user/miniconda3/envs/z/lib/python3.8/site-packages/torch/__init__.py", line 23, in <module>
+    from ._utils_internal import get_file_path, prepare_multiprocessing_environment, \
+  File "/home/user/miniconda3/envs/z/lib/python3.8/site-packages/torch/_utils_internal.py", line 3, in <module>
+    import tempfile
+  File "/home/user/miniconda3/envs/z/lib/python3.8/tempfile.py", line 43, in <module>
+    import shutil as _shutil
+  File "/home/user/miniconda3/envs/z/lib/python3.8/shutil.py", line 10, in <module>
+    import fnmatch
+  File "<frozen importlib._bootstrap>", line 991, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 971, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 914, in _find_spec
+  File "<frozen importlib._bootstrap_external>", line 1342, in find_spec
+  File "<frozen importlib._bootstrap_external>", line 1314, in _get_spec
+  File "<frozen importlib._bootstrap_external>", line 1466, in find_spec
+KeyboardInterrupt
+Fatal Python error: init_import_size: Failed to import the site module
+Python runtime state: initialized
+Traceback (most recent call last):
+  File "/home/user/miniconda3/envs/z/lib/python3.8/site.py", line 580, in <module>
+    main()
+  File "/home/user/miniconda3/envs/z/lib/python3.8/site.py", line 567, in main
+    known_paths = addsitepackages(known_paths)
+  File "/home/user/miniconda3/envs/z/lib/python3.8/site.py", line 350, in addsitepackages
+    addsitedir(sitedir, known_paths)
+  File "/home/user/miniconda3/envs/z/lib/python3.8/site.py", line 208, in addsitedir
+    addpackage(sitedir, name, known_paths)
+  File "/home/user/miniconda3/envs/z/lib/python3.8/site.py", line 169, in addpackage
+    exec(line)
+  File "<string>", line 1, in <module>
+  File "/home/user/miniconda3/envs/z/lib/python3.8/importlib/util.py", line 14, in <module>
+    from contextlib import contextmanager
+  File "/home/user/miniconda3/envs/z/lib/python3.8/contextlib.py", line 5, in <module>
+    from collections import deque
+  File "/home/user/miniconda3/envs/z/lib/python3.8/collections/__init__.py", line 27, in <module>
+    from reprlib import recursive_repr as _recursive_repr
+  File "/home/user/miniconda3/envs/z/lib/python3.8/reprlib.py", line 36, in <module>
+    class Repr:
+  File "/home/user/miniconda3/envs/z/lib/python3.8/reprlib.py", line 36, in Repr
+    class Repr:
+KeyboardInterrupt
+Traceback (most recent call last):
+  File "/home/user/miniconda3/envs/z/lib/python3.8/runpy.py", line 194, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/home/user/miniconda3/envs/z/lib/python3.8/runpy.py", line 87, in _run_code
+    exec(code, run_globals)
+  File "/home/user/zheng/DBSR/eval_utils/evaluate_pixel-shift_v6.py", line 4, in <module>
+    import dataset as datasets
+  File "/home/user/zheng/DBSR/dataset/__init__.py", line 1, in <module>
+    from .imagefolder import ImageFolder
+  File "/home/user/zheng/DBSR/dataset/imagefolder.py", line 16, in <module>
+    from dataset.base_image_dataset import BaseImageDataset
+  File "/home/user/zheng/DBSR/dataset/base_image_dataset.py", line 15, in <module>
+    import torch.utils.data
+  File "/home/user/miniconda3/envs/z/lib/python3.8/site-packages/torch/__init__.py", line 14, in <module>
+    import platform
+  File "/home/user/miniconda3/envs/z/lib/python3.8/platform.py", line 117, in <module>
+    import re
+  File "/home/user/miniconda3/envs/z/lib/python3.8/re.py", line 125, in <module>
+    import sre_compile
+  File "/home/user/miniconda3/envs/z/lib/python3.8/sre_compile.py", line 14, in <module>
+    import sre_parse
+  File "<frozen importlib._bootstrap>", line 991, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 975, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 671, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 779, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 911, in get_code
+  File "<frozen importlib._bootstrap_external>", line 580, in _compile_bytecode
+KeyboardInterrupt
+Traceback (most recent call last):
+  File "/home/user/miniconda3/envs/z/lib/python3.8/subprocess.py", line 64, in <module>
+    import msvcrt
+ModuleNotFoundError: No module named 'msvcrt'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/user/miniconda3/envs/z/lib/python3.8/runpy.py", line 194, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/home/user/miniconda3/envs/z/lib/python3.8/runpy.py", line 87, in _run_code
+    exec(code, run_globals)
+  File "/home/user/zheng/DBSR/eval_utils/evaluate_pixel-shift_v6.py", line 4, in <module>
+    import dataset as datasets
+  File "/home/user/zheng/DBSR/dataset/__init__.py", line 1, in <module>
+    from .imagefolder import ImageFolder
+  File "/home/user/zheng/DBSR/dataset/imagefolder.py", line 16, in <module>
+    from dataset.base_image_dataset import BaseImageDataset
+  File "/home/user/zheng/DBSR/dataset/base_image_dataset.py", line 15, in <module>
+    import torch.utils.data
+  File "/home/user/miniconda3/envs/z/lib/python3.8/site-packages/torch/__init__.py", line 201, in <module>
+    _load_global_deps()
+  File "/home/user/miniconda3/envs/z/lib/python3.8/site-packages/torch/__init__.py", line 147, in _load_global_deps
+    if platform.system() == 'Windows' or sys.executable == 'torch_deploy':
+  File "/home/user/miniconda3/envs/z/lib/python3.8/platform.py", line 891, in system
+    return uname().system
+  File "/home/user/miniconda3/envs/z/lib/python3.8/platform.py", line 857, in uname
+    processor = _syscmd_uname('-p', '')
+  File "/home/user/miniconda3/envs/z/lib/python3.8/platform.py", line 611, in _syscmd_uname
+    import subprocess
+  File "/home/user/miniconda3/envs/z/lib/python3.8/subprocess.py", line 69, in <module>
+    import _posixsubprocess
+  File "<frozen importlib._bootstrap>", line 991, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 975, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 657, in _load_unlocked
+  File "<frozen importlib._bootstrap>", line 562, in module_from_spec
+  File "<frozen importlib._bootstrap>", line 517, in _init_module_attrs
+  File "<frozen importlib._bootstrap>", line 389, in parent
+KeyboardInterrupt
+Traceback (most recent call last):
+  File "/home/user/miniconda3/envs/z/lib/python3.8/runpy.py", line 194, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/home/user/miniconda3/envs/z/lib/python3.8/runpy.py", line 87, in _run_code
+    exec(code, run_globals)
+  File "/home/user/zheng/DBSR/eval_utils/evaluate_pixel-shift_v6.py", line 4, in <module>
+    import dataset as datasets
+  File "/home/user/zheng/DBSR/dataset/__init__.py", line 1, in <module>
+    from .imagefolder import ImageFolder
+  File "/home/user/zheng/DBSR/dataset/imagefolder.py", line 16, in <module>
+    from dataset.base_image_dataset import BaseImageDataset
+  File "/home/user/zheng/DBSR/dataset/base_image_dataset.py", line 15, in <module>
+    import torch.utils.data
+  File "/home/user/miniconda3/envs/z/lib/python3.8/site-packages/torch/__init__.py", line 14, in <module>
+    import platform
+  File "/home/user/miniconda3/envs/z/lib/python3.8/platform.py", line 117, in <module>
+    import re
+  File "/home/user/miniconda3/envs/z/lib/python3.8/re.py", line 337, in <module>
+    import copyreg
+  File "<frozen importlib._bootstrap>", line 991, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 975, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 671, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 779, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 911, in get_code
+  File "<frozen importlib._bootstrap_external>", line 580, in _compile_bytecode
+KeyboardInterrupt
+Traceback (most recent call last):
+  File "/home/user/miniconda3/envs/z/lib/python3.8/runpy.py", line 194, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/home/user/miniconda3/envs/z/lib/python3.8/runpy.py", line 87, in _run_code
+    exec(code, run_globals)
+  File "/home/user/zheng/DBSR/eval_utils/evaluate_pixel-shift_v6.py", line 4, in <module>
+    import dataset as datasets
+  File "/home/user/zheng/DBSR/dataset/__init__.py", line 1, in <module>
+    from .imagefolder import ImageFolder
+  File "/home/user/zheng/DBSR/dataset/imagefolder.py", line 16, in <module>
+    from dataset.base_image_dataset import BaseImageDataset
+  File "/home/user/zheng/DBSR/dataset/base_image_dataset.py", line 15, in <module>
+    import torch.utils.data
+  File "/home/user/miniconda3/envs/z/lib/python3.8/site-packages/torch/__init__.py", line 202, in <module>
+    from torch._C import *  # noqa: F403
+RuntimeError: KeyboardInterrupt: 
+Traceback (most recent call last):
+  File "/home/user/miniconda3/envs/z/lib/python3.8/runpy.py", line 194, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/home/user/miniconda3/envs/z/lib/python3.8/runpy.py", line 87, in _run_code
+    exec(code, run_globals)
+  File "/home/user/zheng/DBSR/eval_utils/evaluate_pixel-shift_v6.py", line 4, in <module>
+    import dataset as datasets
+  File "/home/user/zheng/DBSR/dataset/__init__.py", line 1, in <module>
+    from .imagefolder import ImageFolder
+  File "/home/user/zheng/DBSR/dataset/imagefolder.py", line 16, in <module>
+    from dataset.base_image_dataset import BaseImageDataset
+  File "/home/user/zheng/DBSR/dataset/base_image_dataset.py", line 15, in <module>
+    import torch.utils.data
+  File "/home/user/miniconda3/envs/z/lib/python3.8/site-packages/torch/__init__.py", line 202, in <module>
+    from torch._C import *  # noqa: F403
+RuntimeError: KeyboardInterrupt: 
+Fatal Python error: init_import_size: Failed to import the site module
+Python runtime state: initialized
+Traceback (most recent call last):
+  File "/home/user/miniconda3/envs/z/lib/python3.8/site.py", line 580, in <module>
+    main()
+  File "/home/user/miniconda3/envs/z/lib/python3.8/site.py", line 567, in main
+    known_paths = addsitepackages(known_paths)
+  File "/home/user/miniconda3/envs/z/lib/python3.8/site.py", line 350, in addsitepackages
+    addsitedir(sitedir, known_paths)
+  File "/home/user/miniconda3/envs/z/lib/python3.8/site.py", line 208, in addsitedir
+    addpackage(sitedir, name, known_paths)
+  File "/home/user/miniconda3/envs/z/lib/python3.8/site.py", line 169, in addpackage
+    exec(line)
+  File "<string>", line 1, in <module>
+  File "/home/user/miniconda3/envs/z/lib/python3.8/importlib/util.py", line 14, in <module>
+    from contextlib import contextmanager
+  File "/home/user/miniconda3/envs/z/lib/python3.8/contextlib.py", line 5, in <module>
+    from collections import deque
+  File "/home/user/miniconda3/envs/z/lib/python3.8/collections/__init__.py", line 27, in <module>
+    from reprlib import recursive_repr as _recursive_repr
+  File "<frozen importlib._bootstrap>", line 991, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 975, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 671, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 779, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 911, in get_code
+  File "<frozen importlib._bootstrap_external>", line 584, in _compile_bytecode
+KeyboardInterrupt
+Traceback (most recent call last):
+  File "/home/user/miniconda3/envs/z/lib/python3.8/runpy.py", line 194, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/home/user/miniconda3/envs/z/lib/python3.8/runpy.py", line 87, in _run_code
+    exec(code, run_globals)
+  File "/home/user/zheng/DBSR/eval_utils/evaluate_pixel-shift_v6.py", line 4, in <module>
+    import dataset as datasets
+  File "/home/user/zheng/DBSR/dataset/__init__.py", line 1, in <module>
+    from .imagefolder import ImageFolder
+  File "/home/user/zheng/DBSR/dataset/imagefolder.py", line 16, in <module>
+    from dataset.base_image_dataset import BaseImageDataset
+  File "/home/user/zheng/DBSR/dataset/base_image_dataset.py", line 15, in <module>
+    import torch.utils.data
+  File "/home/user/miniconda3/envs/z/lib/python3.8/site-packages/torch/__init__.py", line 15, in <module>
+    import textwrap
+  File "/home/user/miniconda3/envs/z/lib/python3.8/textwrap.py", line 17, in <module>
+    class TextWrapper:
+  File "/home/user/miniconda3/envs/z/lib/python3.8/textwrap.py", line 81, in TextWrapper
+    wordsep_re = re.compile(r'''
+  File "/home/user/miniconda3/envs/z/lib/python3.8/re.py", line 252, in compile
+    return _compile(pattern, flags)
+  File "/home/user/miniconda3/envs/z/lib/python3.8/re.py", line 304, in _compile
+    p = sre_compile.compile(pattern, flags)
+  File "/home/user/miniconda3/envs/z/lib/python3.8/sre_compile.py", line 764, in compile
+    p = sre_parse.parse(p, flags)
+  File "/home/user/miniconda3/envs/z/lib/python3.8/sre_parse.py", line 948, in parse
+    p = _parse_sub(source, state, flags & SRE_FLAG_VERBOSE, 0)
+  File "/home/user/miniconda3/envs/z/lib/python3.8/sre_parse.py", line 443, in _parse_sub
+    itemsappend(_parse(source, state, verbose, nested + 1,
+  File "/home/user/miniconda3/envs/z/lib/python3.8/sre_parse.py", line 834, in _parse
+    p = _parse_sub(source, state, sub_verbose, nested + 1)
+  File "/home/user/miniconda3/envs/z/lib/python3.8/sre_parse.py", line 443, in _parse_sub
+    itemsappend(_parse(source, state, verbose, nested + 1,
+  File "/home/user/miniconda3/envs/z/lib/python3.8/sre_parse.py", line 834, in _parse
+    p = _parse_sub(source, state, sub_verbose, nested + 1)
+  File "/home/user/miniconda3/envs/z/lib/python3.8/sre_parse.py", line 443, in _parse_sub
+    itemsappend(_parse(source, state, verbose, nested + 1,
+  File "/home/user/miniconda3/envs/z/lib/python3.8/sre_parse.py", line 754, in _parse
+    p = _parse_sub(source, state, verbose, nested + 1)
+  File "/home/user/miniconda3/envs/z/lib/python3.8/sre_parse.py", line 443, in _parse_sub
+    itemsappend(_parse(source, state, verbose, nested + 1,
+  File "/home/user/miniconda3/envs/z/lib/python3.8/sre_parse.py", line 511, in _parse
+    sourceget()
+KeyboardInterrupt
+Traceback (most recent call last):
+  File "/home/user/miniconda3/envs/z/lib/python3.8/runpy.py", line 194, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/home/user/miniconda3/envs/z/lib/python3.8/runpy.py", line 87, in _run_code
+    exec(code, run_globals)
+  File "/home/user/zheng/DBSR/eval_utils/evaluate_pixel-shift_v6.py", line 4, in <module>
+    import dataset as datasets
+  File "/home/user/zheng/DBSR/dataset/__init__.py", line 1, in <module>
+    from .imagefolder import ImageFolder
+  File "/home/user/zheng/DBSR/dataset/imagefolder.py", line 16, in <module>
+    from dataset.base_image_dataset import BaseImageDataset
+  File "/home/user/zheng/DBSR/dataset/base_image_dataset.py", line 15, in <module>
+    import torch.utils.data
+  File "/home/user/miniconda3/envs/z/lib/python3.8/site-packages/torch/__init__.py", line 202, in <module>
+    from torch._C import *  # noqa: F403
+RuntimeError: KeyboardInterrupt: 
+Traceback (most recent call last):
+  File "/home/user/miniconda3/envs/z/lib/python3.8/runpy.py", line 194, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/home/user/miniconda3/envs/z/lib/python3.8/runpy.py", line 87, in _run_code
+    exec(code, run_globals)
+  File "/home/user/zheng/DBSR/eval_utils/evaluate_pixel-shift_v6.py", line 4, in <module>
+    import dataset as datasets
+  File "/home/user/zheng/DBSR/dataset/__init__.py", line 1, in <module>
+    from .imagefolder import ImageFolder
+  File "/home/user/zheng/DBSR/dataset/imagefolder.py", line 16, in <module>
+    from dataset.base_image_dataset import BaseImageDataset
+  File "/home/user/zheng/DBSR/dataset/base_image_dataset.py", line 15, in <module>
+    import torch.utils.data
+  File "/home/user/miniconda3/envs/z/lib/python3.8/site-packages/torch/__init__.py", line 202, in <module>
+    from torch._C import *  # noqa: F403
+RuntimeError: KeyboardInterrupt: 
+/home/user/zheng/DBSR/data/processing_utils.py:83: UserWarning: __floordiv__ is deprecated, and its behavior will change in a future version of pytorch. It currently rounds toward 0 (like the 'trunc' function NOT 'floor'). This results in incorrect rounding for negative values. To keep the current behavior, use torch.div(a, b, rounding_mode='trunc'), or for actual floor division, use torch.div(a, b, rounding_mode='floor').
+  r1 = ((shape[-2] - crop_sz[-2]) // 2).int()
+/home/user/zheng/DBSR/data/processing_utils.py:84: UserWarning: __floordiv__ is deprecated, and its behavior will change in a future version of pytorch. It currently rounds toward 0 (like the 'trunc' function NOT 'floor'). This results in incorrect rounding for negative values. To keep the current behavior, use torch.div(a, b, rounding_mode='trunc'), or for actual floor division, use torch.div(a, b, rounding_mode='floor').
+  c1 = ((shape[-1] - crop_sz[-1]) // 2).int()
+/home/user/miniconda3/envs/z/lib/python3.8/site-packages/torch/functional.py:478: UserWarning: torch.meshgrid: in an upcoming release, it will be required to pass the indexing argument. (Triggered internally at  /opt/conda/conda-bld/pytorch_1659484810403/work/aten/src/ATen/native/TensorShape.cpp:2894.)
+  return _VF.meshgrid(tensors, **kwargs)  # type: ignore[attr-defined]
+/home/user/miniconda3/envs/z/lib/python3.8/site-packages/torch/nn/functional.py:4215: UserWarning: Default grid_sample and affine_grid behavior has changed to align_corners=False since 1.3.0. Please specify align_corners=True if the old behavior is desired. See the documentation of grid_sample for details.
+  warnings.warn(
+Traceback (most recent call last):
+  File "/home/user/miniconda3/envs/z/lib/python3.8/runpy.py", line 194, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/home/user/miniconda3/envs/z/lib/python3.8/runpy.py", line 87, in _run_code
+    exec(code, run_globals)
+  File "/home/user/zheng/DBSR/eval_utils/evaluate_pixel-shift_v6.py", line 325, in <module>
+    main()
+  File "/home/user/zheng/DBSR/eval_utils/evaluate_pixel-shift_v6.py", line 291, in main
+    cv2.imwrite('{}/{}_SR.png'.format(save_path_png, burst_name.split('.')[0]), SR_image)
+KeyboardInterrupt
+Cannot load SpatialCorrelationSampler module
+WARNING: Keyword argument "backbone_pretrained" not found when loading network. It was ignored.
+ *Using the predefined ISP parameters in /home/user/zheng/DBSR/util_scripts/mice_test_meta_infos.pkl
+Fatal Python error: init_import_size: Failed to import the site module
+Python runtime state: initialized
+Traceback (most recent call last):
+  File "/home/user/miniconda3/envs/z/lib/python3.8/site.py", line 580, in <module>
+    main()
+  File "/home/user/miniconda3/envs/z/lib/python3.8/site.py", line 567, in main
+    known_paths = addsitepackages(known_paths)
+  File "/home/user/miniconda3/envs/z/lib/python3.8/site.py", line 350, in addsitepackages
+    addsitedir(sitedir, known_paths)
+  File "/home/user/miniconda3/envs/z/lib/python3.8/site.py", line 208, in addsitedir
+    addpackage(sitedir, name, known_paths)
+  File "/home/user/miniconda3/envs/z/lib/python3.8/site.py", line 169, in addpackage
+    exec(line)
+  File "<string>", line 1, in <module>
+KeyboardInterrupt
+Traceback (most recent call last):
+  File "/home/user/miniconda3/envs/z/lib/python3.8/runpy.py", line 194, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/home/user/miniconda3/envs/z/lib/python3.8/runpy.py", line 87, in _run_code
+    exec(code, run_globals)
+  File "/home/user/zheng/DBSR/eval_utils/evaluate_pixel-shift_v6.py", line 4, in <module>
+    import dataset as datasets
+  File "/home/user/zheng/DBSR/dataset/__init__.py", line 1, in <module>
+    from .imagefolder import ImageFolder
+  File "/home/user/zheng/DBSR/dataset/imagefolder.py", line 16, in <module>
+    from dataset.base_image_dataset import BaseImageDataset
+  File "/home/user/zheng/DBSR/dataset/base_image_dataset.py", line 15, in <module>
+    import torch.utils.data
+  File "/home/user/miniconda3/envs/z/lib/python3.8/site-packages/torch/__init__.py", line 18, in <module>
+    import inspect
+  File "<frozen importlib._bootstrap>", line 991, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 975, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 671, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 779, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 911, in get_code
+  File "<frozen importlib._bootstrap_external>", line 580, in _compile_bytecode
+KeyboardInterrupt
+Traceback (most recent call last):
+  File "/home/user/miniconda3/envs/z/lib/python3.8/runpy.py", line 194, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/home/user/miniconda3/envs/z/lib/python3.8/runpy.py", line 87, in _run_code
+    exec(code, run_globals)
+  File "/home/user/zheng/DBSR/eval_utils/evaluate_pixel-shift_v6.py", line 4, in <module>
+    import dataset as datasets
+  File "/home/user/zheng/DBSR/dataset/__init__.py", line 1, in <module>
+    from .imagefolder import ImageFolder
+  File "/home/user/zheng/DBSR/dataset/imagefolder.py", line 16, in <module>
+    from dataset.base_image_dataset import BaseImageDataset
+  File "/home/user/zheng/DBSR/dataset/base_image_dataset.py", line 15, in <module>
+    import torch.utils.data
+  File "/home/user/miniconda3/envs/z/lib/python3.8/site-packages/torch/__init__.py", line 202, in <module>
+    from torch._C import *  # noqa: F403
+RuntimeError: KeyboardInterrupt: 
