@@ -23,7 +23,7 @@ import data.transforms as tfm
 from admin.multigpu import MultiGPU
 from models_dbsr.loss.image_quality_v2 import PSNR, PixelWiseError
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3,4,5,6,7"
+os.environ["CUDA_VISIBLE_DEVICES"] = "6,7"
 import numpy as np
 import pickle as pkl
 from accelerate import Accelerator
@@ -55,12 +55,12 @@ def run(settings):
         )
     set_seed(42)
     settings.description = 'Default settings for training DBSR models on synthetic burst dataset, with random pixel shift, trans(24), rot(1.0), burst size(8), use database function'
-    settings.batch_size = 6
-    settings.num_workers = 6
+    settings.batch_size = 32
+    settings.num_workers = 12
     settings.multi_gpu = False
     settings.print_interval = 1
 
-    settings.crop_sz = (512, 640)
+    settings.crop_sz = (384, 384)
     settings.burst_sz = 16
     settings.downsample_factor = 4
 
@@ -87,13 +87,13 @@ def run(settings):
     settings.burst_reference_aligned = True
     settings.image_processing_params = {'random_ccm': True, 'random_gains': True, 'smoothstep': True, 'gamma': True, 'add_noise': True}
     dir_path = "/home/user/zheng//DBSR/util_scripts"
-    with open(os.path.join(dir_path, 'mice_val_meta_infos.pkl'), 'rb') as f:
+    with open(os.path.join(dir_path, 'zurich_test_meta_infos.pkl'), 'rb') as f:
         meta_infos_val = pkl.load(f)
     image_processing_params_val = {'random_ccm': True, 'random_gains': True, 'smoothstep': True, 'gamma': True, 'add_noise': True, \
         'predefined_params': meta_infos_val}
 
-    zurich_raw2rgb_train = datasets.MixedMiceNIR_Dai(split='train')
-    zurich_raw2rgb_val = datasets.MixedMiceNIR_Dai(split='val')
+    zurich_raw2rgb_train = datasets.ZurichRAW2RGB(split='train')
+    zurich_raw2rgb_val = datasets.ZurichRAW2RGB(split='test')
 
     transform_train = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True), tfm.RandomHorizontalFlip())
     transform_val = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True))
@@ -120,18 +120,22 @@ def run(settings):
     loader_train = DataLoader('train', dataset_train, training=True, num_workers=settings.num_workers,
                               stack_dim=0, batch_size=settings.batch_size)
     loader_val = DataLoader('val', dataset_val, training=False, num_workers=settings.num_workers,
-                            stack_dim=0, batch_size=settings.batch_size, epoch_interval=5)
+                            stack_dim=0, batch_size=settings.batch_size, epoch_interval=2)
     # loader_val_2 = DataLoader('val_2', dataset_val_2, training=False, num_workers=settings.num_workers,
     #                         stack_dim=0, batch_size=1, epoch_interval=10)
     if accelerator.is_main_process:
         print("train dataset length: ", len(loader_train))
         print("val dataset length: ", len(loader_val)) 
-    net = deeprep_nets.deeprep_sr_iccv21(num_iter=3, enc_dim=64, enc_num_res_blocks=5, enc_out_dim=256,
-                                         dec_dim_pre=64, dec_dim_post=32, dec_num_pre_res_blocks=5,
-                                         dec_num_post_res_blocks=5,
-                                         dec_in_dim=64, dec_upsample_factor=4, gauss_blur_sd=1,
-                                         feature_degradation_upsample_factor=2, use_feature_regularization=False,
-                                         wp_ref_offset_noise=0.00)
+    net = dbsr_nets.dbsrnet_cvpr2021(enc_init_dim=64, enc_num_res_blocks=9, enc_out_dim=512,
+                                     dec_init_conv_dim=64, dec_num_pre_res_blocks=5,
+                                     dec_post_conv_dim=32, dec_num_post_res_blocks=4,
+                                     upsample_factor=settings.downsample_factor * 2,
+                                     offset_feat_dim=64,
+                                     weight_pred_proj_dim=64,
+                                     num_weight_predictor_res=3,
+                                     gauss_blur_sd=1.0,
+                                     icnrinit=True
+                                     )
 
     # Wrap the network for multi GPU training
     # if settings.multi_gpu:
@@ -170,8 +174,8 @@ def run(settings):
     loader_val = accelerator.prepare(loader_val)
 
 
-    for param in net.alignment_net.parameters():
-        param.requires_grad = False
+    # for param in net.alignment_net.parameters():
+    #     param.requires_grad = False
 
 
     actor = dbsr_actors.DBSRSyntheticActor(net=net, objective=objective, loss_weight=loss_weight, accelerator=accelerator)

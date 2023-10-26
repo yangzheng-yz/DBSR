@@ -734,7 +734,7 @@ class AgentSAC(BaseAgentTrainer):
                 actor_loss_episode, critic_1_loss_episode, critic_2_loss_episode, alpha_loss_episode = 0, 0, 0, 0
                 if self.accelerator.is_main_process:
                     initial_permute = permutations.clone()
-                    print(f"Initial permutea at loss_iter_counter {self.loss_iter_counter}: {initial_permute}")
+                    # print(f"Initial permutea at loss_iter_counter {self.loss_iter_counter}: {initial_permute}")
                 while not done:
                     # action = agent.take_action(state)
                     # next_state, reward, done, _ = env.step(action)
@@ -745,21 +745,21 @@ class AgentSAC(BaseAgentTrainer):
                     next_state, action, permutations, done = self.step_environment(dists, data['frame_gt'].clone(), permutations.clone(), iteration, add_noise=True, meta_info=meta_info)
                     if self.accelerator.is_main_process:
                         inter_permute = permutations.clone()
-                        print(f"Inter permutea at loss_iter_counter {self.loss_iter_counter} in timestep {iteration}: {inter_permute}")
+                        # print(f"Inter permutea at loss_iter_counter {self.loss_iter_counter} in timestep {iteration}: {inter_permute}")
                     with torch.no_grad():
                         # print("device of model: ", next(self.sr_net.parameters()).device)
                         # print("device of nextstate: ", next_state.size())
                         pred, _ = self.sr_net(next_state.clone())
                     preds.append(pred.clone())
                     reward = self._calculate_reward(data['frame_gt'], preds[-1], preds[-2], reward_func=reward_func, batch=True, tolerance=0)
-                    if iteration <= 5 or done:
-                        replay_buffer.add(state.cpu().clone(), action.cpu().clone(), reward.cpu().clone(), next_state.cpu().clone(), done)
-                    if self.accelerator.is_main_process:
-                        print(f"[Main GPU] Replay buffer size: {len(replay_buffer.buffer)}")
-                    else:
-                        # 假设有一种方法来获取当前GPU的ID，例如 `current_gpu_id`
-                        current_gpu_id = torch.cuda.current_device()
-                        print(f"[GPU-{current_gpu_id}] Replay buffer size: {len(replay_buffer.buffer)}")
+                    # if iteration <= 5 or done:
+                    replay_buffer.add(state.cpu().clone(), action.cpu().clone(), reward.cpu().clone(), next_state.cpu().clone(), done)
+                    # if self.accelerator.is_main_process:
+                    #     print(f"[Main GPU] Replay buffer size: {len(replay_buffer.buffer)}")
+                    # else:
+                    #     # 假设有一种方法来获取当前GPU的ID，例如 `current_gpu_id`
+                    #     current_gpu_id = torch.cuda.current_device()
+                    #     print(f"[GPU-{current_gpu_id}] Replay buffer size: {len(replay_buffer.buffer)}")
 
                     # print(f"Debug what is the size of state: {state.size()}")
                     # print(f"Debug what is the size of action: {action.size()}")
@@ -771,7 +771,7 @@ class AgentSAC(BaseAgentTrainer):
                     if replay_buffer.size() > minimal_size:
                         b_s, b_a, b_r, b_ns, b_d = replay_buffer.sample(self.sample_size)
                         current_gpu_id = torch.cuda.current_device()
-                        print(f"[GPU-{current_gpu_id}] Sampled data size: {len(b_s)}")
+                        # print(f"[GPU-{current_gpu_id}] Sampled data size: {len(b_s)}")
 
                         transition_dict = {'states': b_s, 'actions': b_a, 'next_states': b_ns, 'rewards': b_r, 'dones': b_d}
                         actor_loss, critic_1_loss, critic_2_loss, alpha_loss = self.update(transition_dict)
@@ -785,7 +785,7 @@ class AgentSAC(BaseAgentTrainer):
                     iteration += 1
                 if self.accelerator.is_main_process:
                     final_permute = permutations.clone()
-                    print(f"Final permutea at loss_iter_counter {self.loss_iter_counter}: {final_permute}")
+                    # print(f"Final permutea at loss_iter_counter {self.loss_iter_counter}: {final_permute}")
                 actor_loss_episode = actor_loss_episode / iteration
                 critic_1_loss_episode = critic_1_loss_episode / iteration
                 critic_2_loss_episode = critic_2_loss_episode / iteration

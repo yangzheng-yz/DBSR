@@ -11,7 +11,7 @@ import data.transforms as tfm
 from admin.multigpu import MultiGPU
 import numpy as np
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "6"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3,4,5"
 import pickle as pkl
 from actors.dbsr_actors import qValueNetwork
 from accelerate import Accelerator, DistributedType
@@ -25,21 +25,21 @@ def run(settings):
 
     ##############SETTINGS#####################
     settings.description = 'adjust 4 with pixel step 1/8 LR pixel, discount_factor: 0.99, one_step_length: 1 / 8, iterations: 10, SAC'
-    settings.batch_size = 8
-    sample_size = 8
+    settings.batch_size = 72
+    sample_size = 72
     settings.num_workers = 32
     settings.multi_gpu = False
     settings.print_interval = 1
 
-    settings.crop_sz = (448, 448)
-    settings.burst_sz = 4
+    settings.crop_sz = (384, 384)
+    settings.burst_sz = 8
     settings.downsample_factor = 4
     one_step_length = 1 / 8
     base_length = 1 / settings.downsample_factor
-    buffer_size = 10000
+    buffer_size = 100000
     
 
-    permutation = np.array([[0.,0.],[0.,2.],[2.,2.],[2.,0.]])
+    permutation = np.array([[0.,0.],[0.,2.],[2.,2.],[2.,0.],[0,3.],[3.,0],[3.,3.],[1.,1.]])
     
     settings.burst_transformation_params = {'max_translation': 3.0,
                                         'max_rotation': 0.0,
@@ -60,7 +60,7 @@ def run(settings):
     settings.burst_reference_aligned = True
     settings.image_processing_params = {'random_ccm': True, 'random_gains': True, 'smoothstep': True, 'gamma': True, 'add_noise': True}
     dir_path = "/home/user/zheng/DBSR/util_scripts"
-    with open(os.path.join(dir_path, 'mice_val_meta_infos.pkl'), 'rb') as f:
+    with open(os.path.join(dir_path, 'zurich_test_meta_infos.pkl'), 'rb') as f:
         meta_infos_val = pkl.load(f)
     image_processing_params_val = {'random_ccm': True, 'random_gains': True, 'smoothstep': True, 'gamma': True, 'add_noise': True, \
                                         'predefined_params': meta_infos_val}
@@ -87,7 +87,7 @@ def run(settings):
 
     # Train sampler and loader
     dataset_train = sampler.RandomImage([zurich_raw2rgb_train], [1],
-                                        samples_per_epoch=settings.batch_size * 1000, processing=data_processing_train)
+                                        samples_per_epoch=settings.batch_size * 5, processing=data_processing_train)
     dataset_val = sampler.IndexedImage(zurich_raw2rgb_val, processing=data_processing_val)
 
     loader_train = DataLoader('train', dataset_train, training=True, num_workers=settings.num_workers,

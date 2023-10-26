@@ -309,7 +309,7 @@ class qValueNetwork(nn.Module):
         # Value prediction for each frame
         self.value_head = nn.Linear(1024, 5 * (num_frames - 1))
         
-        self.transform_layer = nn.Linear(60, 15)
+        # self.transform_layer = nn.Linear(60, 5 * (num_frames - 1))
 
     def modify_resnet_input_channels(self):
         original_conv = self.shared_resnet.conv1
@@ -344,14 +344,15 @@ class qValueNetwork(nn.Module):
         # print(f"Debug temporal_features shape: {temporal_features.size()}")
         # Temporal LSTM layer
         lstm_out, _ = self.lstm(temporal_features)
+        lstm_out = lstm_out[:, -1, :]
         # print(f"Debug lstm_out shape: {lstm_out.size()}")
         # Value prediction
         values = self.value_head(lstm_out)
         # print(f"Debug values shape: {values.size()}")
         values = values.view(batch_size, -1)
         
-        transformed_values = self.transform_layer(values)
-        transformed_values = transformed_values.view(batch_size, num_frames-1, 5)
+        # transformed_values = self.transform_layer(values)
+        transformed_values = values.view(batch_size, num_frames-1, 5)
         
 
         return transformed_values
