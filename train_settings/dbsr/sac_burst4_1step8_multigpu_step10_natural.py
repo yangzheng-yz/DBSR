@@ -11,7 +11,7 @@ import data.transforms as tfm
 from admin.multigpu import MultiGPU
 import numpy as np
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3,4,5"
 import pickle as pkl
 from actors.dbsr_actors import qValueNetwork
 from accelerate import Accelerator, DistributedType
@@ -34,7 +34,7 @@ def run(settings):
     settings.crop_sz = (384, 384)
     settings.burst_sz = 4
     settings.downsample_factor = 4
-    one_step_length = 1 / 8
+    one_step_length = 1 / 4
     base_length = 1 / settings.downsample_factor
     buffer_size = 10000
     
@@ -117,7 +117,6 @@ def run(settings):
     actors_type = actors_attr
     checkpoint_root_path = os.path.join(settings.env.workspace_dir, 'checkpoints', settings.project_path)
     checkpoint_sample_path = os.path.join(checkpoint_root_path, actors_type[0])
-    pre_log_alpha = None
     if os.path.exists(checkpoint_root_path) and accelerator.is_main_process:
         if os.path.exists(checkpoint_sample_path):
             if len(os.listdir(checkpoint_sample_path)) != 0:
@@ -131,8 +130,6 @@ def run(settings):
                     print(f"Loading latest {files[-1]} from {net_checkpoints_dir_path}")
                     # print(state_dict)
                     actors[idx].load_state_dict(state_dict)
-                    if checkpoint.get('log_alpha', None) is not None:
-                        pre_log_alpha = checkpoint['log_alpha']
                     print(f"Load successfully!")
                     
     else:
@@ -148,12 +145,7 @@ def run(settings):
     actors[2] = accelerator.prepare(actors[2])
     actors[3] = accelerator.prepare(actors[3])
     actors[4] = accelerator.prepare(actors[4])
-    if pre_log_alpha is not None:
-        log_alpha = torch.tensor(pre_log_alpha, dtype=torch.float)
-        print(f"Load alpha successfully!")
-    else:
-        log_alpha = torch.tensor(np.log(1), dtype=torch.float)
-    # log_alpha = torch.tensor(np.log(1), dtype=torch.float) # TODO: hyperparameter...
+    log_alpha = torch.tensor(np.log(1), dtype=torch.float) # TODO: hyperparameter...
     log_alpha.requires_grad = True
     log_alpha = accelerator.prepare(log_alpha)
 

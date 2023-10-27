@@ -11,7 +11,7 @@ import data.transforms as tfm
 from admin.multigpu import MultiGPU
 import numpy as np
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2,3"
 import pickle as pkl
 from actors.dbsr_actors import qValueNetwork
 from accelerate import Accelerator, DistributedType
@@ -25,8 +25,8 @@ def run(settings):
 
     ##############SETTINGS#####################
     settings.description = 'adjust 4 with pixel step 1/8 LR pixel, discount_factor: 0.99, one_step_length: 1 / 8, iterations: 10, SAC'
-    settings.batch_size = 84
-    sample_size = 84
+    settings.batch_size = 84 # 84
+    sample_size = 84 # 84
     settings.num_workers = 32
     settings.multi_gpu = False
     settings.print_interval = 1
@@ -34,7 +34,7 @@ def run(settings):
     settings.crop_sz = (384, 384)
     settings.burst_sz = 4
     settings.downsample_factor = 4
-    one_step_length = 1 / 8
+    one_step_length = 1 / 4
     base_length = 1 / settings.downsample_factor
     buffer_size = 10000
     
@@ -153,7 +153,7 @@ def run(settings):
         print(f"Load alpha successfully!")
     else:
         log_alpha = torch.tensor(np.log(1), dtype=torch.float)
-    # log_alpha = torch.tensor(np.log(1), dtype=torch.float) # TODO: hyperparameter...
+    # log_alpha = torch.tensor(np.log(1), dtype=torch.float) if pre_log_alpha is not None else pre_log_alpha # TODO: hyperparameter...
     log_alpha.requires_grad = True
     log_alpha = accelerator.prepare(log_alpha)
 

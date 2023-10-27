@@ -177,6 +177,7 @@ class BaseAgentTrainer:
             'critic_1_optimizer': self.critic_1_optimizer.state_dict(),
             'critic_2_optimizer': self.critic_2_optimizer.state_dict(),
             'log_alpha_optimizer': self.log_alpha_optimizer.state_dict(),
+            'log_alpha': self.log_alpha.item(),
             'stats': self.stats,
             'settings': self.settings
         } for idx, _ in enumerate(nets_type)]
