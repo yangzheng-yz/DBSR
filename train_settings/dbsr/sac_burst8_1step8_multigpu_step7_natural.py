@@ -87,7 +87,7 @@ def run(settings):
 
     # Train sampler and loader
     dataset_train = sampler.RandomImage([zurich_raw2rgb_train], [1],
-                                        samples_per_epoch=settings.batch_size * 5, processing=data_processing_train)
+                                        samples_per_epoch=settings.batch_size * 200, processing=data_processing_train)
     dataset_val = sampler.IndexedImage(zurich_raw2rgb_val, processing=data_processing_val)
 
     loader_train = DataLoader('train', dataset_train, training=True, num_workers=settings.num_workers,
