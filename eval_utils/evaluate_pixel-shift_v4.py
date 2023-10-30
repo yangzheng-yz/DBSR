@@ -17,6 +17,8 @@ from skimage.metrics import peak_signal_noise_ratio as psnr
 from skimage.metrics import structural_similarity as ssim
 from skimage import io, img_as_float
 from sys import argv
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "6"
 
 from evaluation.common_utils.network_param import NetworkParam
 from models_dbsr.loss.image_quality_v2 import PSNR, SSIM, LPIPS
@@ -127,14 +129,7 @@ def main():
     # transform_val = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True), tfm.RandomHorizontalFlip())
     transform_val = tfm.Transform(tfm.ToTensor(normalize=True, val=True))
 
-    permutations = [np.array([[0,0],[0,2],[2,2],[2,0]]),
-                   np.array([[0,0],[0,1],[2,3],[3,0]]),
-                   np.array([[0,0],[0,1],[1,3],[3,0]]),
-                   np.array([[0,0],[0,1],[2,3],[2,0]]),
-                   np.array([[0,0],[0,1],[2,2],[3,0]]),
-                   np.array([[0,0],[0,1],[2,3],[1,0]]),
-                   np.array([[0,0],[0,2],[2,3],[2,0]]),
-                   np.array([[0,0],[1,2],[3,3],[2,0]])]
+    permutations = [np.array([[0,0],[0,1],[0,2],[0,3],[1,0],[1,1],[1,2],[1,3],[2,0],[2,1],[2,2],[2,3],[3,0],[3,1],[3,2],[3,3]])]
 
     burst_transformation_params_val = {'max_translation': 24.0,
                                         'max_rotation': 1.0,

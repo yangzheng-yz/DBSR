@@ -1,0 +1,19 @@
+random_ccm: False
+random_gains: False
+smoothstep: False
+gamma: False
+add_noise: False
+return_rgb_burst: True
+permu_nb: 0
+crop_sz: 384
+burst_sz: 16
+downsample_factor: 4
+random_pixelshift: False
+calculate_loss: True
+
+ckpt_path: /mnt/7T/zheng/DBSR_results/checkpoints/dbsr/dbsr_synthetic_natural_16/DBSRNet_ep0094.pth.tar
+dataset_path: /mnt/7T/Data/Natural/SyntheticDataset
+save_path: /mnt/7T/zheng/DBSR_results/loggings/dbsr_b16_baseline
+specify_image_id: -1 # -1
+save_results: True
+split: val

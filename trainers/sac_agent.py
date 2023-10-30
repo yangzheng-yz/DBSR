@@ -881,7 +881,7 @@ class AgentSAC(BaseAgentTrainer):
     
     def train_off_policy_agent(self, loaders, max_epochs, replay_buffer, minimal_size=50):
         return_list = []
-        for epoch in range(max_epochs):
+        for epoch in range(self.epoch, max_epochs):
             print("Current Training/Validating Epoch is %s" % self.epoch)
             for i_loader, loader in enumerate(loaders):
                 if self.epoch % self.loader_attributes[i_loader]['epoch_interval'] == 0:

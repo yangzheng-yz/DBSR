@@ -18,7 +18,7 @@ from skimage.metrics import structural_similarity as ssim
 from skimage import io, img_as_float
 from sys import argv
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "6"
 import time
 
 from evaluation.common_utils.network_param import NetworkParam
