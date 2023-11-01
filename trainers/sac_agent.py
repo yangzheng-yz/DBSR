@@ -146,8 +146,8 @@ class AgentSAC(BaseAgentTrainer):
                 # print("new_permutations[idx+1]", new_permutations[idx+1])
 
                 # Clip to boundaries
-                new_permutations[idx+1][0] = min(max(new_permutations[idx+1][0].item(), 0.), 3.)
-                new_permutations[idx+1][1] = min(max(new_permutations[idx+1][1].item(), 0.), 3.)
+                new_permutations[idx+1][0] = min(max(new_permutations[idx+1][0].item(), 0.), 4 - self.one_step_length_in_grid)
+                new_permutations[idx+1][1] = min(max(new_permutations[idx+1][1].item(), 0.), 4 - self.one_step_length_in_grid)
 
                 # Check for duplicates, if there's a duplicate, select "stay still" action
                 duplicated = False
@@ -174,17 +174,24 @@ class AgentSAC(BaseAgentTrainer):
 
         return updated_permutations_tensor, updated_actions_tensor.to(device)
 
-    def step_environment(self, dists, HR_batch, permutations, iter, add_noise=True, meta_info=None):
+    def step_environment(self, dists, HR_batch, permutations, iter, add_noise=True, meta_info=None, save_results=False):
 
-        actions = torch.stack([dist.sample() for dist in dists], dim=1)
-        # print("actions: ", actions)
-        permutations, actions  = self.update_permutations_and_actions(actions, permutations)
+        if save_results:
+            # 如果在测试阶段，选择概率最高的动作
+            actions = torch.stack([torch.argmax(dist.probs, dim=-1) for dist in dists], dim=1)
+        else:
+            # 如果在训练阶段，随机抽样动作
+            actions = torch.stack([dist.sample() for dist in dists], dim=1)
+
+        permutations, actions = self.update_permutations_and_actions(actions, permutations)
         
         next_state = self.apply_actions_to_env(HR_batch, permutations, add_noise=add_noise, meta_info=meta_info)
         done = 0
         if iter == self.iterations:
             done = 1
+
         return next_state, actions, permutations, done
+
 
     def apply_actions_to_env(self, HR_batch, permutations_batch, add_noise=True, meta_info=None):
         """Apply actions to a batch of images."""
@@ -292,186 +299,7 @@ class AgentSAC(BaseAgentTrainer):
             next_state, actions, permutations = self.step_environment(dists, frame_gt.clone(), permutations.clone())
             state = next_state.clone()
         return permutations, state
-
-    def cycle_dataset(self, loader):
-        """Do a cycle of training or validation."""
-
-        for idx, _ in enumerate(self.actors):
-            self.actors[idx].train(loader.training)
-        torch.set_grad_enabled(loader.training)
-        # torch.autograd.set_detect_anomaly(True)
-
-        self._init_timing()
-
-        discount_factor = self.discount_factor # set your discount factor
-
-        for i, data in enumerate(loader, 1):
-
-            if self.move_data_to_gpu:
-                data = data.to(self.device)
-
-            data['epoch'] = self.epoch
-            data['settings'] = self.settings
-
-
-            if self.save_results:
-                initial_pred_meta_info = data['meta_info']
-                burst_rgb = data['burst_rgb'].clone()
-
-            batch_size = data['frame_gt'].size(0)
-            log_probs = []
-            values    = []
-            rewards   = []
-            masks     = []
-            preds     = []
-            entropy   = 0
-
-
-            if self.init_permutation is not None:
-                permutations = torch.tensor(self.init_permutation).repeat(batch_size, 1, 1)
-                state = self.apply_actions_to_env(data['frame_gt'].clone(), permutations.clone())
-            else:
-                assert self.pre_actor is not None, "Need a pre actor to produce objective permutation."
-                self.pre_actor.to(self.device)
-                if self.pre_init_permutation is None:
-                    self.pre_init_permutation = torch.tensor(np.array([
-                                                                [0,0],
-                                                                [0,2],
-                                                                [2,2],
-                                                                [2,0]
-                                                            ])).repeat(batch_size, 1, 1)
-                else:
-                    pre_init_permutation = torch.tensor(self.pre_init_permutation).repeat(batch_size, 1, 1)
-                permutations, state = self.generate_objective(self.pre_actor, data['frame_gt'].clone(), 
-                                                                pre_actor_step=self.pre_actor_step, pre_init_permutation=pre_init_permutation)
-            with torch.no_grad():
-                pred, _   = self.sr_net(state)
-            # print("check 1 ok!")
-            preds.append(pred.clone())
-            permutations = permutations[:, 0:self.actor.num_frames].clone()
-            # print("check 2 ok!")
-            # print("what is permutations: ", permutations.size())
-            if self.reward_type == 'psnr':
-                reward_func = {'psnr': PSNR(boundary_ignore=40)}
-            elif self.reward_type == 'ssim':
-                reward_func = {'ssim': SSIM(boundary_ignore=40)}
-            else:
-                assert 0 == 1, "wrong reward type"
-
-            
-            # print("device of state: ", state.size())
-            for it in range(self.iterations):
-                dists, value = self.actor(state)
-                # print("state: ", state)
-                # print("permutations: ", permutations[0])
-                # print("check 3_%s ok!" % it)
-                next_state, actions, permutations = self.step_environment(dists, data['frame_gt'].clone(), permutations.clone())
-                # print("check 4_%s ok!" % it)
-                # print("next_permutations: ", permutations[0])
-                # print("next_state: ", next_state)
-                # updates preds and calculate reward
-                with torch.no_grad():
-                    # print("device of model: ", next(self.sr_net.parameters()).device)
-                    # print("device of nextstate: ", next_state.size())
-                    pred, _ = self.sr_net(next_state.clone())
-                # print("check 5_%s ok!" % it)
-                preds.append(pred.clone())
-
-                reward = self._calculate_reward(data['frame_gt'], preds[-1], preds[-2], reward_func=reward_func, batch=True, tolerance=self.tolerance)
-                # print("check 6_%s ok!" % it)
-                # print("what is actions: ", actions.device)
-                # print("what is dist: ", dists[0].device)
-
-                log_prob = dists[0].log_prob(actions[:, 0])
-                for id in range(1,len(dists)):
-                    log_prob += dists[id].log_prob(actions[:, id])
-                # print("check 7_%s ok!" % it)
-                # print("dists: ", dists[0].probs)
-                for dist in dists:
-                    entropy += dist.entropy().mean()
-                entropy = entropy / (len(dists) - 1)    
-                # print("check 8_%s ok!" % it)
-
-                rewards.append(reward) # (timestep, batch_size, 1)
-                log_probs.append(log_prob) # (timestep, batch, )
-                values.append(value)
-                
-                state = next_state.clone()
-            entropy = entropy / self.iterations
-            # print("check 9 ok!")
-            _, next_value = self.actor(state)
-            # print("check 10 ok!")
-            # print("what is the output: ", type(next_value))
-            # print("what is the next_value1: ", type(next_value))
-            # print("what is the rewards: ", type(rewards))
-            # print("what is the discount_factor: ", type(discount_factor))
-            returns = self.compute_returns(next_value, rewards, gamma=discount_factor)
-            # print("check 11 ok!")
-            # print("returns info, size %s, type %s" % (len(returns), type(returns)))
-            # print("log_probs info, size %s, type %s" % (len(log_probs), type(log_probs)))
-            # print("values info, size %s, type %s" % (len(values), type(values)))
-
-            # print("what is log_probs before cat: ", log_probs)
-            # print("what is returns before cat: ", returns)
-            # print("what is values before cat: ", values)
-            log_probs = torch.cat(log_probs)
-            returns   = torch.cat(returns).detach()
-            values    = torch.cat(values)
-            # print("what is log_probs after cat: ", log_probs)
-            # print("what is returns after cat: ", returns)
-            # print("what is values after cat: ", values)
-
-            advantage = returns - values
-
-            actor_loss  = -(log_probs * advantage.detach()).mean()
-            critic_loss = advantage.pow(2).mean()
-
-            loss = actor_loss + 0.5 * critic_loss - 0.1 * entropy # 0.001
-            # print("check 12 ok!")
-            # print("what is actor_loss: ", actor_loss)
-            # print("what is critic_loss: ", critic_loss)
-            # print("what is entropy: ", entropy)
-            # calculate metric for the initial and final burst
-            metric_initial = reward_func[self.reward_type](preds[0].clone(), data['frame_gt'].clone())
-            metric_final = reward_func[self.reward_type](preds[-1].clone(), data['frame_gt'].clone())
-
-            # backward pass and update weights
-            if loader.training:
-                self.optimizer.zero_grad()
-                (loss).backward()
-                self.optimizer.step()
-            # print("check 13 ok!")
-
-            # update statistics
-            batch_size = self.settings.batch_size
-            self._update_stats({'Loss/total': loss.item(), 'Loss/actor': actor_loss.item(), 'Loss/critic': critic_loss.item(), 'Loss/entropy': entropy.item(), ('%s/initial' % self.reward_type): metric_initial.item(), 
-                                ('%s/final' % self.reward_type): metric_final.item(), "Improvement": ((metric_final.item()-metric_initial.item()))}, batch_size, loader)
-
-            # print statistics
-            self._print_stats(i, loader, batch_size)
-            # print("Final shift: ", permutations)
-        
-            if not loader.training:
-                if self.save_results:
-                    # save vis results
-                    self.save_img_and_metrics(initial_pred=preds[0].clone(), final_pred=preds[-1].clone(), \
-                        initial_psnr=metric_initial.item(), final_psnr=metric_final.item(), meta_info=initial_pred_meta_info, \
-                            burst_rgb=burst_rgb, gt=data['frame_gt'].clone(), final_shifts=permutations.clone(), name=str(i))
-                    # save trajectories
-                    f=open("%s/traj.pkl" % self.saving_dir, 'wb')
-                    pickle.dump(self.final_permutations, f)
-                    f.close()
-                    f=open("%s/traj_int_length_%s.pkl" % (self.saving_dir, self.one_step_length), 'wb')
-                    pickle.dump(self.final_permutations_int_length, f)
-                    f.close()
-                    # save metrics
-                    f=open("%s/metrics.txt" % self.saving_dir, 'a')
-                    print("%s psnr intial: %s, final: %s, improvement: %s | Average psnr initial: %s, final: %s, improvement: %s" % \
-                            (i, metric_initial.item(), metric_final.item(), (metric_final.item()-metric_initial.item()), \
-                                self.initial_psnr_sum/float(i), self.final_psnr_sum/float(i), \
-                                    self.final_psnr_sum/float(i) - self.initial_psnr_sum/float(i)), file=f)
-                    f.close()
-
+    
     def train_epoch(self):
         """Do one epoch for each loader."""
         for loader in self.loaders:
@@ -839,9 +667,10 @@ class AgentSAC(BaseAgentTrainer):
                 ######## preparation done 
                 iteration = 0
                 while not done:
-                    probs = self.actors[0](state) # here the state should be one
+                    with torch.no_grad():
+                        probs = self.actors[0](state) # here the state should be one
                     dists = [Categorical(p) for p in probs.split(1, dim=1)]
-                    next_state, action, permutations, done = self.step_environment(dists, data['frame_gt'].clone(), permutations.clone(), iter=iteration, add_noise=True, meta_info=meta_info)
+                    next_state, action, permutations, done = self.step_environment(dists, data['frame_gt'].clone(), permutations.clone(), iter=iteration, add_noise=True, meta_info=meta_info, save_results=self.save_results)
                     with torch.no_grad():
                         # print("device of model: ", next(self.sr_net.parameters()).device)
                         # print("device of nextstate: ", next_state.size())

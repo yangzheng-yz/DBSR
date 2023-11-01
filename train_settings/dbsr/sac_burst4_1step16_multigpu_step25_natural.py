@@ -11,7 +11,7 @@ import data.transforms as tfm
 from admin.multigpu import MultiGPU
 import numpy as np
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3,4,5"
 import pickle as pkl
 from actors.dbsr_actors import qValueNetwork
 from accelerate import Accelerator, DistributedType
@@ -34,7 +34,7 @@ def run(settings):
     settings.crop_sz = (384, 384)
     settings.burst_sz = 4
     settings.downsample_factor = 4
-    one_step_length = 1 / 8
+    one_step_length = 1 / 16
     base_length = 1 / settings.downsample_factor
     buffer_size = 10000
     
@@ -221,7 +221,7 @@ def run(settings):
                         critic_2_lr_scheduler=critic_2_lr_scheduler, 
                         log_alpha_lr_scheduler=log_alpha_lr_scheduler,
                         log_alpha=log_alpha, 
-                        sr_net=sr_net, iterations=7, reward_type='psnr',
+                        sr_net=sr_net, iterations=25, reward_type='psnr',
                         discount_factor=0.99, init_permutation=permutation, one_step_length=one_step_length, base_length=base_length,
                         sample_size=sample_size, accelerator=accelerator,
                         loader_attributes=loader_attributes,
