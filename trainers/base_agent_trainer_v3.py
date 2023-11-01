@@ -6,6 +6,7 @@ import traceback
 from admin import loading, multigpu
 import numpy as np
 from utils.rl_utils import ReplayBuffer
+import pickle
 
 class BaseAgentTrainer:
     """Base trainer class. Contains functions for training and saving/loading chackpoints.
@@ -63,6 +64,11 @@ class BaseAgentTrainer:
         else:
             self._checkpoint_dir = None
 
+    def load_replay_buffer(self, filename):
+        with open(filename, 'rb') as f:
+            replay_buffer = pickle.load(f)
+        return replay_buffer
+
     def train(self, max_epochs, load_latest=False, fail_safe=True, checkpoint = None, buffer_size=10000):
         """Do training for the given number of epochs.
         args:
@@ -80,7 +86,15 @@ class BaseAgentTrainer:
                 else:
                     if isinstance(checkpoint, str) or isinstance(checkpoint, list):
                         self.load_checkpoint(checkpoint)
-                replay_buffer = ReplayBuffer(buffer_size)
+                directory = '{}/{}'.format(self._checkpoint_dir, self.settings.project_path)
+                if not os.path.exists(directory):
+                    os.makedirs(directory)
+                if os.path.exists(os.path.join(directory, 'replay_buffer.pkl')):
+                    replay_buffer = self.load_replay_buffer(os.path.join(directory, 'replay_buffer.pkl'))
+                    print(f"Successfully load last replay buffer with size {replay_buffer.size()}")
+                else:
+                    replay_buffer = ReplayBuffer(buffer_size)
+                    print(f"Successfully initialize replay buffer with size {replay_buffer.size()}")
                 self.train_sac(max_epochs, replay_buffer)
                 # for epoch in range(self.epoch+1, max_epochs+1):
                 #     self.epoch = epoch
@@ -95,7 +109,7 @@ class BaseAgentTrainer:
                     # if self._checkpoint_dir:
                     #     self.save_checkpoint()
             except:
-                print('Training crashed at epoch {}'.format(epoch))
+                print('Training crashed at epoch {}'.format(self.epoch))
                 if fail_safe:
                     self.epoch -= 1
                     load_latest = True

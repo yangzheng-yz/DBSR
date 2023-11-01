@@ -118,7 +118,7 @@ def run(settings):
     checkpoint_root_path = os.path.join(settings.env.workspace_dir, 'checkpoints', settings.project_path)
     checkpoint_sample_path = os.path.join(checkpoint_root_path, actors_type[0])
     pre_log_alpha = None
-    if os.path.exists(checkpoint_root_path) and accelerator.is_main_process:
+    if os.path.exists(checkpoint_root_path):
         if os.path.exists(checkpoint_sample_path):
             if len(os.listdir(checkpoint_sample_path)) != 0:
                 nets_checkpoints_dir_path = [os.path.join(checkpoint_root_path, i) for i in actors_type]
@@ -164,7 +164,7 @@ def run(settings):
     critic_2_optimizer = optim.Adam(q_net2.parameters(), lr=3e-4)
     log_alpha_optimizer = optim.Adam([log_alpha], lr=1e-4)
 
-    if os.path.exists(checkpoint_root_path) and accelerator.is_main_process:
+    if os.path.exists(checkpoint_root_path):
         if os.path.exists(checkpoint_sample_path):
             if len(os.listdir(checkpoint_sample_path)) != 0:
                 net_checkpoints_dir_path = os.path.join(checkpoint_root_path, actors_type[0])
@@ -185,7 +185,7 @@ def run(settings):
     critic_2_lr_scheduler = optim.lr_scheduler.MultiStepLR(critic_2_optimizer, milestones=[100, 150], gamma=0.2)
     log_alpha_lr_scheduler = optim.lr_scheduler.MultiStepLR(log_alpha_optimizer, milestones=[100, 150], gamma=0.2)
     inital_epoch = 0
-    if os.path.exists(checkpoint_root_path) and accelerator.is_main_process:
+    if os.path.exists(checkpoint_root_path):
         if os.path.exists(checkpoint_sample_path):
             if len(os.listdir(checkpoint_sample_path)) != 0:
                 net_checkpoints_dir_path = os.path.join(checkpoint_root_path, actors_type[0])
@@ -197,7 +197,7 @@ def run(settings):
                 critic_1_lr_scheduler.last_epoch = checkpoint['epoch']
                 critic_2_lr_scheduler.last_epoch = checkpoint['epoch']
                 log_alpha_lr_scheduler.last_epoch = checkpoint['epoch']
-    inital_epoch = actor_lr_scheduler.last_epoch
+                inital_epoch = actor_lr_scheduler.last_epoch
     # print("Initial epoch is %s" % inital_epoch)
     actor_lr_scheduler = accelerator.prepare(actor_lr_scheduler)
     critic_1_lr_scheduler = accelerator.prepare(critic_1_lr_scheduler)

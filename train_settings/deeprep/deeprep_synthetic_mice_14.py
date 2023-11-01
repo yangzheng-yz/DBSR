@@ -147,7 +147,7 @@ def run(settings):
     actors_type = actors_attr
     checkpoint_root_path = os.path.join(settings.env.workspace_dir, 'checkpoints', settings.project_path)
     checkpoint = None
-    if os.path.exists(checkpoint_root_path) and accelerator.is_main_process:
+    if os.path.exists(checkpoint_root_path):
         if len(os.listdir(checkpoint_root_path)) != 0:
                 files = os.listdir(checkpoint_root_path)
                 files.sort()

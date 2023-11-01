@@ -44,7 +44,7 @@ class AgentSAC(BaseAgentTrainer):
         self._set_default_settings()
         
         self.gpus_num = gpus_num
-        self.loss_iter_counter = 0
+        
         
         self.loader_attributes = loader_attributes
         self.accelerator = accelerator
@@ -312,6 +312,7 @@ class AgentSAC(BaseAgentTrainer):
         self._write_tensorboard()
         
     def train_sac(self, max_epochs, replay_buffer):
+        
         self.train_off_policy_agent(self.loaders, max_epochs, replay_buffer, minimal_size=self.minimal_size)
 
     def _init_timing(self):
@@ -525,6 +526,7 @@ class AgentSAC(BaseAgentTrainer):
         total_return        = 0.0
         total_improvement   = 0.0
         num_samples         = 0
+        self.loss_iter_counter = self.epoch * len(loader)
         with tqdm(total=len(loader), desc='Training') as pbar:
             for data in loader:
                 ######## preparation
@@ -618,19 +620,21 @@ class AgentSAC(BaseAgentTrainer):
                 critic_1_loss_episode = critic_1_loss_episode / iteration
                 critic_2_loss_episode = critic_2_loss_episode / iteration
                 alpha_loss_episode = alpha_loss_episode / iteration
-                self.writer.add_scalar('Training Loss/actor_loss', actor_loss_episode, self.loss_iter_counter)
-                self.writer.add_scalar('Training Loss/critic_1_loss', critic_1_loss_episode, self.loss_iter_counter)
-                self.writer.add_scalar('Training Loss/critic_2_loss', critic_2_loss_episode, self.loss_iter_counter)
-                self.writer.add_scalar('Training Loss/alpha_loss', alpha_loss_episode, self.loss_iter_counter)
+                if self.accelerator.is_main_process:
+                    self.writer.add_scalar('Training Loss/actor_loss', actor_loss_episode, self.loss_iter_counter)
+                    self.writer.add_scalar('Training Loss/critic_1_loss', critic_1_loss_episode, self.loss_iter_counter)
+                    self.writer.add_scalar('Training Loss/critic_2_loss', critic_2_loss_episode, self.loss_iter_counter)
+                    self.writer.add_scalar('Training Loss/alpha_loss', alpha_loss_episode, self.loss_iter_counter)
                 metric_initial = reward_func[self.reward_type](preds[0].clone(), data['frame_gt'].clone())
                 metric_final = reward_func[self.reward_type](preds[-1].clone(), data['frame_gt'].clone())
                 total_loss += actor_loss_episode + critic_1_loss_episode + critic_2_loss_episode + alpha_loss_episode
                 total_return += episode_return.mean().item()
                 num_samples += 1 
                 improvement = metric_final.item() - metric_initial.item()
-                self.writer.add_scalar('Training Loss/improvement', improvement, self.loss_iter_counter)
-                self.writer.add_scalar('Training Loss/inital_psnr', metric_initial.item(), self.loss_iter_counter)
-                self.writer.add_scalar('Training Loss/final_psnr', metric_final.item(), self.loss_iter_counter)
+                if self.accelerator.is_main_process:
+                    self.writer.add_scalar('Training Loss/improvement', improvement, self.loss_iter_counter)
+                    self.writer.add_scalar('Training Loss/inital_psnr', metric_initial.item(), self.loss_iter_counter)
+                    self.writer.add_scalar('Training Loss/final_psnr', metric_final.item(), self.loss_iter_counter)
                 total_improvement += improvement
                 self.loss_iter_counter += 1
                 if self.accelerator.is_main_process:
@@ -707,30 +711,42 @@ class AgentSAC(BaseAgentTrainer):
                                     self.final_psnr_sum/idx - self.initial_psnr_sum/idx), file=f)
                     f.close()
         return total_improvement / num_samples      
-    
+
+    def save_replay_buffer(self, replay_buffer, filename):
+        directory = '{}/{}'.format(self._checkpoint_dir, self.settings.project_path)
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+        save_file = os.path.join(directory, filename)
+        with open(save_file, 'wb') as f:
+            pickle.dump(replay_buffer, f)
+
     def train_off_policy_agent(self, loaders, max_epochs, replay_buffer, minimal_size=50):
         return_list = []
         for epoch in range(self.epoch, max_epochs):
-            print("Current Training/Validating Epoch is %s" % self.epoch)
             for i_loader, loader in enumerate(loaders):
                 if self.epoch % self.loader_attributes[i_loader]['epoch_interval'] == 0:
                     if self.loader_attributes[i_loader]['training']:
+                        print("Current Training Epoch is %s" % self.epoch)
                         avg_loss, avg_return, avg_improvement = self.train_one_epoch(loader, replay_buffer, minimal_size, epoch=epoch, loader_attributes=self.loader_attributes[i_loader])
                         # Optionally log or print avg_loss and avg_return
                         
-                        self.writer.add_scalar('Training Loss', avg_loss, self.epoch)
-                        self.writer.add_scalar('Training Return', avg_return, self.epoch)
-                        self.writer.add_scalar('Training Improvement', avg_improvement, self.epoch)
+                        if self.accelerator.is_main_process:
+                            self.writer.add_scalar('Training Loss', avg_loss, self.epoch)
+                            self.writer.add_scalar('Training Return', avg_return, self.epoch)
+                            self.writer.add_scalar('Training Improvement', avg_improvement, self.epoch)
                     else:
+                        print("Current Validating Epoch is %s" % self.epoch)
                         avg_improvement = self.validate_one_epoch(loader, loader_attributes=self.loader_attributes[i_loader])
                         if self.save_results:
                             print("This is validation mode! Done.")
                             exit()
-                        self.writer.add_scalar('Testing Improvement', avg_improvement, self.epoch)
+                        if self.accelerator.is_main_process:
+                            self.writer.add_scalar('Testing Improvement', avg_improvement, self.epoch)
                         if self.accelerator.is_main_process:
                             print(f"Starting saving checkpoint!!!!!!")
                             self.save_checkpoint()
                             print(f"Completed!!!!!!!!!!")
+                            self.save_replay_buffer(replay_buffer, 'replay_buffer.pkl')
                         # Optionally log or print avg_improvement
                     self._stats_new_epoch()
                     # self._write_tensorboard()
