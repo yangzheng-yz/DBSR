@@ -36,7 +36,7 @@ def run(settings):
     settings.downsample_factor = 4
     one_step_length = 1 / 16
     base_length = 1 / settings.downsample_factor
-    buffer_size = 100000
+    buffer_size = 15000
     
 
     permutation = np.array([[0.,0.],[0.,2.],[2.,2.],[2.,0.]])
