@@ -27,7 +27,7 @@ def run(settings):
     settings.description = 'adjust 4 with pixel step 1/8 LR pixel, discount_factor: 0.99, one_step_length: 1 / 8, iterations: 10, SAC'
     settings.batch_size = 84
     sample_size = 84
-    settings.num_workers = 32
+    settings.num_workers = 12
     settings.multi_gpu = False
     settings.print_interval = 1
 

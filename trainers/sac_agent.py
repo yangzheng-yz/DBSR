@@ -746,7 +746,8 @@ class AgentSAC(BaseAgentTrainer):
                             print(f"Starting saving checkpoint!!!!!!")
                             self.save_checkpoint()
                             print(f"Completed!!!!!!!!!!")
-                            self.save_replay_buffer(replay_buffer, 'replay_buffer.pkl')
+                            # if replay_buffer.size() < 100:
+                            #     self.save_replay_buffer(replay_buffer, 'replay_buffer.pkl')
                         # Optionally log or print avg_improvement
                     self._stats_new_epoch()
                     # self._write_tensorboard()

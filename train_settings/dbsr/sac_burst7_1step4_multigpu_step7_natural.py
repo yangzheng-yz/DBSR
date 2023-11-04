@@ -11,7 +11,7 @@ import data.transforms as tfm
 from admin.multigpu import MultiGPU
 import numpy as np
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "3,4,5"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 import pickle as pkl
 from actors.dbsr_actors import qValueNetwork
 from accelerate import Accelerator, DistributedType
@@ -25,21 +25,21 @@ def run(settings):
 
     ##############SETTINGS#####################
     settings.description = 'adjust 4 with pixel step 1/8 LR pixel, discount_factor: 0.99, one_step_length: 1 / 8, iterations: 10, SAC'
-    settings.batch_size = 84
-    sample_size = 84
+    settings.batch_size = 32
+    sample_size = 32
     settings.num_workers = 12
     settings.multi_gpu = False
     settings.print_interval = 1
 
     settings.crop_sz = (384, 384)
-    settings.burst_sz = 4
+    settings.burst_sz = 7
     settings.downsample_factor = 4
-    one_step_length = 1 / 16
+    one_step_length = 1 / 4
     base_length = 1 / settings.downsample_factor
     buffer_size = 15000
     
 
-    permutation = np.array([[0.,0.],[0.,2.],[2.,2.],[2.,0.]])
+    permutation = np.array([[0.,0.],[0.,2.],[2.,2.],[2.,0.],[1,1],[0,1],[3,1]])
     
     settings.burst_transformation_params = {'max_translation': 3.0,
                                         'max_rotation': 0.0,
@@ -221,7 +221,7 @@ def run(settings):
                         critic_2_lr_scheduler=critic_2_lr_scheduler, 
                         log_alpha_lr_scheduler=log_alpha_lr_scheduler,
                         log_alpha=log_alpha, 
-                        sr_net=sr_net, iterations=25, reward_type='psnr',
+                        sr_net=sr_net, iterations=7, reward_type='psnr',
                         discount_factor=0.99, init_permutation=permutation, one_step_length=one_step_length, base_length=base_length,
                         sample_size=sample_size, accelerator=accelerator,
                         loader_attributes=loader_attributes,
