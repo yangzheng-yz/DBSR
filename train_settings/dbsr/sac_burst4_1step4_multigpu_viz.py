@@ -42,7 +42,7 @@ def run(settings):
     
 
     permutation = np.array([[0.,0.],[0.,2.],[2.,2.],[2.,0.]])
-    permutation = np.array([[0.,0.],[0.,3.],[3.,2.],[3.,0.]])
+    # permutation = np.array([[0.,0.],[0.,3.],[3.,2.],[3.,0.]])
     
     settings.burst_transformation_params = {'max_translation': 3.0,
                                         'max_rotation': 0.0,

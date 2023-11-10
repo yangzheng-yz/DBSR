@@ -31,7 +31,7 @@ def run(settings):
     settings.multi_gpu = False
     settings.print_interval = 1
     used_weights_for_validate_traj = True
-    weigths_path = "/mnt/7T/zheng/DBSR_results/checkpoints/dbsr/sac_burst7_1step4_multigpu_step7_natural/ActorSAC_0/best_ep0053.pth.tar"
+    weigths_path = "/mnt/7T/zheng/DBSR_results/checkpoints/dbsr/sac_burst7_1step4_multigpu_step7_natural/ActorSAC_0/ep0011.pth.tar"
 
     settings.crop_sz = (384, 384)
     settings.burst_sz = 7
@@ -40,8 +40,9 @@ def run(settings):
     base_length = 1 / settings.downsample_factor
     buffer_size = 15000
     
+    # permutation = np.array([[0.,0.],[0.,2.],[2.,2.],[2.,0.],[1,1],[0,1],[3,1]])
 
-    permutation = np.array([[0.,0.],[0.,2.],[2.,2.],[2.,0.],[1,1],[0,1],[3,1]])
+    permutation = np.array([[0.,0.],[0.,2.],[2.,2.],[2.,0.],[1,1],[0,1],[1,0]])
     
     settings.burst_transformation_params = {'max_translation': 3.0,
                                         'max_rotation': 0.0,
@@ -120,28 +121,12 @@ def run(settings):
     checkpoint_root_path = os.path.join(settings.env.workspace_dir, 'checkpoints', settings.project_path)
     checkpoint_sample_path = os.path.join(checkpoint_root_path, actors_type[0])
     pre_log_alpha = None
-    if os.path.exists(checkpoint_root_path):
-        if os.path.exists(checkpoint_sample_path):
-            if len(os.listdir(checkpoint_sample_path)) != 0:
-                nets_checkpoints_dir_path = [os.path.join(checkpoint_root_path, i) for i in actors_type]
-                for idx, net_checkpoints_dir_path in enumerate(nets_checkpoints_dir_path):
-                    files = os.listdir(net_checkpoints_dir_path)
-                    files.sort()
-                    cp_path = os.path.join(net_checkpoints_dir_path, files[-1])
-                    checkpoint = torch.load(cp_path, map_location='cpu')
-                    state_dict = checkpoint['net']
-                    print(f"Loading latest {files[-1]} from {net_checkpoints_dir_path}")
-                    # print(state_dict)
-                    actors[idx].load_state_dict(state_dict)
-                    if checkpoint.get('log_alpha', None) is not None:
-                        pre_log_alpha = checkpoint['log_alpha']
-                    print(f"Load successfully!")
-    elif used_weights_for_validate_traj:
+    if used_weights_for_validate_traj:
         checkpoint = torch.load(weigths_path, map_location='cpu')
         state_dict = checkpoint['net']
-        actors[0].load_state_dict(state_dict)                    
+        actors[0].load_state_dict(state_dict)
     else:
-        os.makedirs(checkpoint_root_path, exist_ok=True)
+        assert 1==2, "You need to specify a model!"
 
     target_critic_1.load_state_dict(q_net1.state_dict())
     target_critic_2.load_state_dict(q_net2.state_dict())
@@ -169,18 +154,7 @@ def run(settings):
     critic_2_optimizer = optim.Adam(q_net2.parameters(), lr=3e-4)
     log_alpha_optimizer = optim.Adam([log_alpha], lr=1e-4)
 
-    if os.path.exists(checkpoint_root_path):
-        if os.path.exists(checkpoint_sample_path):
-            if len(os.listdir(checkpoint_sample_path)) != 0:
-                net_checkpoints_dir_path = os.path.join(checkpoint_root_path, actors_type[0])
-                files = os.listdir(net_checkpoints_dir_path)
-                files.sort()
-                cp_path = os.path.join(net_checkpoints_dir_path, files[-1])
-                checkpoint = torch.load(cp_path, map_location='cpu')
-                actor_optimizer.load_state_dict(checkpoint['actor_optimizer'])
-                critic_1_optimizer.load_state_dict(checkpoint['critic_1_optimizer'])
-                critic_2_optimizer.load_state_dict(checkpoint['critic_2_optimizer'])
-                log_alpha_optimizer.load_state_dict(checkpoint['log_alpha_optimizer'])
+
 
     actor_optimizer, critic_1_optimizer, critic_2_optimizer, log_alpha_optimizer = accelerator.prepare(actor_optimizer, critic_1_optimizer, critic_2_optimizer, log_alpha_optimizer)
 
@@ -190,19 +164,7 @@ def run(settings):
     critic_2_lr_scheduler = optim.lr_scheduler.MultiStepLR(critic_2_optimizer, milestones=[100, 150], gamma=0.2)
     log_alpha_lr_scheduler = optim.lr_scheduler.MultiStepLR(log_alpha_optimizer, milestones=[100, 150], gamma=0.2)
     inital_epoch = 0
-    if os.path.exists(checkpoint_root_path):
-        if os.path.exists(checkpoint_sample_path):
-            if len(os.listdir(checkpoint_sample_path)) != 0:
-                net_checkpoints_dir_path = os.path.join(checkpoint_root_path, actors_type[0])
-                files = os.listdir(net_checkpoints_dir_path)
-                files.sort()
-                cp_path = os.path.join(net_checkpoints_dir_path, files[-1])
-                checkpoint = torch.load(cp_path, map_location='cpu')
-                actor_lr_scheduler.last_epoch = checkpoint['epoch']
-                critic_1_lr_scheduler.last_epoch = checkpoint['epoch']
-                critic_2_lr_scheduler.last_epoch = checkpoint['epoch']
-                log_alpha_lr_scheduler.last_epoch = checkpoint['epoch']
-                inital_epoch = actor_lr_scheduler.last_epoch
+
     # print("Initial epoch is %s" % inital_epoch)
     actor_lr_scheduler = accelerator.prepare(actor_lr_scheduler)
     critic_1_lr_scheduler = accelerator.prepare(critic_1_lr_scheduler)
@@ -230,6 +192,6 @@ def run(settings):
                         sample_size=sample_size, accelerator=accelerator,
                         loader_attributes=loader_attributes,
                         actors_attr=actors_attr, target_entropy=-5, minimal_size=200, gpus_num=8, inital_epoch=inital_epoch,
-                        save_results=True, saving_dir="/mnt/7T/zheng/DBSR_results/loggings/b7_1-4_20231106")
+                        save_results=True, saving_dir="/mnt/7T/zheng/DBSR_results/loggings/b7_1-4_20231106_initial1")
 
     trainer.train(201, load_latest=False, fail_safe=True, buffer_size=buffer_size) # (epoch, )

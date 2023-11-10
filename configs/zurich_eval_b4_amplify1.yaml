@@ -1,0 +1,19 @@
+random_ccm: True
+random_gains: True
+smoothstep: True
+gamma: True
+add_noise: True
+return_rgb_burst: True
+permu_nb: 7
+crop_sz: 384
+burst_sz: 4
+downsample_factor: 1
+random_pixelshift: False
+calculate_loss: False
+
+ckpt_path: /home/yutong/zheng/projects/dbsr_rl/DBSR/pretrained_networks/dbsr_synthetic_default.pth
+dataset_path: /mnt/samsung/zheng_data/SyntheticDataset
+save_path: /mnt/7T/zheng/DBSR_results/loggings/dbsr_b4_baseline_amplify1
+specify_image_id: -1 # -1
+save_results: True
+split: val

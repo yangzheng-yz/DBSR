@@ -4,17 +4,19 @@ smoothstep: True
 gamma: True
 add_noise: False
 return_rgb_burst: True
-permu_nb: -2 # 0 1 2 3 4 
+permu_nb: 0 # 0 1 2 3 4 
 crop_sz_h: 512
 crop_sz_w: 640
-burst_sz: 4
-downsample_factor: 4
+burst_sz: 16
+downsample_factor: 1
 random_pixelshift: False
-calculate_loss: True
+calculate_loss: False
 
-ckpt_path: /home/user/zheng/DBSR/pretrained_networks/best.pth.tar
+ckpt_path: /home/user/zheng/DBSR/pretrained_networks/b9_deeprep_best.pth.tar
+# ckpt_path: /home/user/zheng/DBSR/pretrained_networks/deeprep_sr_synthetic_default.pth
+# ckpt_path: /home/user/zheng/DBSR/pretrained_networks/dbsr_synthetic_default.pth
 dataset_path: /mnt/7T/Data/Medical-Public/NIRII_denoising
-save_path: /mnt/7T/zheng/DBSR_results/loggings/b4_baseline_valset
+save_path: /mnt/7T/zheng/DBSR_results/loggings/b4_mice_amplify
 specify_image_id: -1 # -1
 save_results: True
-split: val
+split: test

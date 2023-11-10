@@ -155,6 +155,13 @@ class AgentSAC(BaseAgentTrainer):
                     if (new_permutations[idx+1][0] == initial_permutations[i][0]) \
                         and (new_permutations[idx+1][1] == initial_permutations[i][1]):
                         duplicated = True
+                        break
+                if not duplicated:
+                    for i in range(idx+2, len(initial_permutations)):
+                        if (new_permutations[idx+1][0] == initial_permutations[i][0]) \
+                            and (new_permutations[idx+1][1] == initial_permutations[i][1]):
+                            duplicated = True
+                            break
                 if duplicated:
                     # print("new_permutations[idx+1]", new_permutations[idx+1])
                     new_permutations[idx+1] = initial_permutations[idx+1].clone()
@@ -173,6 +180,97 @@ class AgentSAC(BaseAgentTrainer):
         # print("type specified_translation: ", new_permutations)
 
         return updated_permutations_tensor, updated_actions_tensor.to(device)
+    
+    # def update_permutations_and_actions(self, actions_batch, initial_permutations_batch):
+    #     device = actions_batch.device
+    #     movements = {
+    #         0: (-1, 0),  # Left
+    #         1: (1, 0),   # Right
+    #         2: (0, -1),  # Up
+    #         3: (0, 1),    # Down
+    #         4: (0, 0)     # Stay still
+    #     }
+
+    #     updated_permutations_list = []
+    #     updated_actions_list = []
+    #     for actions, initial_permutations in zip(actions_batch, initial_permutations_batch):
+    #         actions = actions.cpu()
+    #         initial_permutations = initial_permutations.cpu()
+    #         new_actions = actions.clone()
+    #         new_permutations = initial_permutations.clone()
+    #         # updated_permutations = list(initial_permutations)
+    #         # updated_actions = list(actions)
+    #         # print("initial permutations: ", new_permutations)
+    #         for idx, action in enumerate(actions):
+    #             movement = movements[action.item()]
+    #             # print("%sth burst frame movement: " % idx, movement)
+    #             # new_permutations[idx+1][0] = initial_permutations[idx+1][0].item() + movement[0] * self.one_step_length_in_grid
+    #             # new_permutations[idx+1][1] = initial_permutations[idx+1][1].item() + movement[1] * self.one_step_length_in_grid
+    #             new_x = initial_permutations[idx+1][0] + movement[0] * self.one_step_length_in_grid
+    #             new_y = initial_permutations[idx+1][1] + movement[1] * self.one_step_length_in_grid
+
+    #             # print("new_permutations[idx+1]", new_permutations[idx+1])
+
+    #             # Clip to boundaries
+    #             # new_permutations[idx+1][0] = min(max(new_permutations[idx+1][0].item(), 0.), 4 - self.one_step_length_in_grid)
+    #             # new_permutations[idx+1][1] = min(max(new_permutations[idx+1][1].item(), 0.), 4 - self.one_step_length_in_grid)
+    #             # Check for out-of-boundary and adjust the movement if necessary
+    #             if new_x < 0 or new_x >= 4 or new_y < 0 or new_y >= 4:
+    #                 # If movement goes out of boundary, reset to the initial position
+    #                 new_actions[idx] = 4  # Stay still action
+    #                 new_permutations[idx+1] = initial_permutations[idx+1].clone()
+                
+    #             duplicated = False
+    #             for i in range(idx+1):
+    #                 if (new_permutations[idx+1][0] == initial_permutations[i][0]) \
+    #                     and (new_permutations[idx+1][1] == initial_permutations[i][1]):
+    #                     duplicated = True
+    #                     break  # No need to check further if duplicate is found
+                
+    #             if duplicated:
+    #                 # Check surrounding positions for a valid move
+    #                 possible_moves = [0, 1, 2, 3]  # Corresponds to left, right, up, down
+    #                 for move in possible_moves:
+    #                     potential_move = movements[move]
+    #                     new_x = initial_permutations[idx+1][0] + potential_move[0] * self.one_step_length_in_grid
+    #                     new_y = initial_permutations[idx+1][1] + potential_move[1] * self.one_step_length_in_grid
+                        
+    #                     # Check if the new position is within bounds and not occupied
+    #                     if 0 <= new_x <= 4 - self.one_step_length_in_grid and \
+    #                     0 <= new_y <= 4 - self.one_step_length_in_grid:
+    #                         occupied = False
+    #                         for perm in initial_permutations:
+    #                             if new_x == perm[0] and new_y == perm[1]:
+    #                                 occupied = True
+    #                                 break
+                            
+    #                         if not occupied:
+    #                             # Update the action to the new move if the position is free
+    #                             new_actions[idx] = move
+    #                             new_permutations[idx+1] = torch.tensor([new_x, new_y])
+    #                             break
+
+    #                 if occupied:
+    #                     # If all positions around are occupied, stay still
+    #                     new_actions[idx] = 4  # Stay still action
+    #                     new_permutations[idx+1] = initial_permutations[idx+1].clone()
+    #                     print("Warning it should happen!!!!!!!!!!!!!!!!!!!")
+    #             else:
+    #                 initial_permutations[idx+1] = new_permutations[idx+1].clone()
+    #         # print("new permutations: ", new_permutations)
+    #         updated_permutations_list.append(new_permutations)
+    #         updated_actions_list.append(new_actions)
+
+    #     # Convert lists of lists to numpy arrays and then to tensors
+    #     # print("updated_permutations_list", updated_permutations_list)
+    #     updated_permutations_tensor = torch.stack(updated_permutations_list)
+    #     # print("updated_actions_list", updated_actions_list)
+    #     updated_actions_tensor = torch.stack(updated_actions_list)
+    #     print("type specified_translation: ", new_permutations)
+    #     # 先将张量转移到CPU，再转换为numpy数组，最后展开并输出
+    #     # print(f"Updated permutations: {updated_permutations_tensor.cpu().numpy().reshape(-1)}")
+
+    #     return updated_permutations_tensor, updated_actions_tensor.to(device)
 
     def step_environment(self, dists, HR_batch, permutations, iter, add_noise=True, meta_info=None, save_results=False):
 

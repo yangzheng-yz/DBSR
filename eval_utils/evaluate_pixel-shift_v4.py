@@ -18,7 +18,7 @@ from skimage.metrics import structural_similarity as ssim
 from skimage import io, img_as_float
 from sys import argv
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "6"
+os.environ["CUDA_VISIBLE_DEVICES"] = "7"
 
 from evaluation.common_utils.network_param import NetworkParam
 from models_dbsr.loss.image_quality_v2 import PSNR, SSIM, LPIPS
@@ -128,15 +128,32 @@ def main():
         
     # transform_val = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True), tfm.RandomHorizontalFlip())
     transform_val = tfm.Transform(tfm.ToTensor(normalize=True, val=True))
-
-    permutations = [np.array([[0,0],[0,1],[0,2],[0,3],[1,0],[1,1],[1,2],[1,3],[2,0],[2,1],[2,2],[2,3],[3,0],[3,1],[3,2],[3,3]])]
+    permutations = [np.array([[0,0],[0,1],[0,2],[0,3],[1,0],[1,1],[1,2],[1,3],[2,0],[2,1],[2,2],[2,3],[3,0],[3,1],[3,2],[3,3]]), # b16_baseline traj
+                    np.array([[0,0],[0,2],[2,2],[2,0]]), #b4_baseline traj
+                    np.array([[0,0],[0,3],[3,2],[3,0]]), # b4_1-4_step7_model8 best traj
+                    np.array([[0,0],[0,1],[2,3],[3,0]]), # b4_1-4_previous_actors_top1 traj
+                    np.array([[0,0],[0,0.5],[2,3],[3,0]]), # b4_1-8_step7_model8 best traj
+                    np.array([[0,0],[0,1],[0,2],[0,3],[1,0],[1,1],[3,2],[3,3],[3,0],[2,1]]), # b10_1-4_step7_model16 traj
+                    np.array([[0,0],[0/4.0, 1/4.0],[0/4.0, 2/4.0],[0/4.0, 3/4.0],[1/4.0, 0/4.0],[1/4.0, 1/4.0],[1/4.0, 2/4.0],[1/4.0, 3/4.0],[2/4.0, 0/4.0],[2/4.0, 1/4.0],[2/4.0, 2/4.0],[2/4.0, 3/4.0],[3/4.0, 0/4.0],[3/4.0, 1/4.0],[3/4.0, 2/4.0],[3/4.0, 3/4.0]]), # b16_baseline_amplify1 traj
+                    np.array([[0,0],[0/4.0,2/4.0],[2/4.0,2/4.0],[2/4.0,0/4.0]]), #b4_baseline_amplify1 traj
+                    np.array([[0,0],[0/4.0,3/4.0],[3/4.0,2/4.0],[3/4.0,0/4.0]]), # b4_1-4_step7_model8_amplify1 best traj
+                    np.array([[0,0],[0/4.0,1/4.0],[2/4.0,3/4.0],[3/4.0,0/4.0]]), # b4_1-4_previous_actors_top1_amplify1 traj
+                    np.array([[0,0],[0,0.5/4.0],[2/4.0,3/4.0],[3/4.0,0/4.0]]), # b4_1-8_step7_model8_amplify1 best traj
+                    np.array([[0,0],[0/4.0,1/4.0],[0/4.0,3/4.0],[0/4.0,3/4.0],[1/4.0,0/4.0],[3/4.0,1/4.0],[3/4.0,2/4.0],[3/4.0,3/4.0],[3/4.0,0/4.0],[1/4.0,1/4.0]]), # b10_1-4_step7_model16 traj
+                    np.array([[0,0],[0,3],[2,3],[3,0],[1,0]]), # b5_1-4_step7
+                    np.array([[0,0],[0,2],[2,3],[3,0],[1,0],[0,1]]), # b6_1-4_step7
+                    np.array([[0,0],[0,3],[3,2],[2,0],[3,1],[0,1],[1,0]]), # b7_1-4_step7
+                    np.array([[0,0],[0,3],[2,2],[3,0],[1,1],[0,2],[1,0],[1,2]]), # b8_1-4_step7
+                    np.array([[0,0],[0,3],[1,2],[3,0],[3,1],[1,3],[1,0],[0,2],[2,1]]), # b9_1-4_step7
+                    np.array([[0,0],[0,4./3.],[0,8./3.],[4./3.,8./3.],[4./3.,4./3.],[4./3.,0],[8./3.,0],[8./3.,4./3.],[8./3.,8./3.]]) # b9_baseline
+                    ]
 
     burst_transformation_params_val = {'max_translation': 24.0,
                                         'max_rotation': 1.0,
                                         'max_shear': 0.0,
                                         'max_scale': 0.0,
                                         # 'border_crop': 24, #24,
-                                        'random_pixelshift': False,
+                                        'random_pixelshift': cfg.random_pixelshift,
                                         'specified_translation': permutations[cfg.permu_nb]}
     
     data_processing_val = processing.SyntheticBurstDatabaseProcessing((cfg.crop_sz, cfg.crop_sz), cfg.burst_sz,

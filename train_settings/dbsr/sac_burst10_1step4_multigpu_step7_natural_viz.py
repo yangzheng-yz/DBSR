@@ -11,7 +11,7 @@ import data.transforms as tfm
 from admin.multigpu import MultiGPU
 import numpy as np
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import pickle as pkl
 from actors.dbsr_actors import qValueNetwork
 from accelerate import Accelerator, DistributedType
@@ -31,17 +31,17 @@ def run(settings):
     settings.multi_gpu = False
     settings.print_interval = 1
     used_weights_for_validate_traj = True
-    weigths_path = "/mnt/7T/zheng/DBSR_results/checkpoints/dbsr/sac_burst6_1step4_multigpu_step7_natural/ActorSAC_0/best_ep0040.pth.tar"
+    weigths_path = "/mnt/7T/zheng/DBSR_results/checkpoints/dbsr/before_20231031/sac_burst10_1step4_multigpu_step7_natural_b16model/ActorSAC_0/ep0021.pth.tar"
 
     settings.crop_sz = (384, 384)
-    settings.burst_sz = 6
+    settings.burst_sz = 10
     settings.downsample_factor = 4
     one_step_length = 1 / 4
     base_length = 1 / settings.downsample_factor
     buffer_size = 15000
     
 
-    permutation = np.array([[0.,0.],[0.,2.],[2.,2.],[2.,0.],[1,1],[0,1]])
+    permutation = np.array([[0,0],[0,1],[0,2],[0,3],[1,0],[1,1],[1,2],[1,3],[2,0],[2,1]])
     
     settings.burst_transformation_params = {'max_translation': 3.0,
                                         'max_rotation': 0.0,
@@ -126,7 +126,6 @@ def run(settings):
         actors[0].load_state_dict(state_dict)
     else:
         assert 1==2, "You need to specify a model!"
-
     target_critic_1.load_state_dict(q_net1.state_dict())
     target_critic_2.load_state_dict(q_net2.state_dict())
     ############DEFINE MULTIGPU SETTINGS###########
@@ -143,7 +142,7 @@ def run(settings):
     else:
         log_alpha = torch.tensor(np.log(1), dtype=torch.float)
     # log_alpha = torch.tensor(np.log(1), dtype=torch.float) # TODO: hyperparameter...
-    log_alpha.requires_grad = True
+    log_alpha.requires_grad = False
     log_alpha = accelerator.prepare(log_alpha)
 
     ##############DEFINE OPTIMIZER##########
@@ -163,7 +162,6 @@ def run(settings):
     critic_2_lr_scheduler = optim.lr_scheduler.MultiStepLR(critic_2_optimizer, milestones=[100, 150], gamma=0.2)
     log_alpha_lr_scheduler = optim.lr_scheduler.MultiStepLR(log_alpha_optimizer, milestones=[100, 150], gamma=0.2)
     inital_epoch = 0
-
     # print("Initial epoch is %s" % inital_epoch)
     actor_lr_scheduler = accelerator.prepare(actor_lr_scheduler)
     critic_1_lr_scheduler = accelerator.prepare(critic_1_lr_scheduler)
@@ -191,6 +189,6 @@ def run(settings):
                         sample_size=sample_size, accelerator=accelerator,
                         loader_attributes=loader_attributes,
                         actors_attr=actors_attr, target_entropy=-5, minimal_size=200, gpus_num=8, inital_epoch=inital_epoch,
-                        save_results=True, saving_dir="/mnt/7T/zheng/DBSR_results/loggings/b6_1-4_20231106")
+                        save_results=True, saving_dir="/mnt/7T/zheng/DBSR_results/loggings/b10_1-4_20231106")
 
     trainer.train(201, load_latest=False, fail_safe=True, buffer_size=buffer_size) # (epoch, )

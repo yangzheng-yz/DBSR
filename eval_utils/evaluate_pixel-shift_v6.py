@@ -18,7 +18,7 @@ from skimage.metrics import structural_similarity as ssim
 from skimage import io, img_as_float
 from sys import argv
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "6"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import time
 
 from evaluation.common_utils.network_param import NetworkParam
@@ -151,24 +151,26 @@ def main():
     # transform_val = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True), tfm.RandomHorizontalFlip())
     transform_val = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True))
 
-    permutations = [np.array([[0,0],[0,3.],[3.,2.],[3.,0]]),
-                    np.array([[0,0],[0,3],[3,3],[2,0]]),
-                    np.array([[0,0],[0,3],[3,2],[1,0]]),
-                    np.array([[0,0],[0,3],[3,3],[3,0]]),
-                    np.array([[0,0],[0,3],[3,2],[2,0]]),
-                    np.array([[0,0],[0,2],[2,3],[3,0]]),
-                    np.array([[0,0],[0,3],[2,3],[3,0]]),
-                    np.array([[0,0],[0,5.0/2.0],[2,3],[3,0]]),
-                    np.array([[0,0],[0,3],[3.0/2.0,3],[3,0]]),
-                    np.array([[0,0],[0,2],[3.0/2.0,3],[3,0]]),
-                    np.array([[0,0],[0,3],[3,2],[4.0/3.0,0]]),
-                    np.array([[0,0],[0,3],[3,5.0/3.0],[2,0]]),
-                    np.array([[0,0],[0,3],[3,2],[2,0]]),
-                    np.array([[0,0],[0,3],[3,2],[8.0/3.0,0]]),
-                    np.array([[0,0],[1.0/3.0,3],[3,5.0/3.0],[4.0/3.0,0]]),
-                    np.array([[0,0],[0,2],[2,2],[2,0]]),
-                    np.array([[0,0],[4.0/3.0,0],[8.0/3.0,0],[8.0/3.0,4.0/3.0],[4.0/3.0,4.0/3.0],[0,4.0/3.0],[0,8.0/3.0],[4.0/3.0,8.0/3.0],[8.0/3.0,8.0/3.0]])]
-
+    permutations = [np.array([[0,0],[0,1],[0,2],[0,3],[1,0],[1,1],[1,2],[1,3],[2,0],[2,1],[2,2],[2,3],[3,0],[3,1],[3,2],[3,3]]), # b16_baseline traj
+                    np.array([[0,0],[0,2],[2,2],[2,0]]), #b4_baseline traj
+                    np.array([[0,0],[0,3],[3,2],[3,0]]), # b4_1-4_step7_model8 best traj
+                    np.array([[0,0],[0,1],[2,3],[3,0]]), # b4_1-4_previous_actors_top1 traj
+                    np.array([[0,0],[0,0.5],[2,3],[3,0]]), # b4_1-8_step7_model8 best traj
+                    np.array([[0,0],[0,1],[0,2],[0,3],[1,0],[1,1],[3,2],[3,3],[3,0],[2,1]]), # b10_1-4_step7_model16 traj
+                    np.array([[0,0],[0/4.0, 1/4.0],[0/4.0, 2/4.0],[0/4.0, 3/4.0],[1/4.0, 0/4.0],[1/4.0, 1/4.0],[1/4.0, 2/4.0],[1/4.0, 3/4.0],[2/4.0, 0/4.0],[2/4.0, 1/4.0],[2/4.0, 2/4.0],[2/4.0, 3/4.0],[3/4.0, 0/4.0],[3/4.0, 1/4.0],[3/4.0, 2/4.0],[3/4.0, 3/4.0]]), # b16_baseline_amplify1 traj
+                    np.array([[0,0],[0/4.0,2/4.0],[2/4.0,2/4.0],[2/4.0,0/4.0]]), #b4_baseline_amplify1 traj
+                    np.array([[0,0],[0/4.0,3/4.0],[3/4.0,2/4.0],[3/4.0,0/4.0]]), # b4_1-4_step7_model8_amplify1 best traj
+                    np.array([[0,0],[0/4.0,1/4.0],[2/4.0,3/4.0],[3/4.0,0/4.0]]), # b4_1-4_previous_actors_top1_amplify1 traj
+                    np.array([[0,0],[0,0.5/4.0],[2/4.0,3/4.0],[3/4.0,0/4.0]]), # b4_1-8_step7_model8_amplify1 best traj
+                    np.array([[0,0],[0/4.0,1/4.0],[0/4.0,3/4.0],[0/4.0,3/4.0],[1/4.0,0/4.0],[3/4.0,1/4.0],[3/4.0,2/4.0],[3/4.0,3/4.0],[3/4.0,0/4.0],[1/4.0,1/4.0]]), # b10_1-4_step7_model16 traj
+                    np.array([[0,0],[0,3],[2,3],[3,0],[1,0]]), # b5_1-4_step7
+                    np.array([[0,0],[0,2],[2,3],[3,0],[1,0],[0,1]]), # b6_1-4_step7
+                    np.array([[0,0],[0,3],[3,2],[2,0],[3,1],[0,1],[1,0]]), # b7_1-4_step7
+                    np.array([[0,0],[0,3],[2,2],[3,0],[1,1],[0,2],[1,0],[1,2]]), # b8_1-4_step7
+                    np.array([[0,0],[0,3],[1,2],[3,0],[3,1],[1,3],[1,0],[0,2],[2,1]]), # b9_1-4_step7
+                    np.array([[0,0],[0,4./3.],[0,8./3.],[4./3.,8./3.],[4./3.,4./3.],[4./3.,0],[8./3.,0],[8./3.,4./3.],[8./3.,8./3.]]) # b9_baseline
+                    ]
+    
     dir_path = "/home/user/zheng/DBSR/util_scripts"
     meta_infos_found = False
     if os.path.exists(os.path.join(dir_path, 'mice_%s_meta_infos.pkl' % cfg.split)):
@@ -290,7 +292,7 @@ def main():
                 # SR_image = (SR_image.permute(1, 2, 0).clamp(0.0, 1.0) * 2 ** 14).numpy().astype(np.uint16)
                 
                 # HR_image = cv2.resize(HR_image, dsize=(gt.shape[1], gt.shape[0]), interpolation=cv2.INTER_NEAREST)
-                LR_image_cubic = cv2.resize(LR_image, dsize=(HR_image.shape[1], HR_image.shape[0]), interpolation=cv2.INTER_CUBIC)
+                LR_image_cubic = cv2.resize(LR_image, dsize=(SR_image.shape[1], SR_image.shape[0]), interpolation=cv2.INTER_CUBIC)
                 # SR_image = cv2.resize(SR_image, dsize=(gt.shape[1], gt.shape[0]), interpolation=cv2.INTER_NEAREST)
                 # HR_image_cvwrite = HR_image[:, :, [2, 1, 0]]
                 # LR_image_cvwrite = LR_image[:, :, [2, 1, 0]]

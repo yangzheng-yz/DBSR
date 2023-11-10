@@ -8,8 +8,8 @@ import matplotlib.pyplot as plt
 
 # traj_root_path = "/mnt/samsung/zheng/downloaded_datasets/zheng_ccvl21/training_log/viz_results/debug_psnetv13_dbsr_epoch45_validation"
 grid_size = 3 # 3 for 1/4, 6 for 1/8, 9 for 1/12
-burst_sz = 4
-traj_root_path = "/mnt/7T/zheng/DBSR_results/loggings/b4_1-4_20231022"
+burst_sz = 10
+traj_root_path = "/mnt/7T/zheng/DBSR_results/loggings/b10_1-4_20231106"
 f = open(os.path.join(traj_root_path, 'traj_int_length_0.25.pkl'), 'rb')
 # f = open(os.path.join(traj_root_path, 'traj_int_length_0.08333333333333333.pkl'), 'rb')
 pixel_shift_trajectories = pkl.load(f)
@@ -49,10 +49,10 @@ plt.title('Count all trajectories on validation dataset')
 plt.savefig(os.path.join(traj_root_path, 'all_trajectories.png'))
 
 # 获取前10个最常见的轨迹
-common_trajectories = counts.most_common(10)
+common_trajectories = counts.most_common(5)
 
-# 绘制Top-10轨迹在4x4网格中并保存
-fig, axs = plt.subplots(1, 10, figsize=(15, 3))
+# 绘制Top-5轨迹在4x4网格中并保存
+fig, axs = plt.subplots(1, 5, figsize=(15, 3))
 for i, (label, _) in enumerate(common_trajectories):
     
     # burst_sz = int(len(label) / 2)
