@@ -67,7 +67,7 @@ class ResEncoderWarpAlignnet(nn.Module):
         
         self.out_dim = out_dim
 
-    def forward(self, x):
+    def forward(self, x, offset=None):
         # print("x dim is: ", x.size())
         assert x.dim() == 5, "x dim is %s, rather than 5" % x.dim()
 
@@ -79,9 +79,10 @@ class ResEncoderWarpAlignnet(nn.Module):
         if self.train_alignmentnet:
             offsets = self.alignment_net(x_oth.view(-1, *x_oth.shape[-3:]), x_ref.view(-1, *x_ref.shape[-3:]))
         else:
-            with torch.no_grad():
-                self.alignment_net = self.alignment_net.eval()
-                offsets = self.alignment_net(x_oth.view(-1, *x_oth.shape[-3:]), x_ref.view(-1, *x_ref.shape[-3:]))
+            if offset is None:
+                with torch.no_grad():
+                    self.alignment_net = self.alignment_net.eval()
+                    offsets = self.alignment_net(x_oth.view(-1, *x_oth.shape[-3:]), x_ref.view(-1, *x_ref.shape[-3:]))
 
         shape = x.shape
 

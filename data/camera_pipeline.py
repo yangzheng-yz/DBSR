@@ -97,7 +97,7 @@ def gamma_compression(image):
 
 def apply_ccm(image, ccm):
     """Applies a color correction matrix."""
-    assert image.dim() == 3 and image.shape[0] == 3
+    assert image.dim() == 3 and image.shape[0] == 3, f"image.dim is {image.dim()}, image.shape[0] is {image.shape[0]}"
 
     shape = image.shape
     # print("image shape: ", shape)

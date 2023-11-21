@@ -1,6 +1,7 @@
 """
 This version is for the dai's mice dataset.
 """
+import utils.data_format_utils as df_utils
 import dataset as datasets
 from data import processing, sampler, DataLoader
 import data.transforms as tfm
@@ -146,60 +147,14 @@ def main():
     scores_all_mean = {}
     selected_images_id = np.arange(0,len(Zurich_test),1) 
         
-    image_processing_params = {'random_ccm': True, 'random_gains': True, 'smoothstep': True, 'gamma': True, 'add_noise': True}
-        
     # transform_val = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True), tfm.RandomHorizontalFlip())
     transform_val = tfm.Transform(tfm.ToTensorAndJitter(0.0, normalize=True))
-
-    permutations = [np.array([[0,0],[0,1],[0,2],[0,3],[1,0],[1,1],[1,2],[1,3],[2,0],[2,1],[2,2],[2,3],[3,0],[3,1],[3,2],[3,3]]), # b16_baseline traj
-                    np.array([[0,0],[0,2],[2,2],[2,0]]), #b4_baseline traj
-                    np.array([[0,0],[0,3],[3,2],[3,0]]), # b4_1-4_step7_model8 best traj
-                    np.array([[0,0],[0,1],[2,3],[3,0]]), # b4_1-4_previous_actors_top1 traj
-                    np.array([[0,0],[0,0.5],[2,3],[3,0]]), # b4_1-8_step7_model8 best traj
-                    np.array([[0,0],[0,1],[0,2],[0,3],[1,0],[1,1],[3,2],[3,3],[3,0],[2,1]]), # b10_1-4_step7_model16 traj
-                    np.array([[0,0],[0/4.0, 1/4.0],[0/4.0, 2/4.0],[0/4.0, 3/4.0],[1/4.0, 0/4.0],[1/4.0, 1/4.0],[1/4.0, 2/4.0],[1/4.0, 3/4.0],[2/4.0, 0/4.0],[2/4.0, 1/4.0],[2/4.0, 2/4.0],[2/4.0, 3/4.0],[3/4.0, 0/4.0],[3/4.0, 1/4.0],[3/4.0, 2/4.0],[3/4.0, 3/4.0]]), # b16_baseline_amplify1 traj
-                    np.array([[0,0],[0/4.0,2/4.0],[2/4.0,2/4.0],[2/4.0,0/4.0]]), #b4_baseline_amplify1 traj
-                    np.array([[0,0],[0/4.0,3/4.0],[3/4.0,2/4.0],[3/4.0,0/4.0]]), # b4_1-4_step7_model8_amplify1 best traj
-                    np.array([[0,0],[0/4.0,1/4.0],[2/4.0,3/4.0],[3/4.0,0/4.0]]), # b4_1-4_previous_actors_top1_amplify1 traj
-                    np.array([[0,0],[0,0.5/4.0],[2/4.0,3/4.0],[3/4.0,0/4.0]]), # b4_1-8_step7_model8_amplify1 best traj
-                    np.array([[0,0],[0/4.0,1/4.0],[0/4.0,3/4.0],[0/4.0,3/4.0],[1/4.0,0/4.0],[3/4.0,1/4.0],[3/4.0,2/4.0],[3/4.0,3/4.0],[3/4.0,0/4.0],[1/4.0,1/4.0]]), # b10_1-4_step7_model16 traj
-                    np.array([[0,0],[0,3],[2,3],[3,0],[1,0]]), # b5_1-4_step7
-                    np.array([[0,0],[0,2],[2,3],[3,0],[1,0],[0,1]]), # b6_1-4_step7
-                    np.array([[0,0],[0,3],[3,2],[2,0],[3,1],[0,1],[1,0]]), # b7_1-4_step7
-                    np.array([[0,0],[0,3],[2,2],[3,0],[1,1],[0,2],[1,0],[1,2]]), # b8_1-4_step7
-                    np.array([[0,0],[0,3],[1,2],[3,0],[3,1],[1,3],[1,0],[0,2],[2,1]]), # b9_1-4_step7
-                    np.array([[0,0],[0,4./3.],[0,8./3.],[4./3.,8./3.],[4./3.,4./3.],[4./3.,0],[8./3.,0],[8./3.,4./3.],[8./3.,8./3.]]) # b9_baseline
-                    ]
     
     dir_path = "/home/user/zheng/DBSR/util_scripts"
-    meta_infos_found = False
-    if os.path.exists(os.path.join(dir_path, 'mice_%s_meta_infos.pkl' % cfg.split)):
-        with open(os.path.join(dir_path, 'mice_%s_meta_infos.pkl' % cfg.split), 'rb') as f:
-            meta_infos_val = pkl.load(f)
-        print(" *Using the predefined ISP parameters in %s" % os.path.join(dir_path, 'mice_%s_meta_infos.pkl' % cfg.split))
-        meta_infos_found = True
-        image_processing_params = {'random_ccm': cfg.random_ccm, 'random_gains': cfg.random_gains, 'smoothstep': cfg.smoothstep, 'gamma': cfg.gamma, 'add_noise': cfg.add_noise,
-                                    'predefined_params': meta_infos_val}
-
-    else:
-        print(" *Using random ISP parameters")
-        meta_infos_val = {} 
-        image_processing_params = {'random_ccm': cfg.random_ccm, 'random_gains': cfg.random_gains, 'smoothstep': cfg.smoothstep, 'gamma': cfg.gamma, 'add_noise': cfg.add_noise}
-
-
-    burst_transformation_params_val = {'max_translation': 3.0,
-                                        'max_rotation': 0.0,
-                                        'max_shear': 0.0,
-                                        'max_scale': 0.0,
-                                        # 'border_crop': 24, #24,
-                                        'random_pixelshift': cfg.random_pixelshift,
-                                        'specified_translation': permutations[int(cfg.permu_nb)]}
     
-    data_processing_val = processing.SyntheticBurstDatabaseProcessing((512, 640), cfg.burst_sz,
+    data_processing_val = processing.RealBurstDatabaseProcessing((640, 512), cfg.burst_sz,
                                                                         cfg.downsample_factor,
-                                                                        burst_transformation_params=burst_transformation_params_val,
                                                                         transform=transform_val,
-                                                                        image_processing_params=image_processing_params,
                                                                         random_crop=False,
                                                                         return_rgb_busrt=cfg.return_rgb_burst)
 
@@ -229,15 +184,6 @@ def main():
         #                                             transformation_params=burst_transformation_params,
         #                                             interpolation_type=self.interpolation_type)
         # image_burst = rgb2raw.mosaic(image_burst_rgb.clone())
-
-        if meta_infos_found:
-            meta_info = meta_infos_val[data['image_name']]
-            # print(meta_info)
-        else:
-            meta_info = data['meta_info']
-            meta_infos_val[data['image_name']] = meta_info
-            with open(os.path.join(dir_path, 'mice_%s_meta_infos.pkl' % cfg.split), 'wb') as f:
-                pkl.dump(meta_infos_val, f)
                 
         if int(cfg.specify_image_id) != -1:
             if idx != int(cfg.specify_image_id):
@@ -246,7 +192,6 @@ def main():
             
         burst_rgb = data['burst_rgb']
         assert cfg.return_rgb_burst, "Better open this button to save the results."
-        meta_info['frame_num'] = idx
         burst_name = "%s_%s" % (cfg.split, idx)
 
         burst = burst.to(device).unsqueeze(0)
@@ -275,60 +220,13 @@ def main():
                 save_path_png = os.path.join(cfg.save_path, 'images')
                 if not os.path.isdir(save_path_png):
                     os.makedirs(save_path_png, exist_ok=True)
-                HR_image = process_fn.process(gt.cpu(), meta_info)
-                LR_images = []
-                if cfg.perform_traditional:
-                    traditional_translation = permutations[cfg.permu_nb] / cfg.downsample_factor
-                    high_res_grid = np.zeros((int(cfg.crop_sz_w / cfg.downsample_factor) * 4, int(cfg.crop_sz_h / cfg.downsample_factor) * 4, 3))  # 对于RGB图像
-                    counts = np.zeros((int(cfg.crop_sz_w / cfg.downsample_factor) * 4, int(cfg.crop_sz_h / cfg.downsample_factor) * 4, 3))
-                    
-                for img, (dx,dy) in zip(burst_rgb, traditional_translation):
-                    LR_image = process_fn.process(img, meta_info)
-                    LR_images.append(LR_image)
-                    # 计算在高分辨率网格上的位置
-                    x_pos = -int(dx * 4)
-                    y_pos = -int(dy * 4)
-                    # 将低分辨率图像放置到高分辨率网格上，累加对应的像素值和计数
-                    # 确定放置在高分辨率网格上的图像部分
-                    x_start = max(x_pos, 0)
-                    y_start = max(y_pos, 0)
-                    x_end = min(x_pos + int(cfg.crop_sz_w / cfg.downsample_factor) * 4, high_res_grid.shape[1])
-                    y_end = min(y_pos + int(cfg.crop_sz_h / cfg.downsample_factor) * 4, high_res_grid.shape[0])
 
-                    # 计算对应于原始低分辨率图像的部分
-                    x_start_img = x_start - x_pos
-                    y_start_img = y_start - y_pos
-                    x_end_img = x_end - x_pos
-                    y_end_img = y_end - y_pos
-                    # img = process_fn_tensor.process(img, meta_info)
-                    img = img.permute(1,2,0).numpy()
-                    upscaled_img = cv2.resize(img, (int(cfg.crop_sz_h / cfg.downsample_factor) * 4, int(cfg.crop_sz_w / cfg.downsample_factor) * 4), interpolation=cv2.INTER_LINEAR)
-                    # 将低分辨率图像的相应部分放置到高分辨率网格上
-                    high_res_grid[y_start:y_end, x_start:x_end] += upscaled_img[y_start_img:y_end_img, x_start_img:x_end_img]
-                    counts[y_start:y_end, x_start:x_end] += 1
-                    
-                SR_image = process_fn.process(net_pred.squeeze(0).cpu(), meta_info)
-                # SR_image = SR_image / np.max(SR_image)
-                # SR_image = SR_image * 255
-                # high_res_img = high_res_grid / np.maximum(counts, 1)  # 避免除以0
-                high_res_img = high_res_grid / np.max(high_res_grid)  # 避免除以0
-                # high_res_img = high_res_img / np.max(high_res_img)
-                # high_res_img = high_res_grid
-                
-                high_res_grid_tensor = torch.tensor(high_res_img, dtype=torch.float32).permute(2,0,1).cuda()
-                # for m, m_fn in metrics_all.items():
-                #     metric_value = m_fn(high_res_grid_tensor.unsqueeze(0).cuda(), gt.unsqueeze(0)).cpu().item()
-                #     scores_resolved[m].append(metric_value) 
-                high_res_img = process_fn.process(high_res_grid_tensor.cpu(), meta_info)
-                high_res_grid_tensor = torch.tensor(high_res_img, dtype=torch.float32).permute(2,0,1).cuda()
-                # print(f"Debug pred size: {net_pred.device}")
-                high_res_img_uint8 = np.clip(high_res_img,0,255).astype(np.uint8) 
                 # net_pred_np = (net_pred.squeeze(0).permute(1, 2, 0).clamp(0.0, 1.0) * 2 ** 14).cpu().numpy().astype(
                 #     np.uint16)
                 # print("meta_info: ", meta_info)
-                HR_image = process_fn.process(gt.cpu(), meta_info)
-                LR_image = process_fn.process(burst_rgb[0], meta_info)
-                SR_image = process_fn.process(net_pred.squeeze(0).cpu(), meta_info)
+                HR_image = process_fn.process(gt.cpu(), data['meta_info'])
+                LR_image = process_fn.process(burst_rgb[0], data['meta_info'])
+                SR_image = process_fn.process(net_pred.squeeze(0).cpu(), data['meta_info'])
                 
                 # HR_image = gt.cpu()
                 # LR_image = burst_rgb[0]
@@ -353,7 +251,6 @@ def main():
                 cv2.imwrite('{}/{}_LR_cubic.png'.format(save_path_png, burst_name.split('.')[0]), cv2.cvtColor(LR_image_cubic, cv2.COLOR_BGR2GRAY))
                 cv2.imwrite('{}/{}_LR.png'.format(save_path_png, burst_name.split('.')[0]), cv2.cvtColor(LR_image, cv2.COLOR_BGR2GRAY))
                 cv2.imwrite('{}/{}_SR.png'.format(save_path_png, burst_name.split('.')[0]), cv2.cvtColor(SR_image, cv2.COLOR_BGR2GRAY))
-                cv2.imwrite('{}/{}_superresolved.png'.format(save_path_png, burst_name.split('.')[0]), cv2.cvtColor(high_res_img_uint8, cv2.COLOR_BGR2GRAY))
 
                 if not cfg.calculate_loss:
                     print(" Evaluated %s/%s images of %s/%s" % (idx, len(dataset_val)-1, cfg.dataset_path, burst_name), file=save_txt)

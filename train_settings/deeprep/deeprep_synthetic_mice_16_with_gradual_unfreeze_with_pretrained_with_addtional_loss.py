@@ -21,9 +21,9 @@ import actors.dbsr_actors as dbsr_actors
 from trainers import SimpleTrainer
 import data.transforms as tfm
 from admin.multigpu import MultiGPU
-from models_dbsr.loss.image_quality_v2 import PSNR, PixelWiseError
+from models_dbsr.loss.image_quality_v2 import PSNR, PixelWiseError, GANLoss, ContrastLoss, BackgroundLoss
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3,4,5"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 import numpy as np
 import pickle as pkl
 from accelerate import Accelerator
@@ -56,13 +56,18 @@ def run(settings):
         )
     set_seed(42)
     settings.description = 'Default settings for training DBSR models on synthetic burst dataset, with random pixel shift, trans(24), rot(1.0), burst size(8), use database function'
-    settings.batch_size = 12
+    settings.batch_size = 4
     settings.num_workers = 12
     settings.multi_gpu = False
     settings.print_interval = 1
+    modify_first_layer = False
+    is_gray = False
+    unfreeze_every_n_epochs = 20
+    total_unfreeze_epochs = 250 # set None if do not want gradually unfreezing
+    
 
     settings.crop_sz = (512, 640)
-    settings.burst_sz = 4
+    settings.burst_sz = 16
     settings.downsample_factor = 4
 
     permutation = np.array([[0,0],[0,1],[0,2],[0,3],[1,3],[1,2],[1,1],[1,0],[2,0],[2,1],[2,2],[2,3],[3,3],[3,2],[3,1],[3,0]])
@@ -104,18 +109,18 @@ def run(settings):
                                                                 burst_transformation_params=settings.burst_transformation_params,
                                                                 transform=transform_train,
                                                                 image_processing_params=settings.image_processing_params,
-                                                                random_crop=True, gray=True)
+                                                                random_crop=True, gray=is_gray)
     data_processing_val = processing.SyntheticBurstDatabaseProcessing(settings.crop_sz, settings.burst_sz,
                                                               settings.downsample_factor,
                                                               burst_transformation_params=burst_transformation_params_val,
                                                               transform=transform_val,
                                                               image_processing_params=image_processing_params_val,
-                                                              random_crop=False, gray=True)
+                                                              random_crop=False, gray=is_gray, return_rgb_busrt=True)
 
 
     # Train sampler and loader
     dataset_train = sampler.RandomImage([zurich_raw2rgb_train], [1],
-                                        samples_per_epoch=settings.batch_size * 500, processing=data_processing_train)
+                                        samples_per_epoch=settings.batch_size * 200, processing=data_processing_train)
     dataset_val = sampler.IndexedImage(zurich_raw2rgb_val, processing=data_processing_val)
     # dataset_val_2 = sampler.IndexedImage(zurich_raw2rgb_val, processing=data_processing_val_2)
     loader_train = DataLoader('train', dataset_train, training=True, num_workers=settings.num_workers,
@@ -127,21 +132,40 @@ def run(settings):
     if accelerator.is_main_process:
         print("train dataset length: ", len(loader_train))
         print("val dataset length: ", len(loader_val)) 
-    net = deeprep_nets.deeprep_sr_iccv21(num_iter=3, enc_dim=64, enc_num_res_blocks=5, enc_out_dim=256,
-                                        dec_dim_pre=64, dec_dim_post=32, dec_num_pre_res_blocks=5,
-                                         dec_num_post_res_blocks=5,
-                                         dec_in_dim=64, dec_upsample_factor=4, gauss_blur_sd=1,
-                                         feature_degradation_upsample_factor=2, use_feature_regularization=False,
-                                         wp_ref_offset_noise=0.00,input_channels=1)
+    if is_gray:
+        net = deeprep_nets.deeprep_sr_iccv21(num_iter=3, enc_dim=64, enc_num_res_blocks=5, enc_out_dim=256,
+                                            dec_dim_pre=64, dec_dim_post=32, dec_num_pre_res_blocks=5,
+                                            dec_num_post_res_blocks=5,
+                                            dec_in_dim=64, dec_upsample_factor=settings.downsample_factor, gauss_blur_sd=1,
+                                            feature_degradation_upsample_factor=1, use_feature_regularization=False,
+                                            wp_ref_offset_noise=0.00,input_channels=1, is_gray=is_gray)
+    else:
+        net = deeprep_nets.deeprep_sr_iccv21(num_iter=3, enc_dim=64, enc_num_res_blocks=5, enc_out_dim=256,
+                                            dec_dim_pre=64, dec_dim_post=32, dec_num_pre_res_blocks=5,
+                                            dec_num_post_res_blocks=5,
+                                            dec_in_dim=64, dec_upsample_factor=settings.downsample_factor, gauss_blur_sd=1,
+                                            feature_degradation_upsample_factor=2, use_feature_regularization=False,
+                                            wp_ref_offset_noise=0.00,input_channels=4, is_gray=is_gray)
 
-    net = load_network("/home/user/zheng/DBSR/pretrained_networks/deeprep_sr_synthetic_default.pth", modify_first_layer=True)
+    net = load_network("/home/user/zheng/DBSR/pretrained_networks/deeprep_sr_synthetic_default.pth", modify_first_layer=modify_first_layer, net_init=net)
+    # After initializing the net and before starting the training process
+    if True:
+        for name, param in net.named_parameters():
+            if 'lr_encoder' in name or 'hr_decoder' in name:
+                param.requires_grad = False
+        
     # Wrap the network for multi GPU training
     # if settings.multi_gpu:
     #     net = MultiGPU(net, dim=0)
 
-    objective = {'rgb': PixelWiseError(metric='l1', boundary_ignore=40), 'psnr': PSNR(boundary_ignore=40)}
+    discriminator = deeprep_nets.Discriminator(input_channels=3)
+    discriminator = accelerator.prepare(discriminator)
 
-    loss_weight = {'rgb': 1.0}
+    objective = {'rgb': PixelWiseError(metric='l1', boundary_ignore=40), 'psnr': PSNR(boundary_ignore=40), 
+                 'gan_loss': GANLoss(discriminator, device=accelerator.device), 'contrast_loss': ContrastLoss(),
+                 'background_loss': BackgroundLoss(background_threshold=0.1)}
+
+    loss_weight = {'rgb': 1.0, 'gan_loss': 2.0, 'contrast_loss': 0.2, 'background_loss': 0}
 
     actors = [net]
     actors_attr = [f"{type(actor).__name__}" for actor in enumerate(actors)]
@@ -171,28 +195,49 @@ def run(settings):
     loader_train = accelerator.prepare(loader_train)
     loader_val = accelerator.prepare(loader_val)
 
-
-    for param in net.alignment_net.parameters():
-        param.requires_grad = False
+    if total_unfreeze_epochs is not None:
+        for param in net.alignment_net.parameters():
+            param.requires_grad = False
 
 
     actor = dbsr_actors.DBSRSyntheticActor(net=net, objective=objective, loss_weight=loss_weight, accelerator=accelerator)
 
-    optimizer = optim.Adam([{'params': filter(lambda p: p.requires_grad, actor.net.parameters()), 'lr': 1e-4}],
-                           lr=2e-4)
+    # Define learning rates for different layer groups
+    base_lr = 1e-4
+    new_layer_lr = 1e-5  # Lower learning rate for newly unfrozen layers
+    discriminator_lr = 2e-5
+    # Create parameter groups
+    param_groups = [
+        {'name': 'alignment_net', 'params': actor.net.module.alignment_net.parameters(), 'lr': 0},
+        {'name': 'lr_encoder', 'params': actor.net.module.lr_encoder.parameters(), 'lr': base_lr},
+        {'name': 'hr_decoder', 'params': actor.net.module.hr_decoder.parameters(), 'lr': base_lr},
+        {'name': 'hr_initializer', 'params': actor.net.module.hr_initializer.parameters(), 'lr': base_lr},
+        {'name': 'optimizer', 'params': actor.net.module.optimizer.parameters(), 'lr': base_lr},
+        {'name': 'discriminator', 'params': discriminator.parameters(), 'lr': discriminator_lr}
+    ]
+    # Initialize the optimizer with parameter groups
+    optimizer = optim.Adam(param_groups, lr=2e-4)
+
+    # Load the checkpoint if available
     if checkpoint is not None:
         optimizer.load_state_dict(checkpoint['optimizer'])
+
+    # Prepare the optimizer with the accelerator
     optimizer = accelerator.prepare(optimizer)
 
-    lr_scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[50, 100], gamma=0.2)
+    # Learning rate scheduler
+    lr_scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[100, 150], gamma=0.2)
     if checkpoint is not None:
         lr_scheduler.last_epoch = checkpoint['epoch']
     lr_scheduler = accelerator.prepare(lr_scheduler)
-    
-    trainer = SimpleTrainer(actor, [loader_train, loader_val], optimizer, settings, lr_scheduler, accelerator=accelerator, loader_attributes=loader_attributes, 
-                            unfreeze_every_n_epochs=1, total_unfreeze_epochs=50)
+
+    # Trainer initialization
+    trainer = SimpleTrainer(actor, [loader_train, loader_val], optimizer, settings, lr_scheduler, 
+                            accelerator=accelerator, loader_attributes=loader_attributes, 
+                            unfreeze_every_n_epochs=unfreeze_every_n_epochs, total_unfreeze_epochs=total_unfreeze_epochs, new_layer_lr=new_layer_lr)
+
+    # Load the latest epoch if required
     if checkpoint is not None:
-        trainer.epoch = checkpoint['epoch']
-     
+        trainer.epoch = checkpoint['epoch']     
     
-    trainer.train(100, load_latest=False, fail_safe=True)
+    trainer.train(500, load_latest=False, fail_safe=True)

@@ -11,7 +11,8 @@ import data.transforms as tfm
 from admin.multigpu import MultiGPU
 import numpy as np
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3,4,5"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3,4,5,6,7"
 import pickle as pkl
 from actors.dbsr_actors import qValueNetwork
 from accelerate import Accelerator, DistributedType
@@ -25,28 +26,28 @@ def run(settings):
 
     ##############SETTINGS#####################
     settings.description = 'adjust 4 with pixel step 1/8 LR pixel, discount_factor: 0.99, one_step_length: 1 / 8, iterations: 10, SAC'
-    settings.batch_size = 84
-    sample_size = 84
-    settings.num_workers = 32
+    settings.batch_size = 160
+    sample_size = 160
+    settings.num_workers = 12
     settings.multi_gpu = False
     settings.print_interval = 1
 
     settings.crop_sz = (384, 384)
     settings.burst_sz = 4
     settings.downsample_factor = 4
-    one_step_length = 1 / 4
+    one_step_length = 1 / 16
     base_length = 1 / settings.downsample_factor
-    buffer_size = 10000
+    buffer_size = 15000
     
 
     permutation = np.array([[0.,0.],[0.,2.],[2.,2.],[2.,0.]])
     
-    settings.burst_transformation_params = {'max_translation': 3.0,
+    settings.burst_transformation_params = {'max_translation': 4.0 - (one_step_length * settings.downsample_factor),
                                         'max_rotation': 0.0,
                                         'max_shear': 0.0,
                                         'max_scale': 0.0,
                                         # 'border_crop': 24,
-                                        'random_pixelshift': False,
+                                        'random_pixelshift': True,
                                         'specified_translation': permutation}
 
     burst_transformation_params_val = {'max_translation': 3.0,
@@ -117,7 +118,8 @@ def run(settings):
     actors_type = actors_attr
     checkpoint_root_path = os.path.join(settings.env.workspace_dir, 'checkpoints', settings.project_path)
     checkpoint_sample_path = os.path.join(checkpoint_root_path, actors_type[0])
-    if os.path.exists(checkpoint_root_path) and accelerator.is_main_process:
+    pre_log_alpha = None
+    if os.path.exists(checkpoint_root_path):
         if os.path.exists(checkpoint_sample_path):
             if len(os.listdir(checkpoint_sample_path)) != 0:
                 nets_checkpoints_dir_path = [os.path.join(checkpoint_root_path, i) for i in actors_type]
@@ -130,6 +132,8 @@ def run(settings):
                     print(f"Loading latest {files[-1]} from {net_checkpoints_dir_path}")
                     # print(state_dict)
                     actors[idx].load_state_dict(state_dict)
+                    if checkpoint.get('log_alpha', None) is not None:
+                        pre_log_alpha = checkpoint['log_alpha']
                     print(f"Load successfully!")
                     
     else:
@@ -145,7 +149,12 @@ def run(settings):
     actors[2] = accelerator.prepare(actors[2])
     actors[3] = accelerator.prepare(actors[3])
     actors[4] = accelerator.prepare(actors[4])
-    log_alpha = torch.tensor(np.log(1), dtype=torch.float) # TODO: hyperparameter...
+    if pre_log_alpha is not None:
+        log_alpha = torch.tensor(pre_log_alpha, dtype=torch.float)
+        print(f"Load alpha successfully!")
+    else:
+        log_alpha = torch.tensor(np.log(1), dtype=torch.float)
+    # log_alpha = torch.tensor(np.log(1), dtype=torch.float) # TODO: hyperparameter...
     log_alpha.requires_grad = True
     log_alpha = accelerator.prepare(log_alpha)
 
@@ -156,7 +165,7 @@ def run(settings):
     critic_2_optimizer = optim.Adam(q_net2.parameters(), lr=3e-4)
     log_alpha_optimizer = optim.Adam([log_alpha], lr=1e-4)
 
-    if os.path.exists(checkpoint_root_path) and accelerator.is_main_process:
+    if os.path.exists(checkpoint_root_path):
         if os.path.exists(checkpoint_sample_path):
             if len(os.listdir(checkpoint_sample_path)) != 0:
                 net_checkpoints_dir_path = os.path.join(checkpoint_root_path, actors_type[0])
@@ -177,7 +186,7 @@ def run(settings):
     critic_2_lr_scheduler = optim.lr_scheduler.MultiStepLR(critic_2_optimizer, milestones=[100, 150], gamma=0.2)
     log_alpha_lr_scheduler = optim.lr_scheduler.MultiStepLR(log_alpha_optimizer, milestones=[100, 150], gamma=0.2)
     inital_epoch = 0
-    if os.path.exists(checkpoint_root_path) and accelerator.is_main_process:
+    if os.path.exists(checkpoint_root_path):
         if os.path.exists(checkpoint_sample_path):
             if len(os.listdir(checkpoint_sample_path)) != 0:
                 net_checkpoints_dir_path = os.path.join(checkpoint_root_path, actors_type[0])
@@ -189,7 +198,7 @@ def run(settings):
                 critic_1_lr_scheduler.last_epoch = checkpoint['epoch']
                 critic_2_lr_scheduler.last_epoch = checkpoint['epoch']
                 log_alpha_lr_scheduler.last_epoch = checkpoint['epoch']
-    inital_epoch = actor_lr_scheduler.last_epoch
+                inital_epoch = actor_lr_scheduler.last_epoch
     # print("Initial epoch is %s" % inital_epoch)
     actor_lr_scheduler = accelerator.prepare(actor_lr_scheduler)
     critic_1_lr_scheduler = accelerator.prepare(critic_1_lr_scheduler)
@@ -213,10 +222,10 @@ def run(settings):
                         critic_2_lr_scheduler=critic_2_lr_scheduler, 
                         log_alpha_lr_scheduler=log_alpha_lr_scheduler,
                         log_alpha=log_alpha, 
-                        sr_net=sr_net, iterations=10, reward_type='psnr',
+                        sr_net=sr_net, iterations=30, reward_type='psnr',
                         discount_factor=0.99, init_permutation=permutation, one_step_length=one_step_length, base_length=base_length,
                         sample_size=sample_size, accelerator=accelerator,
                         loader_attributes=loader_attributes,
                         actors_attr=actors_attr, target_entropy=-5, minimal_size=200, gpus_num=8, inital_epoch=inital_epoch)
 
-    trainer.train(201, load_latest=False, fail_safe=True, buffer_size=buffer_size) # (epoch, )
+    trainer.train(501, load_latest=False, fail_safe=True, buffer_size=buffer_size) # (epoch, )

@@ -11,7 +11,7 @@ import data.transforms as tfm
 from admin.multigpu import MultiGPU
 import numpy as np
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "3,4,5"
+os.environ["CUDA_VISIBLE_DEVICES"] = "4,5,6"
 import pickle as pkl
 from actors.dbsr_actors import qValueNetwork
 from accelerate import Accelerator, DistributedType
@@ -25,8 +25,8 @@ def run(settings):
 
     ##############SETTINGS#####################
     settings.description = 'adjust 4 with pixel step 1/8 LR pixel, discount_factor: 0.99, one_step_length: 1 / 8, iterations: 10, SAC'
-    settings.batch_size = 84
-    sample_size = 84
+    settings.batch_size = 64
+    sample_size = 64
     settings.num_workers = 12
     settings.multi_gpu = False
     settings.print_interval = 1
@@ -41,13 +41,14 @@ def run(settings):
 
     permutation = np.array([[0.,0.],[0.,2.],[2.,2.],[2.,0.]])
     
-    settings.burst_transformation_params = {'max_translation': 3.0,
+    settings.burst_transformation_params = {'max_translation': 4.0 - (one_step_length * settings.downsample_factor),
                                         'max_rotation': 0.0,
                                         'max_shear': 0.0,
                                         'max_scale': 0.0,
                                         # 'border_crop': 24,
-                                        'random_pixelshift': False,
-                                        'specified_translation': permutation}
+                                        'random_pixelshift': True,
+                                        'specified_translation': permutation,
+                                        'one_step_length': one_step_length}
 
     burst_transformation_params_val = {'max_translation': 3.0,
                                         'max_rotation': 0.0,
@@ -55,7 +56,8 @@ def run(settings):
                                         'max_scale': 0.0,
                                         # 'border_crop': 24,
                                         'random_pixelshift': False,
-                                        'specified_translation': permutation}
+                                        'specified_translation': permutation,
+                                        'one_step_length':one_step_length}
     
     settings.burst_reference_aligned = True
     settings.image_processing_params = {'random_ccm': True, 'random_gains': True, 'smoothstep': True, 'gamma': True, 'add_noise': True}
@@ -221,10 +223,10 @@ def run(settings):
                         critic_2_lr_scheduler=critic_2_lr_scheduler, 
                         log_alpha_lr_scheduler=log_alpha_lr_scheduler,
                         log_alpha=log_alpha, 
-                        sr_net=sr_net, iterations=25, reward_type='psnr',
+                        sr_net=sr_net, iterations=30, reward_type='psnr',
                         discount_factor=0.99, init_permutation=permutation, one_step_length=one_step_length, base_length=base_length,
                         sample_size=sample_size, accelerator=accelerator,
                         loader_attributes=loader_attributes,
                         actors_attr=actors_attr, target_entropy=-5, minimal_size=200, gpus_num=8, inital_epoch=inital_epoch)
 
-    trainer.train(201, load_latest=False, fail_safe=True, buffer_size=buffer_size) # (epoch, )
+    trainer.train(501, load_latest=False, fail_safe=True, buffer_size=buffer_size) # (epoch, )

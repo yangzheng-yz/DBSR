@@ -20,7 +20,9 @@ import torch.nn.functional as F
 from torch.distributions import Categorical
 import torchvision.models as models
 import torchvision.models as models
-
+import utils.data_format_utils as df_utils
+import cv2
+from data.postprocessing_functions import SimplePostProcess
 
 class ResNet18(nn.Module):
     def __init__(self, in_channels):
@@ -612,15 +614,54 @@ class DBSRSyntheticActor(BaseActor):
         # print("data burst info: ", type(data['burst']))
         # print(data['burst'].size())
         pred, aux_dict = self.net(data['burst'])
-
+        # print(f"Debug gt image size: {data['frame_gt'].size()}")
         # Compute loss
         loss_rgb_raw = self.objective['rgb'](pred, data['frame_gt'])
+        if not data['training']:
+        # print("data['meta_info']: ", data['meta_info'])
+            if self.accelerator.is_main_process:
+                for key, value in data['meta_info'].items():
+                    if isinstance(value, torch.Tensor) and value.is_cuda:
+
+                        data['meta_info'][key] = value.cpu().squeeze(0)
+
+                process_fn = SimplePostProcess(return_np=True)
+                process_fn_gt = SimplePostProcess(gains=False, ccm=False, gamma=False, smoothstep=False, return_np=True)
+                # print("gt: ", gt.size())
+                # print("burst_rgb[0]: ", burst_rgb[0].size())
+                
+                HR_image = process_fn_gt.process(data['frame_gt'][0].cpu().clone(), data['meta_info'])
+                LR_image = process_fn.process(data['burst_rgb'][0][0].cpu().clone(), data['meta_info'])
+                SR_image = process_fn.process(pred[0].cpu().clone(), data['meta_info'])
+                # pred_to_save = df_utils.torch_to_npimage(pred[0].cpu().clone())
+                # print(f"Debug gt image size: {data['frame_gt'].size()}")
+                # gt_to_save = df_utils.torch_to_npimage(data['frame_gt'][0].cpu().clone())
+                # input_to_save = df_utils.torch_to_npimage(data['burst'][0][0].cpu().clone())
+                # name = int(len(os.listdir(saving_dir))/3)
+                cv2.imwrite('{}/{}'.format("/mnt/7T/zheng/DBSR_results/loggings/results_for_test_grayinput", 'test_gt.png'), HR_image)
+                cv2.imwrite('{}/{}'.format("/mnt/7T/zheng/DBSR_results/loggings/results_for_test_grayinput", 'test_pred.png'), SR_image)
+                cv2.imwrite('{}/{}'.format("/mnt/7T/zheng/DBSR_results/loggings/results_for_test_grayinput", 'test_input.png'), LR_image)
+
         loss_rgb = self.loss_weight['rgb'] * loss_rgb_raw
         
         if self.objective.get('perceptual', None) is not None:
             loss_percept_raw = self.objective['perceptual'](pred, data['frame_gt'])
             loss_percept = self.loss_weight['perceptual'] * loss_percept_raw
             loss_rgb += loss_percept
+        if self.objective.get('gan_loss', None) is not None:
+            loss_gan_loss_raw = self.objective['gan_loss'](pred, real_images=data['frame_gt'])
+            loss_gan_loss = self.loss_weight['gan_loss'] * loss_gan_loss_raw
+            loss_rgb += loss_gan_loss
+
+        if self.objective.get('contrast_loss', None) is not None:
+            loss_contrast_loss_raw = self.objective['contrast_loss'](pred, data['frame_gt'])
+            loss_contrast_loss = self.loss_weight['contrast_loss'] * loss_contrast_loss_raw
+            loss_rgb += loss_contrast_loss
+            
+        if self.objective.get('background_loss', None) is not None:
+            loss_background_loss_raw = self.objective['background_loss'](pred, data['frame_gt'])
+            loss_background_loss = self.loss_weight['background_loss'] * loss_background_loss_raw
+            loss_rgb += loss_background_loss
 
         if 'psnr' in self.objective.keys():
             # print(f"what is pred {pred.size()}")
@@ -628,15 +669,29 @@ class DBSRSyntheticActor(BaseActor):
             psnr = self.objective['psnr'](pred.clone().detach(), data['frame_gt'])
 
         loss = loss_rgb
+        stats = {'Loss/total': loss.item(),
+                'Loss/rgb': loss_rgb.item(),
+                'Loss/raw/rgb': loss_rgb_raw.item()}
         if self.objective.get('perceptual', None) is not None:
             stats = {'Loss/total': loss.item(),
                     'Loss/rgb': loss_rgb.item() - loss_percept.item(),
                     'Loss/percept': loss_percept.item(),
                     'Loss/raw/rgb': loss_rgb_raw.item()}
-        else: 
-            stats = {'Loss/total': loss.item(),
-                    'Loss/rgb': loss_rgb.item(),
-                    'Loss/raw/rgb': loss_rgb_raw.item()}
+        if self.objective.get('gan_loss', None) is not None:
+            stats['Loss/rgb'] = stats['Loss/rgb'] - loss_gan_loss.item()
+            stats['Loss/gan_loss'] = loss_gan_loss.item()
+
+        if self.objective.get('contrast_loss', None) is not None:
+            stats['Loss/rgb'] = stats['Loss/rgb'] - loss_contrast_loss.item()
+            stats['Loss/contrast_loss'] = loss_contrast_loss.item()
+
+        if self.objective.get('background_loss', None) is not None:
+            stats['Loss/rgb'] = stats['Loss/rgb'] - loss_background_loss.item()
+            stats['Loss/background_loss'] = loss_background_loss.item()
+        # else: 
+        #     stats = {'Loss/total': loss.item(),
+        #             'Loss/rgb': loss_rgb.item(),
+        #             'Loss/raw/rgb': loss_rgb_raw.item()}
 
         if 'psnr' in self.objective.keys():
             
@@ -666,6 +721,7 @@ class DBSRRealWorldActor(BaseActor):
         # Run network
         gt = data['frame_gt']
         burst = data['burst']
+        print(f"Debug gt size: {gt.size()}")
         pred, aux_dict = self.net(burst)
 
         # Perform spatial and color alignment of the prediction

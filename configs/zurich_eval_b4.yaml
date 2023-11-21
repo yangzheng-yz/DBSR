@@ -2,18 +2,20 @@ random_ccm: True
 random_gains: True
 smoothstep: True
 gamma: True
-add_noise: True
+add_noise: False
 return_rgb_burst: True
-permu_nb: 5
+permu_nb: 1
 crop_sz: 384
-burst_sz: 10
+burst_sz: 4
 downsample_factor: 4
 random_pixelshift: false
 calculate_loss: True
 
-ckpt_path: /home/user/zheng/DBSR/pretrained_networks/dbsr_synthetic_default.pth
+ckpt_path: /home/user/zheng/DBSR/pretrained_networks/dbsr_synthetic_default.pth # /home/user/zheng/DBSR/pretrained_networks/dbsr_synthetic_default.pth
 dataset_path: /mnt/7T/Data/Natural/SyntheticDataset
-save_path: /mnt/7T/zheng/DBSR_results/loggings/dbsr_b10_1-4_step7
+save_path: /mnt/7T/zheng/DBSR_results/loggings/dbsr_b4_1-16
 specify_image_id: -1 # -1
 save_results: True
 split: val
+new_shift: False
+perform_traditional: True

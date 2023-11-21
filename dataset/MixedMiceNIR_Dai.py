@@ -41,6 +41,8 @@ class MixedMiceNIR_Dai(BaseImageDataset):
         root = self.root
         if split in ['train', 'val', 'test', 'val_two']:
             self.img_pth = os.path.join(root, split, 'without_art')
+        elif split == 'real_test_one':
+            self.img_pth = os.path.join(root, split)
         else:
             raise Exception('Unknown split {}'.format(split))
 
@@ -56,6 +58,9 @@ class MixedMiceNIR_Dai(BaseImageDataset):
         elif split == 'val' or 'val_two':
             image_list = os.listdir(self.img_pth)
             image_list.sort() 
+        elif split == 'real_test_one':
+            image_list = [os.listdir(self.img_pth)]
+            image_list.sort()
         else:
             raise Exception
 
@@ -75,6 +80,13 @@ class MixedMiceNIR_Dai(BaseImageDataset):
 
             if info is None:
                 info = self.get_image_info(im_id)
+        elif self.split == 'real_test_one':
+            frames = []
+            for idx, f in enumerate(self.image_list):
+                img = (self._get_image(idx) / 65535.0 * 255.0).astype(np.uint8)
+                 
+                frames.append(img[0:512, 0:512])
+            return frames, None
         else:
             Exception
 

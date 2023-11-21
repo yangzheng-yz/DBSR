@@ -18,7 +18,8 @@ from skimage.metrics import structural_similarity as ssim
 from skimage import io, img_as_float
 from sys import argv
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "7"
+from skimage.restoration import denoise_tv_chambolle
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 from evaluation.common_utils.network_param import NetworkParam
 from models_dbsr.loss.image_quality_v2 import PSNR, SSIM, LPIPS
@@ -94,6 +95,8 @@ def main():
     boundary_ignore = 40
     metrics_all = {}
     scores = {}
+    scores_resolved = {}
+    scores_cubic = {}
     for m in metrics:
         if not cfg.calculate_loss:
             break
@@ -108,6 +111,8 @@ def main():
             raise Exception
         metrics_all[m] = loss_fn
         scores[m] = []
+        scores_resolved[m] = []
+        scores_cubic[m] = []
 
     scores_all = {}
     
@@ -122,6 +127,8 @@ def main():
     """The third part is to define the transformation's type"""
     
     scores_all_mean = {}
+    scores_resolved_all_mean = {}
+    scores_cubic_all_mean = {}
     selected_images_id = np.arange(0,300,1) 
         
     image_processing_params = {'random_ccm': cfg.random_ccm, 'random_gains': cfg.random_gains, 'smoothstep': cfg.smoothstep, 'gamma': cfg.gamma, 'add_noise': cfg.add_noise}
@@ -132,24 +139,27 @@ def main():
                     np.array([[0,0],[0,2],[2,2],[2,0]]), #b4_baseline traj
                     np.array([[0,0],[0,3],[3,2],[3,0]]), # b4_1-4_step7_model8 best traj
                     np.array([[0,0],[0,1],[2,3],[3,0]]), # b4_1-4_previous_actors_top1 traj
-                    np.array([[0,0],[0,0.5],[2,3],[3,0]]), # b4_1-8_step7_model8 best traj
+                    np.array([[0,0],[0,0.5],[2,3.5],[3.5,0]]), # b4_1-8_step7_model8 best traj
+                    np.array([[0,0],[0,0.75],[2,3.5],[3.25,0]]), # b4_1-16_step25_model8 best traj
                     np.array([[0,0],[0,1],[0,2],[0,3],[1,0],[1,1],[3,2],[3,3],[3,0],[2,1]]), # b10_1-4_step7_model16 traj
                     np.array([[0,0],[0/4.0, 1/4.0],[0/4.0, 2/4.0],[0/4.0, 3/4.0],[1/4.0, 0/4.0],[1/4.0, 1/4.0],[1/4.0, 2/4.0],[1/4.0, 3/4.0],[2/4.0, 0/4.0],[2/4.0, 1/4.0],[2/4.0, 2/4.0],[2/4.0, 3/4.0],[3/4.0, 0/4.0],[3/4.0, 1/4.0],[3/4.0, 2/4.0],[3/4.0, 3/4.0]]), # b16_baseline_amplify1 traj
                     np.array([[0,0],[0/4.0,2/4.0],[2/4.0,2/4.0],[2/4.0,0/4.0]]), #b4_baseline_amplify1 traj
                     np.array([[0,0],[0/4.0,3/4.0],[3/4.0,2/4.0],[3/4.0,0/4.0]]), # b4_1-4_step7_model8_amplify1 best traj
                     np.array([[0,0],[0/4.0,1/4.0],[2/4.0,3/4.0],[3/4.0,0/4.0]]), # b4_1-4_previous_actors_top1_amplify1 traj
-                    np.array([[0,0],[0,0.5/4.0],[2/4.0,3/4.0],[3/4.0,0/4.0]]), # b4_1-8_step7_model8_amplify1 best traj
+                    np.array([[0,0],[0,0.5/4.0],[2/4.0,3.5/4.0],[3.5/4.0,0/4.0]]), # b4_1-8_step7_model8_amplify1 best traj
                     np.array([[0,0],[0/4.0,1/4.0],[0/4.0,3/4.0],[0/4.0,3/4.0],[1/4.0,0/4.0],[3/4.0,1/4.0],[3/4.0,2/4.0],[3/4.0,3/4.0],[3/4.0,0/4.0],[1/4.0,1/4.0]]), # b10_1-4_step7_model16 traj
                     np.array([[0,0],[0,3],[2,3],[3,0],[1,0]]), # b5_1-4_step7
                     np.array([[0,0],[0,2],[2,3],[3,0],[1,0],[0,1]]), # b6_1-4_step7
                     np.array([[0,0],[0,3],[3,2],[2,0],[3,1],[0,1],[1,0]]), # b7_1-4_step7
                     np.array([[0,0],[0,3],[2,2],[3,0],[1,1],[0,2],[1,0],[1,2]]), # b8_1-4_step7
                     np.array([[0,0],[0,3],[1,2],[3,0],[3,1],[1,3],[1,0],[0,2],[2,1]]), # b9_1-4_step7
-                    np.array([[0,0],[0,4./3.],[0,8./3.],[4./3.,8./3.],[4./3.,4./3.],[4./3.,0],[8./3.,0],[8./3.,4./3.],[8./3.,8./3.]]) # b9_baseline
+                    np.array([[0,0],[0,4./3.],[0,8./3.],[4./3.,8./3.],[4./3.,4./3.],[4./3.,0],[8./3.,0],[8./3.,4./3.],[8./3.,8./3.]]), # b9_baseline
+                    np.array([[0,0],[3.5,1.5],[3.5,3.5],[1.5,3.5]]),
+                    
                     ]
 
-    burst_transformation_params_val = {'max_translation': 24.0,
-                                        'max_rotation': 1.0,
+    burst_transformation_params_val = {'max_translation': 4.0,
+                                        'max_rotation': 0.0,
                                         'max_shear': 0.0,
                                         'max_scale': 0.0,
                                         # 'border_crop': 24, #24,
@@ -162,11 +172,13 @@ def main():
                                                                         transform=transform_val,
                                                                         image_processing_params=image_processing_params,
                                                                         random_crop=False,
-                                                                        return_rgb_busrt=cfg.return_rgb_burst)
+                                                                        return_rgb_busrt=cfg.return_rgb_burst,
+                                                                        newshift=cfg.new_shift)
     
     dataset_val = sampler.IndexedImage(Zurich_test, processing=data_processing_val)
     
     process_fn = SimplePostProcess(return_np=True)
+    process_fn_tensor = SimplePostProcess(return_np=False)
 
     """The fourth part is to perform prediction"""
     if not os.path.isdir(cfg.save_path):
@@ -176,6 +188,7 @@ def main():
         os.remove(save_txt_path)
     save_txt = open(save_txt_path, 'a')
     
+
     for idx, data in enumerate(dataset_val):
 
         burst = data['burst']
@@ -223,9 +236,54 @@ def main():
                 # net_pred_np = (net_pred.squeeze(0).permute(1, 2, 0).clamp(0.0, 1.0) * 2 ** 14).cpu().numpy().astype(
                 #     np.uint16)
                 HR_image = process_fn.process(gt.cpu(), meta_info)
-                LR_image = process_fn.process(burst_rgb[0], meta_info)
+                LR_images = []
+                if cfg.perform_traditional:
+                    traditional_translation = permutations[cfg.permu_nb] / cfg.downsample_factor
+                    high_res_grid = np.zeros((int(cfg.crop_sz / cfg.downsample_factor) * 4, int(cfg.crop_sz / cfg.downsample_factor) * 4, 3))  # 对于RGB图像
+                    counts = np.zeros((int(cfg.crop_sz / cfg.downsample_factor) * 4, int(cfg.crop_sz / cfg.downsample_factor) * 4, 3))
+                    
+                for img, (dx,dy) in zip(burst_rgb, traditional_translation):
+                    LR_image = process_fn.process(img, meta_info)
+                    LR_images.append(LR_image)
+                    # 计算在高分辨率网格上的位置
+                    x_pos = -int(dx * 4)
+                    y_pos = -int(dy * 4)
+                    # 将低分辨率图像放置到高分辨率网格上，累加对应的像素值和计数
+                    # 确定放置在高分辨率网格上的图像部分
+                    x_start = max(x_pos, 0)
+                    y_start = max(y_pos, 0)
+                    x_end = min(x_pos + int(cfg.crop_sz / cfg.downsample_factor) * 4, high_res_grid.shape[1])
+                    y_end = min(y_pos + int(cfg.crop_sz / cfg.downsample_factor) * 4, high_res_grid.shape[0])
+
+                    # 计算对应于原始低分辨率图像的部分
+                    x_start_img = x_start - x_pos
+                    y_start_img = y_start - y_pos
+                    x_end_img = x_end - x_pos
+                    y_end_img = y_end - y_pos
+                    # img = process_fn_tensor.process(img, meta_info)
+                    img = img.permute(1,2,0).numpy()
+                    upscaled_img = cv2.resize(img, (int(cfg.crop_sz / cfg.downsample_factor) * 4, int(cfg.crop_sz / cfg.downsample_factor) * 4), interpolation=cv2.INTER_LINEAR)
+                    # 将低分辨率图像的相应部分放置到高分辨率网格上
+                    high_res_grid[y_start:y_end, x_start:x_end] += upscaled_img[y_start_img:y_end_img, x_start_img:x_end_img]
+                    counts[y_start:y_end, x_start:x_end] += 1
+                    
                 SR_image = process_fn.process(net_pred.squeeze(0).cpu(), meta_info)
+                # SR_image = SR_image / np.max(SR_image)
+                # SR_image = SR_image * 255
+                # high_res_img = high_res_grid / np.maximum(counts, 1)  # 避免除以0
+                high_res_img = high_res_grid / np.max(high_res_grid)  # 避免除以0
+                # high_res_img = high_res_img / np.max(high_res_img)
+                # high_res_img = high_res_grid
                 
+                high_res_grid_tensor = torch.tensor(high_res_img, dtype=torch.float32).permute(2,0,1).cuda()
+                for m, m_fn in metrics_all.items():
+                    metric_value = m_fn(high_res_grid_tensor.unsqueeze(0).cuda(), gt.unsqueeze(0)).cpu().item()
+                    scores_resolved[m].append(metric_value) 
+                high_res_img = process_fn.process(high_res_grid_tensor.cpu(), meta_info)
+                high_res_grid_tensor = torch.tensor(high_res_img, dtype=torch.float32).permute(2,0,1).cuda()
+                # print(f"Debug pred size: {net_pred.device}")
+                high_res_img_uint8 = np.clip(high_res_img,0,255).astype(np.uint8) 
+             
                 # HR_image = gt.cpu()
                 # LR_image = burst_rgb[0]
                 # SR_image = net_pred.squeeze(0).cpu()
@@ -235,7 +293,7 @@ def main():
                 # SR_image = (SR_image.permute(1, 2, 0).clamp(0.0, 1.0) * 2 ** 14).numpy().astype(np.uint16)
                 
                 # HR_image = cv2.resize(HR_image, dsize=(gt.shape[1], gt.shape[0]), interpolation=cv2.INTER_NEAREST)
-                LR_image_cubic = cv2.resize(LR_image, dsize=(HR_image.shape[1], HR_image.shape[0]), interpolation=cv2.INTER_CUBIC)
+                LR_image_cubic = cv2.resize(LR_images[0], dsize=(LR_images[0].shape[1]*4, LR_images[0].shape[0]*4), interpolation=cv2.INTER_CUBIC)
                 # SR_image = cv2.resize(SR_image, dsize=(gt.shape[1], gt.shape[0]), interpolation=cv2.INTER_NEAREST)
                 # HR_image_cvwrite = HR_image[:, :, [2, 1, 0]]
                 # LR_image_cvwrite = LR_image[:, :, [2, 1, 0]]
@@ -245,15 +303,23 @@ def main():
                 burst_rgb_np = cv2.resize(burst_rgb_np, dsize=(HR_image.shape[1], HR_image.shape[0]), interpolation=cv2.INTER_CUBIC)
                 burst_rgb_tensor = torch.from_numpy(burst_rgb_np)
                 burst_rgb_tensor = burst_rgb_tensor.permute(2,0,1).to(device)
+                for m, m_fn in metrics_all.items():
+                    metric_value = m_fn(burst_rgb_tensor.unsqueeze(0), gt.unsqueeze(0)).cpu().item()
+                    scores_cubic[m].append(metric_value)
                 cv2.imwrite('{}/{}_HR.png'.format(save_path_png, burst_name.split('.')[0]), HR_image)
                 cv2.imwrite('{}/{}_LR_cubic.png'.format(save_path_png, burst_name.split('.')[0]), LR_image_cubic)
-                cv2.imwrite('{}/{}_LR.png'.format(save_path_png, burst_name.split('.')[0]), LR_image)
+                cv2.imwrite('{}/{}_superresolved.png'.format(save_path_png, burst_name.split('.')[0]), high_res_img_uint8)
+                for id_img, img in enumerate(LR_images):
+                    cv2.imwrite('{}/{}_LR_{}.png'.format(save_path_png, burst_name.split('.')[0], id_img), img)
                 cv2.imwrite('{}/{}_SR.png'.format(save_path_png, burst_name.split('.')[0]), SR_image)
 
                 if not cfg.calculate_loss:
                     print(" Evaluated %s/%s images of %s/%s" % (idx, len(dataset_val)-1, cfg.dataset_path, burst_name), file=save_txt)
                     continue
-                print(" Evaluated %s/%s images of %s/%s, its PSNR is %s, its SSIM is %s, LRPSNR is %s, LRSSIM is %s" % (idx, len(dataset_val)-1, cfg.dataset_path, burst_name, scores['psnr'][-1], scores['ssim'][-1], metrics_all['psnr'](burst_rgb_tensor.unsqueeze(0), gt.unsqueeze(0)).cpu().item(), metrics_all['ssim'](burst_rgb_tensor.unsqueeze(0), gt.unsqueeze(0)).cpu().item()), file=save_txt)
+                if cfg.perform_traditional:
+                    print(" Evaluated %s/%s images of %s/%s, its PSNR is %s, its SSIM is %s, LRPSNR is %s, LRSSIM is %s, Resolved_PSNR is %s, Resolved_SSIM is %s" % (idx, len(dataset_val)-1, cfg.dataset_path, burst_name, scores['psnr'][-1], scores['ssim'][-1], metrics_all['psnr'](burst_rgb_tensor.unsqueeze(0), gt.unsqueeze(0)).cpu().item(), metrics_all['ssim'](burst_rgb_tensor.unsqueeze(0), gt.unsqueeze(0)).cpu().item(), scores_resolved['psnr'][-1], scores_resolved['ssim'][-1]), file=save_txt)
+                else:
+                    print(" Evaluated %s/%s images of %s/%s, its PSNR is %s, its SSIM is %s, LRPSNR is %s, LRSSIM is %s, Resolved_PSNR is %s, Resolved_SSIM is %s" % (idx, len(dataset_val)-1, cfg.dataset_path, burst_name, scores['psnr'][-1], scores['ssim'][-1], metrics_all['psnr'](burst_rgb_tensor.unsqueeze(0), gt.unsqueeze(0)).cpu().item(), metrics_all['ssim'](burst_rgb_tensor.unsqueeze(0), gt.unsqueeze(0)).cpu().item(), scores_resolved['psnr'][-1], scores_resolved['ssim'][-1]), file=save_txt)
             else:
                 if not cfg.calculate_loss:
                     print(" Evaluated %s/%s images of %s/%s" % (idx, len(dataset_val)-1, cfg.dataset_path, burst_name), file=save_txt)
@@ -271,11 +337,17 @@ def main():
     # scores_all[n.get_display_name()] = scores
     if cfg.calculate_loss:
         scores_all_mean = {m: sum(s) / len(s) for m, s in scores.items()}
+        scores_resolved_all_mean = {m: sum(s) / len(s) for m, s in scores_resolved.items()}
+        scores_cubic_all_mean = {m: sum(s) / len(s) for m, s in scores_cubic.items()}
     if not os.path.isdir(cfg.save_path):
         os.makedirs('{}'.format(cfg.save_path), exist_ok=True)
     if cfg.calculate_loss:
         with open(os.path.join(cfg.save_path, 'results.pkl'), 'wb') as f:
             pkl.dump(scores_all_mean, f)
+        with open(os.path.join(cfg.save_path, 'results_resolved.pkl'), 'wb') as f:
+            pkl.dump(scores_resolved_all_mean, f)
+        with open(os.path.join(cfg.save_path, 'results_cubic.pkl'), 'wb') as f:
+            pkl.dump(scores_cubic_all_mean, f)
 
 
 if __name__ == '__main__':

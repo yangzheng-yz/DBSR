@@ -24,11 +24,15 @@ class ResPixShuffleConv(nn.Module):
     def __init__(self, input_dim, init_conv_dim, num_pre_res_blocks, post_conv_dim,
                  num_post_res_blocks,
                  use_bn=False, activation='relu',
-                 upsample_factor=2, icnrinit=False, gauss_blur_sd=None, gauss_ksz=3):
+                 upsample_factor=2, icnrinit=False, gauss_blur_sd=None, gauss_ksz=3, is_gray=False):
         super().__init__()
         self.gauss_ksz = gauss_ksz
-        self.init_layer = blocks.conv_block(input_dim, init_conv_dim, 3, stride=1, padding=1, batch_norm=use_bn,
-                                            activation=activation)
+        if is_gray:
+            self.init_layer = blocks.conv_block(input_dim, init_conv_dim, 3, stride=1, padding=1, batch_norm=use_bn,
+                                                activation=activation)
+        else:
+            self.init_layer = blocks.conv_block(input_dim, init_conv_dim, 3, stride=1, padding=1, batch_norm=use_bn,
+                                                activation=activation)
 
         d_in = init_conv_dim
         pre_res_layers = []
@@ -48,8 +52,10 @@ class ResPixShuffleConv(nn.Module):
                                                    activation=activation))
 
         self.post_res_layers = nn.Sequential(*post_res_layers)
-
-        self.predictor = blocks.conv_block(post_conv_dim, 3, 1, stride=1, padding=0, batch_norm=False)
+        if is_gray:
+            self.predictor = blocks.conv_block(post_conv_dim, 1, 1, stride=1, padding=0, batch_norm=False)
+        else:
+            self.predictor = blocks.conv_block(post_conv_dim, 3, 1, stride=1, padding=0, batch_norm=False)
 
     def forward(self, x):
         feat = x['fused_enc']

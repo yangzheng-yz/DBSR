@@ -27,7 +27,9 @@ import data.synthetic_burst_generation as syn_burst_generation
 
 
 class SimpleTrainer(BaseTrainer):
-    def __init__(self, actor, loaders, optimizer, settings, lr_scheduler=None, loader_attributes=None, accelerator=None):
+    def __init__(self, actor, loaders, optimizer, settings, lr_scheduler=None, loader_attributes=None, accelerator=None, 
+                 unfreeze_every_n_epochs=5, total_unfreeze_epochs=None,
+                 new_layer_lr=1e-5):
         """
         args:
             actor - The actor for training the network
@@ -41,6 +43,7 @@ class SimpleTrainer(BaseTrainer):
 
         self._set_default_settings()
 
+        self.new_layer_lr = new_layer_lr
         self.loader_attributes = loader_attributes
         self.accelerator = accelerator
         # Initialize statistics variables
@@ -53,6 +56,8 @@ class SimpleTrainer(BaseTrainer):
         self.move_data_to_gpu = getattr(settings, 'move_data_to_gpu', True)
         
         self.current_test_psnr = 0
+        self.unfreeze_every_n_epochs=unfreeze_every_n_epochs
+        self.total_unfreeze_epochs=total_unfreeze_epochs
 
     def _set_default_settings(self):
         # Dict of all default values
@@ -119,6 +124,7 @@ class SimpleTrainer(BaseTrainer):
             data['settings'] = self.settings
 
             # forward pass
+            data['training'] = loader_attribute['training']
             loss, stats = self.actor(data)
             
             # if not loader.training:
@@ -147,8 +153,52 @@ class SimpleTrainer(BaseTrainer):
         #         self.save_checkpoint(net)
                 
 
+    def unfreeze_deeprep_layers(self, model, current_epoch, unfreeze_every_n_epochs=5, total_unfreeze_epochs=20):
+        # Access the underlying model if it's wrapped by DistributedDataParallel
+        if hasattr(model, 'module'):
+            model = model.module
+
+        # Only proceed to unfreeze layers if it's time according to the schedule
+        if current_epoch % unfreeze_every_n_epochs == 0 and current_epoch <= total_unfreeze_epochs:
+            # Calculate the number of layers to unfreeze in this epoch
+            num_layers_lr_encoder = len(list(model.lr_encoder.parameters()))
+            num_layers_hr_decoder = len(list(model.hr_decoder.parameters()))
+            total_layers = num_layers_lr_encoder + num_layers_hr_decoder
+
+            layers_to_unfreeze = int(total_layers * current_epoch / total_unfreeze_epochs)
+
+            # Unfreeze layers in lr_encoder
+            for i, param in enumerate(model.lr_encoder.parameters()):
+                param.requires_grad = True
+                layers_to_unfreeze -= 1  # Decrement the count for each layer unfrozen
+                if layers_to_unfreeze <= 0:
+                    break  # Stop if we've unfrozen the calculated number of layers
+            
+            # If there are still layers to unfreeze, continue with hr_decoder
+            if layers_to_unfreeze > 0:
+                for param in model.hr_decoder.parameters():
+                    param.requires_grad = True
+                    layers_to_unfreeze -= 1
+                    if layers_to_unfreeze <= 0:
+                        break  # Stop if we've unfrozen the calculated number of layers
+                    
+    def update_learning_rates(self, current_epoch, unfreeze_every_n_epochs, new_layer_lr):
+        # Only update learning rates if it's time according to the schedule
+        if current_epoch % unfreeze_every_n_epochs == 0:
+            # Update the learning rates for newly unfrozen layers
+            for param_group in self.optimizer.param_groups:
+                # Skip the alignment net which has a learning rate of 0
+                if param_group['name'] != 'alignment_net':
+                    if param_group['name'] == 'lr_encoder' or 'hr_decoder':
+                        param_group['lr'] = new_layer_lr
+
+
     def train_epoch(self):
         """Do one epoch for each loader."""
+        if self.total_unfreeze_epochs is not None:
+            self.unfreeze_deeprep_layers(self.actor.net, self.epoch, unfreeze_every_n_epochs=self.unfreeze_every_n_epochs, total_unfreeze_epochs=self.total_unfreeze_epochs)
+                # Update learning rates for the newly unfrozen layers
+            self.update_learning_rates(self.epoch, self.unfreeze_every_n_epochs, self.new_layer_lr)
         for idx, loader in enumerate(self.loaders):
             if self.epoch % self.loader_attributes[idx]['epoch_interval'] == 0:
                 self.cycle_dataset(loader, self.loader_attributes[idx])

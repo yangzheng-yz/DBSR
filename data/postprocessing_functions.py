@@ -32,25 +32,43 @@ class SimplePostProcess:
 
 def process_linear_image_rgb(image, meta_info, gains=True, ccm=True, gamma=True, smoothstep=True, return_np=False):
     if gains:
-        image = apply_gains(image, meta_info['rgb_gain'], meta_info['red_gain'], meta_info['blue_gain'])
+        try:
+            image = apply_gains(image, meta_info['rgb_gain'], meta_info['red_gain'], meta_info['blue_gain'])
+        except:
+            image = apply_gains(image, meta_info['rgb_gain'][0], meta_info['red_gain'][0], meta_info['blue_gain'][0])
         # save_image = df_utils.torch_to_npimage(image)
         # cv2.imwrite("after_gain.png", save_image)
     if ccm:
-        image = apply_ccm(image, meta_info['cam2rgb'])
+        try:
+            image = apply_ccm(image, meta_info['cam2rgb'])
+        except:
+            image = apply_ccm(image, meta_info['cam2rgb'][0])
         # save_image = df_utils.torch_to_npimage(image)
         # cv2.imwrite("after_ccm.png", save_image)
 
     image = image.clamp(0.0, 1.0)
-    if meta_info['gamma'] and gamma:
-        image = gamma_compression(image)
-        # save_image = df_utils.torch_to_npimage(image)
-        # cv2.imwrite("after_gamma.png", save_image)
+    try:
+        if meta_info['gamma'] and gamma:
+            image = gamma_compression(image)
+            # save_image = df_utils.torch_to_npimage(image)
+            # cv2.imwrite("after_gamma.png", save_image)
 
-    if meta_info['smoothstep'] and smoothstep:
-        image = apply_smoothstep(image)
-        # save_image = df_utils.torch_to_npimage(image)
-        # cv2.imwrite("after_smooth.png", save_image)
-    image = image.clamp(0.0, 1.0)
+        if meta_info['smoothstep'] and smoothstep:
+            image = apply_smoothstep(image)
+            # save_image = df_utils.torch_to_npimage(image)
+            # cv2.imwrite("after_smooth.png", save_image)
+        image = image.clamp(0.0, 1.0)
+    except:
+        if meta_info['gamma'][0] and gamma:
+            image = gamma_compression(image)
+            # save_image = df_utils.torch_to_npimage(image)
+            # cv2.imwrite("after_gamma.png", save_image)
+
+        if meta_info['smoothstep'][0] and smoothstep:
+            image = apply_smoothstep(image)
+            # save_image = df_utils.torch_to_npimage(image)
+            # cv2.imwrite("after_smooth.png", save_image)
+        image = image.clamp(0.0, 1.0)
     # save_image = df_utils.torch_to_npimage(image)
     # cv2.imwrite("after_clamp.png", save_image)
     if return_np:

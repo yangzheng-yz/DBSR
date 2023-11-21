@@ -63,9 +63,9 @@ class BaseTrainer:
         num_tries = 1
         for i in range(num_tries):
             try:
-                if load_latest:
-                    if self.accelerator.is_main_process:
-                        self.load_checkpoint()
+                # if load_latest:
+                #     if self.accelerator.is_main_process:
+                #         self.load_checkpoint()
 
                 for epoch in range(self.epoch+1, max_epochs+1):
                     self.epoch = epoch

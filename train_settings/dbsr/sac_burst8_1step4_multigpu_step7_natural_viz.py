@@ -11,7 +11,7 @@ import data.transforms as tfm
 from admin.multigpu import MultiGPU
 import numpy as np
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "7"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 import pickle as pkl
 from actors.dbsr_actors import qValueNetwork
 from accelerate import Accelerator, DistributedType
@@ -31,7 +31,7 @@ def run(settings):
     settings.multi_gpu = False
     settings.print_interval = 1
     used_weights_for_validate_traj = True
-    weigths_path = "/mnt/7T/zheng/DBSR_results/checkpoints/dbsr/sac_burst8_1step4_multigpu_step7_natural/ActorSAC_0/ep0012.pth.tar"
+    weigths_path = "/mnt/7T/zheng/DBSR_results/checkpoints/dbsr/sac_burst8_1step4_multigpu_step7_natural/ActorSAC_0/best_ep0112.pth.tar"
 
     settings.crop_sz = (384, 384)
     settings.burst_sz = 8
@@ -134,10 +134,10 @@ def run(settings):
     
     sr_net = accelerator.prepare(sr_net)
     actors[0] = accelerator.prepare(actors[0])
-    actors[1] = accelerator.prepare(actors[1])
-    actors[2] = accelerator.prepare(actors[2])
-    actors[3] = accelerator.prepare(actors[3])
-    actors[4] = accelerator.prepare(actors[4])
+    # actors[1] = accelerator.prepare(actors[1])
+    # actors[2] = accelerator.prepare(actors[2])
+    # actors[3] = accelerator.prepare(actors[3])
+    # actors[4] = accelerator.prepare(actors[4])
     if pre_log_alpha is not None:
         log_alpha = torch.tensor(pre_log_alpha, dtype=torch.float)
         print(f"Load alpha successfully!")
@@ -191,6 +191,6 @@ def run(settings):
                         sample_size=sample_size, accelerator=accelerator,
                         loader_attributes=loader_attributes,
                         actors_attr=actors_attr, target_entropy=-5, minimal_size=200, gpus_num=8, inital_epoch=inital_epoch,
-                        save_results=True, saving_dir="/mnt/7T/zheng/DBSR_results/loggings/b8_1-4_20231106_initial1")
+                        save_results=True, saving_dir="/mnt/7T/zheng/DBSR_results/loggings/b8_1-4_20231113_initial1")
 
     trainer.train(201, load_latest=False, fail_safe=True, buffer_size=buffer_size) # (epoch, )

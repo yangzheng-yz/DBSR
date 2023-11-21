@@ -21,6 +21,87 @@ import math
 import lpips
 from torchvision.models import vgg19
 
+def contrast_loss(pred, gt):
+    pred_contrast = pred.std(dim=(2, 3)) - pred.mean(dim=(2, 3))
+    gt_contrast = gt.std(dim=(2, 3)) - gt.mean(dim=(2, 3))
+    return F.l1_loss(pred_contrast, gt_contrast)
+
+class BackgroundLoss(nn.Module):
+    def __init__(self, background_threshold=0.1):
+        super().__init__()
+        self.background_threshold = background_threshold
+
+    def forward(self, prediction, target):
+        # Create a mask where the target is below the background threshold
+        background_mask = (target < self.background_threshold).float()
+        
+        # Calculate the loss as the mean of the product of prediction and the background mask
+        loss = (prediction * background_mask).mean()
+        return loss
+
+class ContrastLoss(nn.Module):
+    def __init__(self):
+        super(ContrastLoss, self).__init__()
+
+    def forward(self, input, target):
+        # Calculate the contrast of the input and target
+        input_contrast = self._contrast(input)
+        target_contrast = self._contrast(target)
+
+        # Calculate the noise level in the background
+        input_noise = self._noise(input)
+        target_noise = self._noise(target)
+
+        # Calculate loss based on contrast difference and noise level
+        contrast_loss = F.l1_loss(input_contrast, target_contrast)
+        noise_loss = F.l1_loss(input_noise, target_noise)
+
+        # Combine the losses
+        total_loss = contrast_loss + noise_loss
+        return total_loss
+
+    def _contrast(self, x):
+        # Kernel for edge detection, e.g., Sobel operator
+        kernel = torch.tensor([[-1, -1, -1], [-1, 8, -1], [-1, -1, -1]], dtype=torch.float32).to(x.device)
+        kernel = kernel.view(1, 1, 3, 3).repeat(x.size(1), 1, 1, 1)
+        contrast = F.conv2d(x, kernel, padding=1, groups=x.size(1))
+        return contrast
+
+    def _noise(self, x):
+        # Simple standard deviation to estimate noise
+        noise = torch.std(x, dim=(2, 3), keepdim=True)
+        return noise
+    
+class GANLoss(nn.Module):
+    def __init__(self, discriminator, real_label=1.0, fake_label=0.0, device='cuda'):
+        super(GANLoss, self).__init__()
+        self.real_label = real_label
+        self.fake_label = fake_label
+        self.loss = nn.BCEWithLogitsLoss()
+        self.discriminator = discriminator.to(device)
+        self.device = device
+
+    def get_discriminator_output(self, images):
+        return self.discriminator(images).view(-1)
+
+    def forward(self, fake_images, real_images=None, target_is_real=True):
+        if real_images is not None:
+            # When real images are provided, use them to compute the discriminator's output
+            discriminator_output = self.get_discriminator_output(real_images)
+        else:
+            # Otherwise, use the fake images
+            discriminator_output = self.get_discriminator_output(fake_images)
+
+        if target_is_real:
+            # If the target is real, the labels should be all ones
+            labels = torch.full((discriminator_output.size(0),), self.real_label, device=self.device)
+        else:
+            # If the target is fake, the labels should be all zeros
+            labels = torch.full((discriminator_output.size(0),), self.fake_label, device=self.device)
+
+        loss = self.loss(discriminator_output, labels)
+        return loss
+
 class PerceptualLoss(nn.Module):
     def __init__(self, device='cuda'):  # Add a device parameter
         super(PerceptualLoss, self).__init__()

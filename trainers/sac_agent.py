@@ -28,7 +28,8 @@ class AgentSAC(BaseAgentTrainer):
                 interpolation_type='bilinear', reward_type='psnr', save_results=False, saving_dir=None, one_step_length=1/4, base_length=1/4,
                 target_entropy=-1, tau=0.005, init_permutation=None, minimal_size=50, sample_size=4, accelerator=None,
                 loader_attributes=None, actors_attr=None, gpus_num=8,
-                inital_epoch=0):
+                inital_epoch=0,
+                newshift=False):
         """
         args:
             actor - The actor for training the network
@@ -42,7 +43,7 @@ class AgentSAC(BaseAgentTrainer):
             log_alpha_optimizer, settings, actor_lr_scheduler, critic_1_lr_scheduler, critic_2_lr_scheduler, log_alpha_lr_scheduler, log_alpha, actors_attr, inital_epoch)
 
         self._set_default_settings()
-        
+        self.newshift = newshift
         self.gpus_num = gpus_num
         
         
@@ -310,10 +311,22 @@ class AgentSAC(BaseAgentTrainer):
                                         'max_scale': 0.0,
                                         'random_pixelshift': False,
                                         'specified_translation': permutations_batch[i]}
-            image_burst_rgb, _ = syn_burst_generation.single2lrburstdatabase(HR, burst_size=burst_size,
-                                                        downsample_factor=self.downsample_factor,
-                                                        transformation_params=burst_transformation_params,
-                                                        interpolation_type=self.interpolation_type)
+            if self.newshift:
+                image_burst_rgb, _, _ = syn_burst_generation.single2lrburstdatabase_new_shift(HR, burst_size=burst_size,
+                                                            downsample_factor=self.downsample_factor,
+                                                            transformation_params=burst_transformation_params,
+                                                            interpolation_type=self.interpolation_type)    
+            else:
+                try:
+                    image_burst_rgb, _ = syn_burst_generation.single2lrburstdatabase(HR, burst_size=burst_size,
+                                                                downsample_factor=self.downsample_factor,
+                                                                transformation_params=burst_transformation_params,
+                                                                interpolation_type=self.interpolation_type)
+                except:
+                    image_burst_rgb, _, _ = syn_burst_generation.single2lrburstdatabase(HR, burst_size=burst_size,
+                                                                downsample_factor=self.downsample_factor,
+                                                                transformation_params=burst_transformation_params,
+                                                                interpolation_type=self.interpolation_type)
             
             image_burst = rgb2raw.mosaic(image_burst_rgb.clone())
             # Add noise
@@ -646,10 +659,11 @@ class AgentSAC(BaseAgentTrainer):
                     pred, _   = self.sr_net(state)
                 preds.append(pred.clone())
                 batch_size = data['frame_gt'].size(0)
-                if self.accelerator.is_main_process:
-                    print(f"Data frame gt batch size {batch_size}")
-                permutations = torch.tensor(self.init_permutation, device=self.accelerator.device).repeat(batch_size, 1, 1)
-
+                # if self.accelerator.is_main_process:
+                    # print(f"Data frame gt batch size {batch_size}")
+                # permutations = torch.tensor(self.init_permutation, device=self.accelerator.device).repeat(batch_size, 1, 1)
+                permutations = data['permutations']
+                # print(f"Debug permutations is {permutations}")
                 if self.reward_type == 'psnr':
                     reward_func = {'psnr': PSNR(boundary_ignore=40)}
                 elif self.reward_type == 'ssim':
@@ -671,8 +685,8 @@ class AgentSAC(BaseAgentTrainer):
                     probs = self.actors[0](state) # here the state should be one
                     dists = [Categorical(p) for p in probs.split(1, dim=1)]
                     next_state, action, permutations, done = self.step_environment(dists, data['frame_gt'].clone(), permutations.clone(), iteration, add_noise=True, meta_info=meta_info)
-                    if self.accelerator.is_main_process:
-                        inter_permute = permutations.clone()
+                    # if self.accelerator.is_main_process:
+                    #     inter_permute = permutations.clone()
                         # print(f"Inter permutea at loss_iter_counter {self.loss_iter_counter} in timestep {iteration}: {inter_permute}")
                     with torch.no_grad():
                         # print("device of model: ", next(self.sr_net.parameters()).device)
@@ -758,7 +772,8 @@ class AgentSAC(BaseAgentTrainer):
                 initial_pred = pred.clone()
                 final_pred  =pred.clone()
                 batch_size = data['frame_gt'].size(0)
-                permutations = torch.tensor(self.init_permutation, device=self.accelerator.device).repeat(batch_size, 1, 1)
+                # permutations = torch.tensor(self.init_permutation, device=self.accelerator.device).repeat(batch_size, 1, 1)
+                permutations = data['permutations']
                 if self.reward_type == 'psnr':
                     reward_func = {'psnr': PSNR(boundary_ignore=40)}
                 elif self.reward_type == 'ssim':

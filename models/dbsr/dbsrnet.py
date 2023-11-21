@@ -94,11 +94,11 @@ class DBSRNet(nn.Module):
         self.merging = merging      # Merges the input embeddings to obtain a single feature map
         self.decoder = decoder      # Decodes the merged embeddings to generate HR RGB image
 
-    def forward(self, im):
-        out_enc = self.encoder(im)
+    def forward(self, im, offset=None):
+        out_enc = self.encoder(im, offset=offset)
         out_merge = self.merging(out_enc)
         out_dec = self.decoder(out_merge)
-
+        # print(f"Debug estimated offset: {out_enc['offsets'][0,:,:,0,0]}")
         return out_dec['pred'], {'offsets': out_enc['offsets'], 'fusion_weights': out_merge['fusion_weights']}
 
 
@@ -119,7 +119,7 @@ def dbsrnet_cvpr2021(enc_init_dim, enc_num_res_blocks, enc_out_dim,
                      gauss_blur_sd=None,
                      gauss_ksz=3,
                      use_pretrained=None,
-                     with_attention=False
+                     with_attention=False,
                      ):
     # backbone
     alignment_net = PWCNet(load_pretrained=True,

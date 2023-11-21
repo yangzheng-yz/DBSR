@@ -26,6 +26,27 @@ from models.alignment.pyrcorr import PyrCorr
 
 from models.deeprep.alignment import PWCNetAlignment, AlignmentWrapper
 
+class Discriminator(nn.Module):
+    def __init__(self, input_channels=1):
+        super(Discriminator, self).__init__()
+        self.main = nn.Sequential(
+            nn.Conv2d(input_channels, 64, kernel_size=4, stride=2, padding=1),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(128),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(128, 256, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(256),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(256, 512, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(512),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(512, 1, kernel_size=4, stride=1, padding=0),
+            nn.Sigmoid()
+        )
+
+    def forward(self, input):
+        return self.main(input).view(-1)
 
 class DeepRepNet(nn.Module):
     """ Deep Reparametrization model"""
@@ -41,8 +62,9 @@ class DeepRepNet(nn.Module):
 
         self.use_noise_estimate = use_noise_estimate
 
-    def forward(self, im, num_iter=None, noise_estimate=None):
+    def forward(self, im, num_iter=None, noise_estimate=None, offsets=None):
         enc_in = im
+        # print(f"Debug input image size: {enc_in.size()}")
         if noise_estimate is not None and self.use_noise_estimate:
             if noise_estimate.dim() == 4:
                 noise_estimate_re = noise_estimate.unsqueeze(1).repeat(1, im.shape[1], 1, 1, 1)
@@ -54,19 +76,26 @@ class DeepRepNet(nn.Module):
             noise_estimate_re = None
 
         lr_enc = self.lr_encoder(enc_in)
-
+        # print(f"Debug lr_enc size: {lr_enc['enc'].size()}")
         y_init = self.hr_initializer(lr_enc['enc'])
-
+        # print(f"Debug y_init size: {y_init.size()}")
         if self.alignment_net is not None:
-            offsets, offsets_aux = self.alignment_net(im)
+            if offsets is None:
+                offsets, offsets_aux = self.alignment_net(im)
+                # print(f"Debug offsets size: {offsets.size()}")
+                # print(f"Debug offsets_aux size: {offsets_aux.size()}")
+            else:
+                offsets = offsets
+                offsets_aux = {}
         else:
             offsets = None
             offsets_aux = {}
         y_optim, _ = self.optimizer(y_init=y_init, x=lr_enc['enc'], offsets=offsets, num_iter=num_iter,
                                     noise_estimate=noise_estimate_re)
-
+        # print(f"Debug y_optim size: {y_optim.size()}")
         lr_enc['fused_enc'] = y_optim
         y_pred = self.hr_decoder(lr_enc)
+        # print(f"Debug y_pred['pred'] size: {y_pred['pred'].size()}")
         return y_pred['pred'], {'offsets': offsets, 'offsets_aux': offsets_aux}
 
 
@@ -82,15 +111,17 @@ def deeprep_sr_iccv21(num_iter, enc_dim=32, enc_num_res_blocks=3, enc_out_dim=64
                       wp_ref_offset_noise=0.02,
                       use_feature_regularization=False,
                       init_feat_reg_w=1.0, gauss_blur_sd=1,
-                      accelerator=None
+                      accelerator=None,
+                      input_channels=4,
+                      is_gray=False,
                       ):
-    lr_encoder = encoders.ResEncoder(input_channels=4, init_dim=enc_dim, num_res_blocks=enc_num_res_blocks,
+    lr_encoder = encoders.ResEncoder(input_channels=input_channels, init_dim=enc_dim, num_res_blocks=enc_num_res_blocks,
                                      out_dim=enc_out_dim)
     hr_decoder = decoders.ResPixShuffleConv(dec_in_dim,
                                             dec_dim_pre, dec_num_pre_res_blocks, dec_dim_post,
                                             dec_num_post_res_blocks,
                                             upsample_factor=dec_upsample_factor,
-                                            icnrinit=True, gauss_blur_sd=gauss_blur_sd)
+                                            icnrinit=True, gauss_blur_sd=gauss_blur_sd, is_gray=is_gray)
 
     hr_initializer = initializers.PixelShuffleInitializer(input_dim=enc_out_dim, output_dim=dec_in_dim,
                                                           upsample_factor=feature_degradation_upsample_factor)

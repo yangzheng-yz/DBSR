@@ -22,8 +22,10 @@ def numpy_to_torch(a: np.ndarray):
 
 
 def torch_to_numpy(a: torch.Tensor):
-    return a.permute(1, 2, 0).numpy()
-
+    try:
+        return a.permute(1, 2, 0).numpy()
+    except:
+        return a.permute(1, 2, 0).detach().numpy()
 
 def torch_to_npimage(a: torch.Tensor, unnormalize=True, input_bgr=False):
     a_np = torch_to_numpy(a.clamp(0.0, 1.0))

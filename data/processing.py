@@ -123,33 +123,12 @@ class SyntheticBurstProcessing(BaseProcessing):
         return data
 
 class SyntheticBurstDatabaseProcessing(BaseProcessing):
-    """ The processing class used for training on synthetic bursts. The class generates a synthetic RAW burst using
-    a RGB image. This is achieved by i) extracting a crop from the input image, ii) using an inverse camera pipeline to
-    convert the RGB crop to linear sensor space, ii) Applying random/specific affine transformations to obtain a burst from the
-    single crop, and iii) downsampling the generated burst, applying bayer mosaicking pattern, and adding synthetic
-    noise. """
+
     def __init__(self, crop_sz, burst_size, downsample_factor, crop_scale_range=None, crop_ar_range=None,
                  burst_transformation_params=None, image_processing_params=None,
-                 interpolation_type='bilinear', return_rgb_busrt=False, random_crop=True,
+                 interpolation_type='bilinear', return_rgb_busrt=False, random_crop=True, gray=False,newshift=False,
                  *args, **kwargs):
-        """
-        args:
-            crop_sz - The size of the image region first cropped from the input image
-            burst_size - Number of images in the generated burst.
-            downsample_factor - The factor by which the images are downsampled when generating lower-resolution burst
-            crop_scale_range - The range (min, max) of random resizing performed when extracting the initial image crop.
-                               If None, no resizing is performed.
-            crop_ar_range - The range (min, max) of random aspect ratio change performed when extracting the initial
-                            image crop. If None, the original aspect ratio is preserved.
-            burst_transformation_params - A dict containing the parameters for the affine transformations applied
-                                          when generating a burst from a single image.
-            image_processing_params - A dict containing the parameters for the inverse camera pipeline used to obtain
-                                      linear sensor space image from RGB image.
-            interpolation_type - Type of interpolation used when applying the affine transformation and downsampling the
-                                 image.
-            return_rgb_busrt - Boolean indicating whether to return an RGB burst, in addition to the RAW burst.
-            random_crop - Boolean indicating whether to perform random cropping (True) or center cropping (False)
-        """
+
         super().__init__(*args, **kwargs)
         if not isinstance(crop_sz, (tuple, list)):
             crop_sz = (crop_sz, crop_sz)
@@ -168,6 +147,8 @@ class SyntheticBurstDatabaseProcessing(BaseProcessing):
         self.random_crop = random_crop
 
         self.image_processing_params = image_processing_params
+        self.gray = gray
+        self.newshift = newshift
 
     def __call__(self, data: TensorDict):
         # Augmentation, e.g. convert to tensor
@@ -185,22 +166,26 @@ class SyntheticBurstDatabaseProcessing(BaseProcessing):
             # Perform center cropping
             assert self.crop_scale_range is None and self.crop_ar_range is None
             frame_crop = prutils.center_crop(data['frame'], crop_sz)
-
-        # Generate synthetic RAW burst
-        # burst, frame_gt, burst_rgb, flow_vector, meta_info = syn_burst_generation.rgb2rawburst(frame_crop,
-        #                                                                                        self.burst_size,
-        #                                                                                        self.downsample_factor,
-        #                                                                                        burst_transformation_params=self.burst_transformation_params,
-        #                                                                                        image_processing_params=self.image_processing_params,
-        #                                                                                        interpolation_type=self.interpolation_type
-        #                                                                                        )
-        burst, frame_gt, burst_rgb, flow_vector, meta_info = syn_burst_generation.rgb2rawburstdatabase(frame_crop,
+        permutations = None
+        try:
+            burst, frame_gt, burst_rgb, flow_vector, meta_info, permutations = syn_burst_generation.rgb2rawburstdatabase(frame_crop,
+                                                                                                self.burst_size,
+                                                                                                self.downsample_factor,
+                                                                                                burst_transformation_params=self.burst_transformation_params,
+                                                                                                image_processing_params=self.image_processing_params,
+                                                                                                interpolation_type=self.interpolation_type,
+                                                                                                image_name=data.get('image_name', None),
+                                                                                                gray=self.gray, newshift=self.newshift,
+                                                                                                )            
+        except:
+            burst, frame_gt, burst_rgb, flow_vector, meta_info = syn_burst_generation.rgb2rawburstdatabase(frame_crop,
                                                                                                self.burst_size,
                                                                                                self.downsample_factor,
                                                                                                burst_transformation_params=self.burst_transformation_params,
                                                                                                image_processing_params=self.image_processing_params,
                                                                                                interpolation_type=self.interpolation_type,
-                                                                                               image_name=data.get('image_name', None)
+                                                                                               image_name=data.get('image_name', None),
+                                                                                               gray=self.gray, newshift=self.newshift,
                                                                                                )
 
         # Crop border regions
@@ -215,6 +200,79 @@ class SyntheticBurstDatabaseProcessing(BaseProcessing):
         data['frame_gt'] = frame_gt
         data['burst'] = burst
         data['meta_info'] = meta_info
+        data['flow_vector'] = flow_vector
+        data['permutations'] = permutations
+        # print(f"Debug Real offset: {flow_vector[:,:,0,0]}")
+        return data
+class RealBurstDatabaseProcessing(BaseProcessing):
+
+    def __init__(self, crop_sz, burst_size, downsample_factor, crop_scale_range=None, crop_ar_range=None,
+                 burst_transformation_params=None, image_processing_params=None,
+                 interpolation_type='bilinear', return_rgb_busrt=False, random_crop=True, gray=False,newshift=False,
+                 *args, **kwargs):
+
+        super().__init__(*args, **kwargs)
+        if not isinstance(crop_sz, (tuple, list)):
+            crop_sz = (crop_sz, crop_sz)
+
+        self.crop_sz = crop_sz
+
+        self.burst_size = burst_size
+        self.downsample_factor = downsample_factor
+
+        self.burst_transformation_params = burst_transformation_params
+
+        self.crop_scale_range = crop_scale_range
+        self.crop_ar_range = crop_ar_range
+        self.return_rgb_busrt = return_rgb_busrt
+        self.interpolation_type = interpolation_type
+        self.random_crop = random_crop
+
+        self.image_processing_params = image_processing_params
+        self.gray = gray
+        self.newshift = newshift
+
+    def __call__(self, data: TensorDict):
+        # Augmentation, e.g. convert to tensor
+        burst_sz = len(data['frame'])
+        if self.transform is not None:
+            for i in range(burst_sz):
+                data['frame'][i] = self.transform(image=data['frame'][i])
+
+        # add extra padding to compensate for cropping of border region
+        # crop_sz = [c + 2 * self.burst_transformation_params.get('border_crop', 0) for c in self.crop_sz]
+        crop_sz = [512, 640]
+        frame_crops = data['frame']
+        # if getattr(self, 'random_crop', True):
+        #     # Perform random cropping
+        #     for i in range(burst_sz):
+        #         frame_crops.append(prutils.random_resized_crop(data['frame'][i], crop_sz,
+        #                                                  scale_range=self.crop_scale_range,
+        #                                                  ar_range=self.crop_ar_range))
+        # else:
+        #     # Perform center cropping
+        #     assert self.crop_scale_range is None and self.crop_ar_range is None
+        #     for i in range(burst_sz):
+        #         frame_crops.append(prutils.center_crop(data['frame'][i], crop_sz))
+
+        burst, frame_gt, burst_rgb, meta_info = syn_burst_generation.burstrgb2raw(frame_crops,
+                                                                                               frame_crops[0],
+                                                                                               downsample_factor=self.downsample_factor,
+                                                                                               image_processing_params=self.image_processing_params,
+                                                                                               interpolation_type=self.interpolation_type
+                                                                                               )
+
+        
+        del data['frame']
+
+        # if self.return_rgb_busrt:
+        data['burst_rgb'] = burst_rgb
+
+        data['frame_gt'] = frame_gt
+        data['burst'] = burst
+        data['meta_info'] = meta_info
+        # data['flow_vector'] = flow_vector
+        # print(f"Debug Real offset: {flow_vector[:,:,0,0]}")
         return data
 
 class VisibleBurstProcessing(BaseProcessing):
